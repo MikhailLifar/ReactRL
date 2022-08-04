@@ -16,8 +16,8 @@ class BaseModel:
     top['input'] = {}
     # ...or parameters number (if don't have names) instead
     # with same limits for each output in this case
-    parameters_count['input'] = 5
-    each_pair_limits['input'] = (-5., 5.)
+    parameters_count['input'] = None
+    each_pair_limits['input'] = None
 
     # same for the outputs
     # define parameters names..
@@ -26,10 +26,10 @@ class BaseModel:
     bottom['output'] = {}
     top['output'] = {}
     # ...or parameters number (if don't have names) instead
-    parameters_count['output'] = 10
-    each_pair_limits['output'] = (0., 10.)
+    parameters_count['output'] = -1
+    each_pair_limits['output'] = -1
 
-    model_name = 'TestModel'
+    model_name = '???'
     limits = {}
 
     def __init__(self, params=None):
@@ -56,7 +56,7 @@ class BaseModel:
                 self.limits[kind] = [self.each_pair_limits[kind]] * self.parameters_count[kind]
             else:
                 raise AttributeError('Something went wrong!')
-            print(self.limits[kind])
+            # print(self.limits[kind])
 
     def set_params(self, params):
         assert isinstance(params, dict), 'Params is not a dictionary!'
@@ -77,9 +77,19 @@ class BaseModel:
             assert self.names[kind], 'Do not have names for inputs'
             return {name: self.limits[kind][i][in_pair] for i, name in enumerate(self.names[kind])}
         elif out == 'array':
-            return np.array([lim_pair[in_pair] for lim_pair in self.limits['input']])
+            return np.array([lim_pair[in_pair] for lim_pair in self.limits[kind]])
 
     def update(self, data_slice, delta_t, save_for_plot=False):
+        raise NotImplementedError
+
+    @staticmethod
+    def default_constants():
+        raise NotImplementedError
+
+    def assign_constants(self, **kw):
+        raise NotImplementedError
+
+    def assign_and_eval_values(self, **kw):
         raise NotImplementedError
 
     def reset(self):
@@ -92,4 +102,3 @@ class BaseModel:
     #     out_arr[:, 0] = frame['???']
     #     out_arr[:, -1] = frame['???']
     #     return out_arr
-

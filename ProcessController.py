@@ -22,7 +22,7 @@ class ProcessController:
 
     def __init__(self, process_to_control_obj: BaseModel,
                  controlled_names: list = None, output_names: list = None,
-                 target_func=None,
+                 target_func_to_maximize=None,
                  real_exp=False,
                  supposed_step_count: int = None,
                  supposed_exp_time: float = None):
@@ -44,7 +44,7 @@ class ProcessController:
             self.controlled_names = process_to_control_obj.names['input']
             if not self.controlled_names:  # if there are not input names...
                 for i in range(process_to_control_obj.parameters_count['input']):
-                    self.controlled_names.append(str(i + 1))  # ... generate names. I am not sure that
+                    self.controlled_names.append(f'in{i+1}')  # ... generate names. I am not sure that
                     # it is the best solution
         else:
             assert controlled_names and (controlled_names == process_to_control_obj.names['input'])
@@ -63,7 +63,7 @@ class ProcessController:
             self.output_names = process_to_control_obj.names['output']
             if not self.output_names:  # if there are not input names...
                 for i in range(process_to_control_obj.parameters_count['output']):
-                    self.output_names.append(str(i + 1))  # ... generate names. I am not sure that
+                    self.output_names.append(f'out{i+1}')  # ... generate names. I am not sure that
                     # it is the best solution
         else:
             assert output_names and (output_names == process_to_control_obj.names['output'])
@@ -71,6 +71,9 @@ class ProcessController:
         size = np.ceil(self.max_exp_time / self.analyser_dt).astype('int32')
         self.output_history = np.full((size, len(self.output_names)), -1.)
         self.output_history_dt = np.full(size, -1.)
+        self.target_history = None
+        if target_func_to_maximize is not None:
+            self.target_history = np.full(size, np.nan, dtype=np.float)
 
         self.controlling_signals_history[0] = self.controlled
 
@@ -80,7 +83,7 @@ class ProcessController:
         # for execution time measurement
         # self.times = [0, 0, 0]
 
-        self.target_func = target_func
+        self.target_func = target_func_to_maximize
         self.real_exp = real_exp
 
     def set_controlled(self, new_values):
@@ -204,21 +207,29 @@ class ProcessController:
         # self.times[0] += t1-t0
         # self.times[1] += t2-t1
         # self.times[2] += t3-t2
+
+        #     "easy" way for get_process_output
+        #     if time_history.size > 1:
+        #         O2 = scipy.interpolate.interp1d(time_history, self.gas_flow_history[self.step_count-5:self.step_count, self.gas_ind['O2']], kind='next', fill_value='extrapolate')
+        #         CO = scipy.interpolate.interp1d(time_history, self.gas_flow_history[self.step_count-5:self.step_count, self.gas_ind['CO']], kind='next', fill_value='extrapolate')
+
         return res
 
-    #     "easy" way for get_process_output
-    #     if time_history.size > 1:
-    #         O2 = scipy.interpolate.interp1d(time_history, self.gas_flow_history[self.step_count-5:self.step_count, self.gas_ind['O2']], kind='next', fill_value='extrapolate')
-    #         CO = scipy.interpolate.interp1d(time_history, self.gas_flow_history[self.step_count-5:self.step_count, self.gas_ind['CO']], kind='next', fill_value='extrapolate')
+    def get_target_for_passed(self):
+        inds_to_compute = (self.output_history_dt >= 0) & np.isnan(self.target_history)
+        if any(inds_to_compute):
+            self.target_history[inds_to_compute] = \
+                np.apply_along_axis(self.target_func, 1, self.output_history[inds_to_compute])
+        return self.target_history[np.isfinite(self.target_history)]
 
     def integrate_along_history(self, time_segment=None, out_name=None,
                                 target_mode=False):
         output_time_stamp, output = self.get_process_output()
         if target_mode:
-            output = np.apply_along_axis(self.target_func, 0, output)
+            output = np.apply_along_axis(self.target_func, 1, output)
             assert output.shape[0] == output_time_stamp.shape[0]
         else:
-            if output.shape[1] > 1:  # integral only for one output at same time name allowed
+            if output.shape[1] > 1:  # integral only for one output name at same time allowed
                 assert out_name is not None
                 new_output = None
                 for i, name in enumerate(self.output_names):
@@ -227,6 +238,8 @@ class ProcessController:
                         break
                 output = new_output
                 assert output is not None
+            else:
+                output = output[:, 0]
         if time_segment is None:
             return lib.integral(output_time_stamp, output)
         assert len(time_segment) == 2, 'Time segment should has the form: [brg, end], no another options'
@@ -236,12 +249,14 @@ class ProcessController:
     def plot(self, file_name, time_segment=None, plot_more_function=None, additional_plot=None, plot_mode='together',
              out_name=None):
 
-        if len(self.output_names) == 1:
-            out_name = self.output_names[0]
-        assert out_name is not None
         inds = self.output_history_dt > -1
         output_time_stamp, output = self.output_history_dt[inds], self.output_history[inds]
-        if len(self.output_names) > 1:
+        if out_name == 'target':
+            output = np.apply_along_axis(self.target_func, 1, output)
+        elif len(self.output_names) == 1:
+            out_name = self.output_names[0]
+        elif len(self.output_names) > 1:
+            assert out_name is not None
             assigned = False
             for i, name in enumerate(self.output_names):
                 if name == out_name:
@@ -269,11 +284,6 @@ class ProcessController:
                 interp_funcs.append(lambda x: create_f(name)(x))
 
         def plot_more_function2(ax):
-            # for i in range(self.step_count-1):
-            #     if self.controlling_signals_history[i + 1, self.controlled_ind['O2']] > 0:
-            #         ax.axvspan(time_history[i], time_history[i+1], facecolor='grey', alpha=0.3)
-            # if self.controlling_signals_history[0, self.controlled_ind['O2']] > 0:
-            #     ax.axvspan(0, time_history[0], facecolor='grey', alpha=0.3)
             if plot_more_function is not None:
                 plot_more_function(ax)
 
@@ -304,20 +314,28 @@ class ProcessController:
             list_to_plot = []
             for i, name in enumerate(self.controlled_names):
                 list_to_plot += [output_time_stamp, interp_funcs[i](output_time_stamp), name]
+
+            plot_lims = {}
+            for kind in ('input', 'output'):
+                plot_lims[kind] = [np.min(self.process_to_control.get_bounds('min', kind)),
+                                   np.max(self.process_to_control.get_bounds('max', kind))]
+                plot_lims[kind][0] = plot_lims[kind][0] * (1. - np.sign(plot_lims[kind][0]) * 0.03)
+                plot_lims[kind][1] = plot_lims[kind][1] * (1. + np.sign(plot_lims[kind][1]) * 0.03)
+
             lib.save_to_file(*list_to_plot,
                              output_time_stamp, output, out_name,
                              *additional,
                              fileName=file_name[:file_name.rfind('.')] + '_all_data.csv',)
-            lib.plot_to_file(*list_to_plot, xlabel='Time', ylabel='?', save_csv=False,
+            lib.plot_to_file(*list_to_plot, xlabel='Time, s', ylabel='?', save_csv=False,
                              fileName=file_name[:file_name.rfind('.')] + '_in.png',
-                             xlim=time_segment, ylim=[0., None],
+                             xlim=time_segment, ylim=plot_lims['input'],
                              plotMoreFunction=plot_more_function2)
-            lib.plot_to_file(output_time_stamp, output, out_name, xlabel='Time', ylabel='?', save_csv=False,
+            lib.plot_to_file(output_time_stamp, output, out_name, xlabel='Time, s', ylabel='?', save_csv=False,
                              fileName=file_name[:file_name.rfind('.')] + '_out.png',
-                             xlim=time_segment, ylim=[1.03 * min(np.min(output), 0.), None],
+                             xlim=time_segment, ylim=plot_lims['output'],
                              plotMoreFunction=plot_more_function2)
-            if additional_plot:
-                lib.plot_to_file(*additional, xlabel='Time', ylabel='?', save_csv=False,
+            if additional_plot and len(additional):
+                lib.plot_to_file(*additional, xlabel='Time, s', ylabel='?', save_csv=False,
                                  fileName=file_name[:file_name.rfind('.')] + '_add.png',
                                  xlim=time_segment, ylim=[0., None],
                                  plotMoreFunction=plot_more_function2)
@@ -349,7 +367,9 @@ class ProcessController:
         self.step_count = 0  # current step in flow history
 
         self.output_history = np.full_like(self.output_history, -1.)
-        self.output_history_dt = np.full_like(self.output_history, -1.)
+        self.output_history_dt = np.full(self.output_history.shape[0], -1.)
+        if self.target_func is not None:
+            self.target_history = np.full_like(self.target_history, np.nan, dtype=np.float)
 
         self.controlling_signals_history[0] = self.controlled
 
@@ -359,17 +379,51 @@ class ProcessController:
 
 
 def custom_experiment():
-    PC = ProcessController(TestModel())
+    # # 1st try
+    # PC = ProcessController(TestModel())
+    # for i in range(5):
+    #     PC.set_controlled([i + 0.2 * i1 for i1 in range(1, 6)])
+    #     PC.time_forward(30)
+    # PC.get_process_output()
+    # for c in '12345678':
+    #     PC.plot(f'PC_plots/example{c}.png', out_name=c, plot_mode='separately')
+
+    def target(x):
+        # target_v = np.array([2., 1., 3., -1., 0.,
+        #                      1., -1., 3., -2., 3.])
+        target_v = np.array([2., 1., 3.])
+        return -np.linalg.norm(x - target_v)
+
+    PC = ProcessController(TestModel(), target_func_to_maximize=target)
     for i in range(5):
         PC.set_controlled([i + 0.2 * i1 for i1 in range(1, 6)])
         PC.time_forward(30)
-    PC.get_process_output()
-    for c in '12345678':
-        PC.plot(f'PC_plots/example{c}.png', out_name=c, plot_mode='separately')
+    print(PC.integrate_along_history(target_mode=True))
+    for c in [f'out{i}' for i in range(1, 4)]:
+        PC.plot(f'PC_plots/example_{c}.png', out_name=c, plot_mode='separately')
+    PC.plot(f'PC_plots/example_target.png', out_name='target', plot_mode='separately')
+
+    pass
+
+
+def test_PC_for_Libuda():
+    def target(x):
+        return x[0]
+
+    PC = ProcessController(LibudaModelWithDegradation(), target_func_to_maximize=target)
+    # for i in range(5):
+    #     PC.set_controlled([(i + 0.2 * i1) * 1.e-5 for i1 in range(1, 3)])
+    #     PC.time_forward(30)
+    PC.set_controlled({'O2': 10.e-5, 'CO': 4.5e-5})
+    PC.time_forward(500)
+    print(PC.integrate_along_history(target_mode=True))
+    PC.plot(f'PC_plots/example_RL_21_10_task.png', out_name='target', plot_mode='separately')
 
 
 if __name__ == '__main__':
 
-    custom_experiment()
+    # custom_experiment()
+
+    test_PC_for_Libuda()
 
     pass

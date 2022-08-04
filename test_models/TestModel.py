@@ -1,5 +1,5 @@
-import \
-    copy
+# import \
+#     copy
 
 import numpy as np
 # from numpy.linalg import norm
@@ -52,13 +52,17 @@ def normalize_matrix(M):
     """
     Function normalizes the matrix so that
     for any input vector x and for any output vector Mx:
-        Mx[j] <= max(x) for all j
+        abs(Mx[j]) <= max(abs(x)) for all j
+
     :param M:
     :return:
     """
     assert len(M.shape) == 2
-    for i_row, row in enumerate(M):
-        M[i_row] = M[i_row] / np.sum(np.abs(row))
+    M_T = M.transpose()
+    for ind, row in enumerate(M_T):
+        M_T[ind] = M_T[ind] / np.sum(np.abs(row))
+        assert np.sum(np.abs(M_T[ind])) <= 1.
+        M[:, ind] = M_T[ind]
 
 
 class TestModel(BaseModel):
@@ -66,15 +70,24 @@ class TestModel(BaseModel):
 
     def __init__(self):
         BaseModel.__init__(self, params=None)
+
+        # assign limits
+        self.parameters_count['input'] = 3
+        self.each_pair_limits['input'] = (-5., 5.)
+
+        self.parameters_count['output'] = 3
+        self.each_pair_limits['output'] = (-5., 5.)
+
+        self.fill_limits()
+
         m = max(len(self.names['input']), self.parameters_count['input'])
         n = max(len(self.names['output']), self.parameters_count['output'])
-
         self.matrix_shape = (m, n)
-        self.internal_M = generate_max_rank_matr(*self.matrix_shape)
+        # self.internal_M = generate_max_rank_matr(*self.matrix_shape)
+        self.internal_M = np.load(f'M_{m}x{n}.npy')
         normalize_matrix(self.internal_M)
 
         self.directions = np.random.randint(-1, 2, self.matrix_shape)
-
         self.increment = 0.01
         self.change_dir_prob = 0.01
 
@@ -85,16 +98,17 @@ class TestModel(BaseModel):
         raise NotImplementedError
 
     def update(self, input_arr, delta_t, save_for_plot=False):
-        # gradually changing internal
-        self.internal_M += self.directions * self.increment * delta_t
-        # change increment direction for small part of self.internal elements
-        choice_matr = np.random.random(self.matrix_shape) < self.change_dir_prob
-        d_change_vector = self.directions[choice_matr].reshape(1, -1)[0]
-        for i, d in enumerate(d_change_vector):
-            if d == -1:
-                d_change_vector[i] = 1
-            else:
-                d_change_vector[i] -= 1
-        self.directions[choice_matr] = d_change_vector
+        # # gradually changing internal
+        # self.internal_M += self.directions * self.increment * delta_t
+        # # change increment direction for small part of self.internal elements
+        # choice_matr = np.random.random(self.matrix_shape) < self.change_dir_prob
+        # d_change_vector = self.directions[choice_matr].reshape(1, -1)[0]
+        # for i, d in enumerate(d_change_vector):
+        #     if d == -1:
+        #         d_change_vector[i] = 1
+        #     else:
+        #         d_change_vector[i] -= 1
+        # self.directions[choice_matr] = d_change_vector
+        # normalize_matrix(self.internal_M)
         self.model_output = np.dot(input_arr, self.internal_M)
         return self.model_output
