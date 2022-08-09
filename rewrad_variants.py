@@ -3,7 +3,7 @@ import numpy as np
 
 def get_reward_func(params: dict):
     if params['name'] == 'each_step_base':
-        bias = -0.3
+        bias = params['bias']
 
         def each_step_base(env_obj) -> float:
             target_history = env_obj.controller.get_target_for_passed()
@@ -18,10 +18,11 @@ def get_reward_func(params: dict):
         out_func = each_step_base
 
     elif params['name'] == 'full_ep_base':
+        bias = params['bias']
 
         def full_ep_base(env_obj) -> float:
             if env_obj.end_episode:
-                return env_obj.integral * env_obj.normalize_coef - 0.02
+                return env_obj.integral * env_obj.normalize_coef - bias
             return 0.
 
         out_func = full_ep_base

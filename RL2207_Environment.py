@@ -1,3 +1,7 @@
+# import \
+#     copy
+# import \
+#     warnings
 import \
     copy
 from types import \
@@ -6,6 +10,8 @@ from types import \
 import matplotlib
 # import \
 #     numpy as np
+import \
+    numpy as np
 
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -29,7 +35,8 @@ class RL2207_Environment(Environment):
                  episode_time=500, time_step=10,
                  state_spec: dict = None,
                  initial_values: dict = None,
-                 preprocess_time=0):
+                 preprocess_time=0,
+                 log_scaling_dict=None):
 
         """
 
@@ -108,6 +115,20 @@ class RL2207_Environment(Environment):
         self.normalize_coef = normalize_coef(self)
         assert self.normalize_coef >= 0
 
+        self.if_use_log_scale = log_scaling_dict is not None
+        self.to_log_inds = None
+        self.to_log_scales = None
+        self.norm_to_log = None
+        if self.if_use_log_scale:
+            to_log_inds_scales = np.array([[self.controller.output_ind[name],
+                                                 log_scaling_dict[name]]
+                                           for name in self.controller.output_names if name in log_scaling_dict])
+            self.to_log_inds = to_log_inds_scales[:, 0]
+            self.to_log_scales = to_log_inds_scales[:, 1]
+            self.norm_to_log = np.vstack(((self.model.get_bounds('max', 'output') -
+                                           self.model.get_bounds('min', 'output'))[self.to_log_inds],
+                                          self.model.get_bounds('min', 'output')[self.to_log_inds]))
+
         # self.save_policy = False
         # self.policy_df = pd.DataFrame(columns=[*self.in_gas_names, 'time_steps'])
 
@@ -129,7 +150,14 @@ class RL2207_Environment(Environment):
                 self.reward = MethodType(get_reward_func(
                     params={'name': 'full_ep_2', 'subtype': f'{subtype}_mode', 'depth': 25}
                 ), self)
-                return
+            elif reward_spec in ('each_step_base', 'full_ep_base'):
+                # TODO here is crutch with bias
+                bias = 0.02
+                if isinstance(self.model, TestModel):
+                    bias = -0.3
+                self.reward = MethodType(get_reward_func(
+                    params={'name': reward_spec, 'bias': bias}
+                ), self)
             else:
                 self.reward = MethodType(get_reward_func(params={'name': reward_spec}), self)
 
@@ -148,11 +176,21 @@ class RL2207_Environment(Environment):
             self.reward = MethodType(reward_spec, self)
             self.reward_name = 'callable'
 
+    def log_preprocess(self, measurement: np.ndarray):
+        part_to_preprocess = (measurement[self.to_log_inds] -
+                                         self.norm_to_log[1]) / self.norm_to_log[0]
+        measurement[self.to_log_inds] = np.log(1 + self.to_log_scales * part_to_preprocess)
+
     def states(self):
+        out_lower = self.model.get_bounds('min', 'output')
+        out_upper = self.model.get_bounds('max', 'output')
+        if self.if_use_log_scale:
+            out_lower[self.to_log_inds] = 0.
+            out_upper[self.to_log_inds] = np.log(1. + self.to_log_scales) + 1e-5
         lower = np.hstack((self.model.get_bounds('min', 'input'),
-                           self.model.get_bounds('min', 'output')))
+                           out_lower))
         upper = np.hstack((self.model.get_bounds('max', 'input'),
-                           self.model.get_bounds('max', 'output')))
+                           out_upper))
         # print(self.model.get_bounds('min', 'input'))
         # print(self.model.get_bounds('min', 'output'))
         states_shape = self.state_spec['shape']
@@ -215,6 +253,9 @@ class RL2207_Environment(Environment):
         self.controller.set_controlled(model_inputs)
         self.controller.time_forward(dt=self.time_step)
         current_measurement = self.controller.get_process_output()[1][-1]
+        if self.if_use_log_scale:
+            current_measurement = copy.deepcopy(current_measurement)
+            self.log_preprocess(current_measurement)
 
         # if self.save_policy:
         #     ind = self.policy_df.shape[0]
@@ -334,11 +375,15 @@ def normalize_coef(env_obj):
             env_obj.controller.reset()
             env_obj.controller.set_controlled({'O2': max_inputs['O2'] * d['O2'], 'CO': max_inputs['CO'] * d['CO']})
             env_obj.controller.time_forward(env_obj.episode_time)
-            integral = env_obj.controller.integrate_along_history()
+            integral = env_obj.controller.integrate_along_history(target_mode=True)
             # assert integral > 0, 'integral should be positive'
             if integral > 0:
                 koefs.append(1 / integral)
-        return np.min(koefs)
+        if len(koefs):
+            return np.min(koefs)
+        else:
+            warnings.warn('Failed to compute coefficient. Default one will be used.')
+            return 10.
 
     elif isinstance(env_obj.model, TestModel):
         target_step_estim = 1 / 3 * np.linalg.norm(env_obj.model.get_bounds('max', 'output')

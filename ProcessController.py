@@ -49,7 +49,8 @@ class ProcessController:
         else:
             assert controlled_names and (controlled_names == process_to_control_obj.names['input'])
             self.controlled_names = controlled_names
-        self.controlled_ind = {self.controlled_names[i]: i for i in range(len(self.controlled_names))}
+
+        self.controlled_ind = {name: i for i, name in enumerate(self.controlled_names)}
         self.controlled = np.zeros(len(self.controlled_names))
         # self.gas_max_values = 100  # percent
         # gas flow values (one for each constant interval)
@@ -68,6 +69,7 @@ class ProcessController:
         else:
             assert output_names and (output_names == process_to_control_obj.names['output'])
             self.output_names = output_names
+        self.output_ind = {name: i for i, name in enumerate(self.output_names)}
         size = np.ceil(self.max_exp_time / self.analyser_dt).astype('int32')
         self.output_history = np.full((size, len(self.output_names)), -1.)
         self.output_history_dt = np.full(size, -1.)
@@ -85,6 +87,10 @@ class ProcessController:
 
         self.target_func = target_func_to_maximize
         self.real_exp = real_exp
+
+        self.plot_lims = dict()
+        self.plot_axes_names = dict()
+        self.initialize_plot_params()
 
     def set_controlled(self, new_values):
         """
@@ -246,6 +252,24 @@ class ProcessController:
         inds = (time_segment[0] <= output_time_stamp) & (output_time_stamp <= time_segment[1])
         return lib.integral(output_time_stamp[inds], output[inds])
 
+    def initialize_plot_params(self):
+        for kind in ('input', 'output'):
+            self.plot_lims[kind] = [np.min(self.process_to_control.get_bounds('min', kind)),
+                               np.max(self.process_to_control.get_bounds('max', kind))]
+            self.plot_lims[kind][0] = self.plot_lims[kind][0] * (1. - np.sign(self.plot_lims[kind][0]) * 0.03)
+            self.plot_lims[kind][1] = self.plot_lims[kind][1] * (1. + np.sign(self.plot_lims[kind][1]) * 0.03)
+        for kind in ('input', 'output', 'additional'):
+            self.plot_axes_names[kind] = '?'
+
+    def set_plot_params(self, **kwargs):
+        for kind in ('input', 'output'):
+            if f'{kind}_lims' in kwargs:
+                assert len(kwargs[f'{kind}_lims']) == 2
+                self.plot_lims[kind] = kwargs[f'{kind}_lims']
+        for kind in ('input', 'output', 'additional'):
+            if f'{kind}_ax_name' in kwargs:
+                self.plot_axes_names[kind] = kwargs[f'{kind}_ax_name']
+
     def plot(self, file_name, time_segment=None, plot_more_function=None, additional_plot=None, plot_mode='together',
              out_name=None):
 
@@ -284,6 +308,7 @@ class ProcessController:
                 interp_funcs.append(lambda x: create_f(name)(x))
 
         def plot_more_function2(ax):
+            ax.set_facecolor('#cacaca')
             if plot_more_function is not None:
                 plot_more_function(ax)
 
@@ -315,29 +340,26 @@ class ProcessController:
             for i, name in enumerate(self.controlled_names):
                 list_to_plot += [output_time_stamp, interp_funcs[i](output_time_stamp), name]
 
-            plot_lims = {}
-            for kind in ('input', 'output'):
-                plot_lims[kind] = [np.min(self.process_to_control.get_bounds('min', kind)),
-                                   np.max(self.process_to_control.get_bounds('max', kind))]
-                plot_lims[kind][0] = plot_lims[kind][0] * (1. - np.sign(plot_lims[kind][0]) * 0.03)
-                plot_lims[kind][1] = plot_lims[kind][1] * (1. + np.sign(plot_lims[kind][1]) * 0.03)
-
             lib.save_to_file(*list_to_plot,
                              output_time_stamp, output, out_name,
                              *additional,
                              fileName=file_name[:file_name.rfind('.')] + '_all_data.csv',)
-            lib.plot_to_file(*list_to_plot, xlabel='Time, s', ylabel='?', save_csv=False,
+            lib.plot_to_file(*list_to_plot, xlabel='Time, s', ylabel=self.plot_axes_names['input'],
+                             save_csv=False,
                              fileName=file_name[:file_name.rfind('.')] + '_in.png',
-                             xlim=time_segment, ylim=plot_lims['input'],
+                             xlim=time_segment, ylim=self.plot_lims['input'],
                              plotMoreFunction=plot_more_function2)
-            lib.plot_to_file(output_time_stamp, output, out_name, xlabel='Time, s', ylabel='?', save_csv=False,
+            lib.plot_to_file(output_time_stamp, output, out_name, xlabel='Time, s',
+                             ylabel=self.plot_axes_names['output'],
+                             save_csv=False,
                              fileName=file_name[:file_name.rfind('.')] + '_out.png',
-                             xlim=time_segment, ylim=plot_lims['output'],
+                             xlim=time_segment, ylim=self.plot_lims['output'],
                              plotMoreFunction=plot_more_function2)
             if additional_plot and len(additional):
-                lib.plot_to_file(*additional, xlabel='Time, s', ylabel='?', save_csv=False,
+                lib.plot_to_file(*additional, xlabel='Time, s', ylabel=self.plot_axes_names['additional'],
+                                 save_csv=False,
                                  fileName=file_name[:file_name.rfind('.')] + '_add.png',
-                                 xlim=time_segment, ylim=[0., None],
+                                 xlim=time_segment,
                                  plotMoreFunction=plot_more_function2)
         if time_segment is not None:
             i = (time_segment[0] <= output_time_stamp) & (output_time_stamp <= time_segment[1])
@@ -416,8 +438,15 @@ def test_PC_for_Libuda():
     #     PC.time_forward(30)
     PC.set_controlled({'O2': 10.e-5, 'CO': 4.5e-5})
     PC.time_forward(500)
-    print(PC.integrate_along_history(target_mode=True))
-    PC.plot(f'PC_plots/example_RL_21_10_task.png', out_name='target', plot_mode='separately')
+    # print(PC.integrate_along_history(target_mode=True))
+    # PC.plot(f'PC_plots/example_RL_21_10_task.png', out_name='target', plot_mode='separately')
+
+    # find optimal log_scale
+    average_rate = PC.integrate_along_history(target_mode=True) / PC.get_current_time()
+    max_rate, = PC.process_to_control.get_bounds('max', 'output')
+    log_scale = 5_000
+    print(np.log(1 + log_scale * average_rate / max_rate))
+    print(np.log(1 + log_scale))
 
 
 if __name__ == '__main__':

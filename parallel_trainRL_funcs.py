@@ -13,8 +13,9 @@ from run_RL import *
 
 
 def train_list_parallel(
-        names: tuple,
         params_variants: list,
+        names: tuple,
+        repeat: int = 1,
         out_path: str = None,
         const_params: dict = None,
         controller: ProcessController = None,
@@ -25,6 +26,14 @@ def train_list_parallel(
         on_cluster=False,
         at_same_time: int = 20):
     assert len(names) == len(params_variants[0]), 'Error: lengths mismatch'
+
+    if repeat > 1:
+        assert isinstance(params_variants, list), f'params_variants should be list,' \
+                                                  f'got {type(params_variants)} instead'
+        new_list = []
+        for values_set in params_variants:
+            new_list += [values_set] * repeat
+        params_variants = new_list
 
     for subd_name in ('env', 'model', 'agent'):
         if subd_name not in const_params:
@@ -46,11 +55,11 @@ def train_list_parallel(
         for i in range(try_num):
             # ../RL_10_21/venv/bin/python
             if on_cluster:
-                os.system(f'run-cluster -m 3000 -n 1 "venv/bin/python parallel_trainRL.py {i}"')
+                os.system(f'run-cluster -m 3000 -n 1 "{python_interpreter} {file_to_execute_path} {i}"')
             else:
                 os.system(f'{python_interpreter} {file_to_execute_path} {i}')  # just put here path to the script
         if on_cluster:
-            os.system('run-cluster -m 2000 -n 1 "venv/bin/python parallel_trainRL.py -2"')
+            os.system(f'run-cluster -m 2000 -n 1 "{python_interpreter} {file_to_execute_path} -2"')
         else:
             os.system(f'{python_interpreter} {file_to_execute_path} -2')
 
@@ -103,7 +112,7 @@ def train_list_parallel(
             n_episodes=n_episodes, create_unique_folder=False)
         # individual iteration file
         x_vector = np.arange(env_obj.stored_integral_data['integral'][:env_obj.count_episodes].size)[::20]
-        this_train_ress = env_obj.integral_plot['smooth_1000_step']
+        this_train_ress = env_obj.stored_integral_data['smooth_1000_step']
         if x_vector.size > this_train_ress.size:
             x_vector = x_vector[:this_train_ress.size]
         label = ''
@@ -122,10 +131,13 @@ def train_greed_parallel(*value_sets,
 
     assert len(names) == len(value_sets), 'Error: lengths mismatch'
     params_variants = list(itertools.product(*value_sets))
-    train_list_parallel(names, params_variants, **train_list_args)
+    train_list_parallel(params_variants, names, **train_list_args)
 
 
 if __name__ == '__main__':
+
+    # episode_time = 500
+    # time_step = 10
 
     # train_list_parallel(params_variants=[['each_step_base', 'each_step_base', 'each_step_base'],
     #                                      [3e-2, 5e-2, 5., 'each_step_new'],
@@ -150,8 +162,6 @@ if __name__ == '__main__':
     #                     unique_folder=False,
     #                     at_same_time=30)
 
-    # episode_time = 500
-    # time_step = 10
     # train_greed_parallel(['each_step_base', 'each_step_base', 'full_ep_mean', 'full_ep_mean'],
     #                  names=('env:reward_spec', ),
     #                  const_params={

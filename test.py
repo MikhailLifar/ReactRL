@@ -39,23 +39,41 @@ def increase_contrast():
     plt.show()
 
 
-def practice_in_cv():
-    # reading
-    img = cv2.imread('imgs/5.jpg', cv2.IMREAD_COLOR)
-
-    # without convertation image would have wrong colors
-    img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-
-    ksize = 7
-    img = cv2.blur(img, (ksize, ksize))
-
-    img = cv2.Canny(image=img, threshold1=20, threshold2=25)
-
+def show_with_pyplolt(img: np.ndarray):
     # show image with pyplot
     fig, ax = plt.subplots(1, figsize=(15, 8))
     ax.imshow(img)
     plt.show()  # not presented in GFG tutorial!
     plt.close(fig)
+
+
+def show_with_resize(img: np.ndarray, name: str):
+    # show image with pyplot
+    h = img.shape[0] // 4
+    w = img.shape[1] // 4
+    resized = cv2.resize(img, (w, h), interpolation=cv2.INTER_AREA)
+    cv2.imshow(name, resized)
+
+
+def practice_in_cv():
+    # reading
+    img = cv2.imread('imgs/5.jpg', cv2.IMREAD_COLOR)
+    # to grayscale
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    show_with_resize(img, 'gray')
+
+    ksize = 7
+    img = cv2.GaussianBlur(img, (ksize, ksize), 0)
+
+    img = cv2.erode(img, None, iterations=5)
+    # show_with_resize(img, 'erode')
+    img = cv2.dilate(img, None, iterations=5)
+    show_with_resize(img, 'erode+dilate')
+
+    img = cv2.Canny(image=img, threshold1=20, threshold2=25)
+
+    show_with_resize(img, 'final')
+    cv2.waitKey(0)
 
 
 def run_test_model():
@@ -76,9 +94,9 @@ if __name__ == '__main__':
     # M = generate_max_rank_matr(5, 5)
     # print(M)
 
-    # practice_in_cv()
+    practice_in_cv()
 
-    M = generate_max_rank_matr(3, 3)
-    np.save('./M_3x3.npy', M, allow_pickle=False)
+    # M = generate_max_rank_matr(3, 3)
+    # np.save('./M_3x3.npy', M, allow_pickle=False)
 
     pass
