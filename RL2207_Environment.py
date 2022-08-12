@@ -115,6 +115,12 @@ class RL2207_Environment(Environment):
         self.normalize_coef = normalize_coef(self)
         assert self.normalize_coef >= 0
 
+        # Log preprocessing parameters.
+        # Log preprocessing may be used when output values of the process
+        # are distributed not uniformly between min and max bounds,
+        # exactly when these values are mostly much closer to the min bound.
+        # I've tried log scaling with L2001 model, but results were the same as earlier,
+        # without scaling
         self.if_use_log_scale = log_scaling_dict is not None
         self.to_log_inds = None
         self.to_log_scales = None
@@ -329,8 +335,8 @@ class RL2207_Environment(Environment):
     #     plt.close(fig)
 
     def describe_to_file(self, filename):
-        with open(filename, 'w') as fout:
-            fout.write('--Environment information--\n')
+        with open(filename, 'a') as fout:
+            fout.write('\n--Environment information--\n')
             fout.write(self.additional_info + '\n')
             fout.write('--Model information--\n')
             fout.write(self.model.add_info + '\n')

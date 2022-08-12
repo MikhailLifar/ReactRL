@@ -26,6 +26,7 @@ ADD_PLOTS = ['theta_CO', 'theta_O']
 def create_tforce_agent(environment: RL2207_Environment, agent_name, params: dict = None):
     if params is None:
         params = dict()
+    if 'memory' not in params:
         if agent_name == 'dqn':
             params['memory'] = 100
         # elif agent_name == 'vpg':
@@ -159,7 +160,7 @@ def fill_variable_dict(values: list, values_names: tuple):
     variable_dict['model'] = dict()
     for i1, name in enumerate(values_names):
         find = False
-        for subset_name in variable_dict:
+        for subset_name in ('model', 'env', 'agent'):
             if f'{subset_name}:' in name:
                 find = True
                 sub_name = name[name.find(':') + 1:]
@@ -210,14 +211,22 @@ def train_list(names: tuple,
             max_episode_timesteps=6000)
         # agent parametrization
         if 'agent_name' in const_params:
-            agent_rl = create_tforce_agent(env_obj, const_params['agent_name'],
-                                           **(const_params['agent']), **(variable_params['agent']))
+            agent_name = const_params['agent_name']
         else:
-            agent_rl = create_tforce_agent(env_obj, variable_params['agent_name'],
-                                           **(const_params['agent']), **(variable_params['agent']))
+            agent_name = variable_params['agent_name']
+        agent_rl = create_tforce_agent(env_obj, agent_name,
+                                       params={**(const_params['agent']), **(variable_params['agent'])})
         # run training
+        the_folder = make_subdir_return_path(out_path, name='_', with_date=False, unique=True)
+        # describe the agent to file
+        with open(f'{the_folder}/_info.txt', 'a') as f:
+            f.write(f'----Agent----\n')
+            f.write(f'agent: {agent_name}\n')
+            agent_params = {**const_params['agent'], **variable_params['agent']}
+            for p in agent_params:
+                f.write(f'{p}: {agent_params[p]}\n')
         run(env_obj, agent_rl,
-            out_folder=make_subdir_return_path(out_path, name='_', with_date=False, unique=True),
+            out_folder=the_folder,
             n_episodes=10000, create_unique_folder=False)
         # collect training results
         x_vector = np.arange(env_obj.integral_plot['integral'][:env_obj.count_episodes].size)[::20]
@@ -234,28 +243,45 @@ def train_list(names: tuple,
                      ylabel='integral/episode_time', )
 
 
-def train_greed(*value_sets,
-                names: tuple,
-                parallel_mode=False,
-                **train_list_args):
+def train_grid(*value_sets,
+               names: tuple,
+               **train_list_args):
 
     assert len(names) == len(value_sets), 'Error: lengths mismatch'
     params_variants = list(itertools.product(*value_sets))
+    # if tuple names contains subtuple of names
+    contains_tuple = False
+    for it in names:
+        if isinstance(it, tuple):
+            contains_tuple = True
+            break
+    # if contains...
+    if contains_tuple:
+        # realisation of grid not for the single parameter,
+        # but for the sets of parameters,
+        # i. e. creation grid of the form
+        # [
+        #  [a11, a12, a13..., b11, b12..., ...], [a11, a12, a13..., b21, b22..., ...], [a11, a12, a13..., b31, b32.., ...],
+        #  [a21, a22, a23..., b11, b12..., ...], [a21, a22, a23..., b21, b22..., ...], [a21, a22, a23..., b31, b32.., ...],
+        #  ]
+        for i, _ in enumerate(params_variants):
+            new_params_set = []
+            for j, it in enumerate(names):
+                if isinstance(it, tuple):
+                    for k, _ in enumerate(it):
+                        new_params_set.append(params_variants[i][j][k])
+                else:
+                    new_params_set.append(params_variants[i][j])
+            params_variants[i] = new_params_set
+        new_names = []
+        for it in names:
+            if isinstance(it, tuple):
+                for name in it:
+                    new_names.append(name)
+            else:
+                new_names.append(it)
+        names = tuple(new_names)
     train_list(names, params_variants, **train_list_args)
-
-
-def train_different_agents(*args, agents_names: list = None, main_path=None, **kwargs):
-    if agents_names is None:
-        agents_names = ['vpg', 'dpg', 'ppo', 'a2c']
-    main_path = make_subdir_return_path(main_path)
-    for name in agents_names:
-        try:
-            train_greed(*args, agent_name=name,
-                    out_path=make_subdir_return_path(main_path, with_date=False, unique=False, name=name),
-                    unique_folder=False, **kwargs)
-        except tensorforce.TensorforceError as e:
-            print(f'Something went wrong in method {name}')
-            print(e)
 
 
 if __name__ == '__main__':

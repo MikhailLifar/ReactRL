@@ -35,6 +35,7 @@ def choose_from_folder(folder_path, subfolder_path,
         subfolder_path = '/' + subfolder_path
     in_dir = [name for name in os.listdir(f'{folder_path}{subfolder_path}')
               if valid_file_key(name)]
+    in_dir.sort()
     if choose_typo == 'max':
         outfile = max(in_dir, key=take_key)
         return f'{folder_path}{subfolder_path}/{outfile}'
@@ -72,28 +73,31 @@ def collect_along_folder(folder_path,
             print(f'Error with folder: {d}')
 
 
+def collect_training_results(folder):
+    for name_part in (
+            '_all_data',
+            '_in',
+            '_out'
+                      ):
+        collect_along_folder(folder,
+                             'testing_deterministic',
+                             choose_folder_key=lambda s: s[0] == '_' and s[1].isdigit(),
+                             choose_file_key=lambda s: s[0].isdigit() and name_part in s,
+                             take_key=lambda s: float(s[:s.find('c')]))
+
+
 if __name__ == '__main__':
-    #get_compressed_along_folder('run_RL_out/train_greed/220708_diff_state',
-                                #names_to_copy=('agent', 'testing_deterministic',
-                                         #'output_by_step.png', 'integral_by_step.csv'),
-                                #key=lambda s: s[0] == '_')
-    collect_along_folder('run_RL_out/train_greed/220726_limited_conditions',
-                         'testing_deterministic',
-                         choose_folder_key=lambda s: s[0] == '_' and s[1].isdigit(),
-                         choose_file_key=lambda s: s[0].isdigit() and '_all_data' in s,
-                         take_key=lambda s: float(s[:s.find('c')]))
-    collect_along_folder('run_RL_out/train_greed/220726_limited_conditions',
-                         'testing_deterministic',
-                         choose_folder_key=lambda s: s[0] == '_' and s[1].isdigit(),
-                         choose_file_key=lambda s: s[0].isdigit() and '_in' in s,
-                         take_key=lambda s: float(s[:s.find('c')]))
-    collect_along_folder('run_RL_out/train_greed/220726_limited_conditions',
-                         'testing_deterministic',
-                         choose_folder_key=lambda s: s[0] == '_' and s[1].isdigit(),
-                         choose_file_key=lambda s: s[0].isdigit() and '_out' in s,
-                         take_key=lambda s: float(s[:s.find('c')]))
-    #collect_along_folder('run_RL_out/train_greed/220708_diff_state',
-                         #choose_folder_key=lambda s: s[0] == '_' and s[1].isdigit(),
-                         #choose_file_key=lambda s: 'by_step' in s and '.csv' in s,
-                         #dest_name='collected_integral_curves')
+    # get_compressed_along_folder('run_RL_out/train_greed/220708_diff_state',
+    #                             names_to_copy=('agent', 'testing_deterministic',
+    #                                      'output_by_step.png', 'integral_by_step.csv'),
+    #                             key=lambda s: s[0] == '_')
+
+    folds = ['220805_Libuda_more_CO_allowed', '220805_Libuda_more_CO_allowed']
+    for fold in folds:
+        collect_training_results(f'run_RL_out/current_training/{fold}')
+
+    # collect_along_folder('run_RL_out/train_greed/220708_diff_state',
+    #                      choose_folder_key=lambda s: s[0] == '_' and s[1].isdigit(),
+    #                      choose_file_key=lambda s: 'by_step' in s and '.csv' in s,
+    #                      dest_name='collected_integral_curves')
     pass

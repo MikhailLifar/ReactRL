@@ -104,11 +104,21 @@ def train_list_parallel(
                                            **(const_params['env']), **(variable_params['env'])),
             max_episode_timesteps=6000)
         if 'agent_name' in const_params:
-            agent_rl = create_tforce_agent(env_obj, const_params['agent_name'])
+            agent_name = const_params['agent_name']
         else:
-            agent_rl = create_tforce_agent(env_obj, variable_params['agent_name'])
+            agent_name = variable_params['agent_name']
+        agent_rl = create_tforce_agent(env_obj, agent_name,
+                                       params={**(const_params['agent']), **(variable_params['agent'])})
+        the_folder = make_subdir_return_path(out_path, name=f'_{iter_arg}', with_date=False, unique=False)
+        # describe the agent to file
+        with open(f'{the_folder}/_info.txt', 'a') as f:
+            f.write(f'----Agent_information----\n')
+            f.write(f'agent: {agent_name}\n')
+            agent_params = {**const_params['agent'], **variable_params['agent']}
+            for p in agent_params:
+                f.write(f'{p}: {agent_params[p]}\n')
         run(env_obj, agent_rl,
-            out_folder=make_subdir_return_path(out_path, name=f'_{iter_arg}', with_date=False, unique=False),
+            out_folder=the_folder,
             n_episodes=n_episodes, create_unique_folder=False)
         # individual iteration file
         x_vector = np.arange(env_obj.stored_integral_data['integral'][:env_obj.count_episodes].size)[::20]
@@ -125,12 +135,44 @@ def train_list_parallel(
         df.to_csv(f'{out_path}/iter{iter_arg}.csv', sep=' ', index=False)
 
 
-def train_greed_parallel(*value_sets,
-                         names: tuple,
-                         **train_list_args):
+def train_grid_parallel(*value_sets,
+                        names: tuple,
+                        **train_list_args):
 
     assert len(names) == len(value_sets), 'Error: lengths mismatch'
     params_variants = list(itertools.product(*value_sets))
+    contains_tuple = False
+    # if tuple names contains subtuple of names
+    for it in names:
+        if isinstance(it, tuple):
+            contains_tuple = True
+            break
+    # if contains...
+    if contains_tuple:
+        # realisation of grid not for the single parameter,
+        # but for the sets of parameters,
+        # i. e. creation grid of the form
+        # [
+        #  [a11, a12, a13..., b11, b12..., ...], [a11, a12, a13..., b21, b22..., ...], [a11, a12, a13..., b31, b32.., ...],
+        #  [a21, a22, a23..., b11, b12..., ...], [a21, a22, a23..., b21, b22..., ...], [a21, a22, a23..., b31, b32.., ...],
+        #  ]
+        for i, _ in enumerate(params_variants):
+            new_params_set = []
+            for j, it in enumerate(names):
+                if isinstance(it, tuple):
+                    for k, _ in enumerate(it):
+                        new_params_set.append(params_variants[i][j][k])
+                else:
+                    new_params_set.append(params_variants[i][j])
+            params_variants[i] = new_params_set
+        new_names = []
+        for it in names:
+            if isinstance(it, tuple):
+                for name in it:
+                    new_names.append(name)
+            else:
+                new_names.append(it)
+        names = tuple(new_names)
     train_list_parallel(params_variants, names, **train_list_args)
 
 
@@ -162,7 +204,7 @@ if __name__ == '__main__':
     #                     unique_folder=False,
     #                     at_same_time=30)
 
-    # train_greed_parallel(['each_step_base', 'each_step_base', 'full_ep_mean', 'full_ep_mean'],
+    # train_grid_parallel(['each_step_base', 'each_step_base', 'full_ep_mean', 'full_ep_mean'],
     #                  names=('env:reward_spec', ),
     #                  const_params={
     #                      'env': {'model_type': 'continuous',

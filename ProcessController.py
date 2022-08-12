@@ -90,7 +90,8 @@ class ProcessController:
 
         self.plot_lims = dict()
         self.plot_axes_names = dict()
-        self.initialize_plot_params()
+        self.target_func_name = 'target'
+        self._initialize_plot_params()
 
     def set_controlled(self, new_values):
         """
@@ -252,23 +253,27 @@ class ProcessController:
         inds = (time_segment[0] <= output_time_stamp) & (output_time_stamp <= time_segment[1])
         return lib.integral(output_time_stamp[inds], output[inds])
 
-    def initialize_plot_params(self):
+    def _initialize_plot_lims(self):
         for kind in ('input', 'output'):
             self.plot_lims[kind] = [np.min(self.process_to_control.get_bounds('min', kind)),
                                np.max(self.process_to_control.get_bounds('max', kind))]
             self.plot_lims[kind][0] = self.plot_lims[kind][0] * (1. - np.sign(self.plot_lims[kind][0]) * 0.03)
             self.plot_lims[kind][1] = self.plot_lims[kind][1] * (1. + np.sign(self.plot_lims[kind][1]) * 0.03)
-        for kind in ('input', 'output', 'additional'):
+
+    def _initialize_plot_params(self):
+        self._initialize_plot_lims()
+        for kind in ('input', 'output', 'additional', 'target'):
             self.plot_axes_names[kind] = '?'
 
     def set_plot_params(self, **kwargs):
         for kind in ('input', 'output'):
             if f'{kind}_lims' in kwargs:
-                assert len(kwargs[f'{kind}_lims']) == 2
                 self.plot_lims[kind] = kwargs[f'{kind}_lims']
-        for kind in ('input', 'output', 'additional'):
+        for kind in ('input', 'output', 'additional', 'target'):
             if f'{kind}_ax_name' in kwargs:
                 self.plot_axes_names[kind] = kwargs[f'{kind}_ax_name']
+        if 'target_name' in kwargs:
+            self.target_func_name = kwargs['target_name']
 
     def plot(self, file_name, time_segment=None, plot_more_function=None, additional_plot=None, plot_mode='together',
              out_name=None):
@@ -328,35 +333,58 @@ class ProcessController:
         else:
             additional_plot = False
 
+        common_title = ''
+        if out_name == 'target':
+            integral = lib.integral(output_time_stamp, self.get_target_for_passed())
+            common_title = f'Cumulative {self.target_func_name}: {integral:.3g}'
+
         if plot_mode == 'together':
             list_to_plot = []
             for i, name in enumerate(self.controlled_names):
                 list_to_plot += [output_time_stamp, interp_funcs[i](output_time_stamp), name]
             list_to_plot += [output_time_stamp, output, out_name]
-            lib.plot_to_file(*list_to_plot, *additional, xlabel='Time, s', ylabel='?',
+            lib.plot_to_file(*list_to_plot, *additional, title=common_title, xlabel='Time, s', ylabel='?',
                              fileName=file_name, xlim=time_segment, plotMoreFunction=plot_more_function2)
         else:
             list_to_plot = []
             for i, name in enumerate(self.controlled_names):
                 list_to_plot += [output_time_stamp, interp_funcs[i](output_time_stamp), name]
+                # # Check if limits for plotting are correct, it is computationally expensive!
+                # if self.plot_lims['input'] is not None:
+                #     if (np.min(list_to_plot[-1]) < self.plot_lims['input'][0]) or \
+                #             (np.max(list_to_plot[-1]) > self.plot_lims['input'][1]):
+                #         self.plot_lims['input'] = None
+
+            # # Check if limits for plotting are correct, it is computationally expensive!
+            # if self.plot_lims['output'] is not None:
+            #     if (np.min(output) < self.plot_lims['output'][0]) or \
+            #             (np.max(output) > self.plot_lims['output'][1]):
+            #         self.plot_lims['output'] = None
 
             lib.save_to_file(*list_to_plot,
                              output_time_stamp, output, out_name,
                              *additional,
                              fileName=file_name[:file_name.rfind('.')] + '_all_data.csv',)
-            lib.plot_to_file(*list_to_plot, xlabel='Time, s', ylabel=self.plot_axes_names['input'],
+            lib.plot_to_file(*list_to_plot,
+                             title=common_title,
+                             xlabel='Time, s', ylabel=self.plot_axes_names['input'],
                              save_csv=False,
                              fileName=file_name[:file_name.rfind('.')] + '_in.png',
                              xlim=time_segment, ylim=self.plot_lims['input'],
                              plotMoreFunction=plot_more_function2)
-            lib.plot_to_file(output_time_stamp, output, out_name, xlabel='Time, s',
+            lib.plot_to_file(output_time_stamp, output, out_name,
+                             title=common_title,
+                             xlabel='Time, s',
                              ylabel=self.plot_axes_names['output'],
                              save_csv=False,
                              fileName=file_name[:file_name.rfind('.')] + '_out.png',
                              xlim=time_segment, ylim=self.plot_lims['output'],
                              plotMoreFunction=plot_more_function2)
             if additional_plot and len(additional):
-                lib.plot_to_file(*additional, xlabel='Time, s', ylabel=self.plot_axes_names['additional'],
+                lib.plot_to_file(*additional,
+                                 title=common_title,
+                                 xlabel='Time, s',
+                                 ylabel=self.plot_axes_names['additional'],
                                  save_csv=False,
                                  fileName=file_name[:file_name.rfind('.')] + '_add.png',
                                  xlim=time_segment,

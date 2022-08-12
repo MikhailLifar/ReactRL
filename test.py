@@ -1,5 +1,7 @@
 # import matplotlib
 # matplotlib.use('Agg')
+import \
+    itertools
 
 import matplotlib.pyplot as plt
 
@@ -56,23 +58,44 @@ def show_with_resize(img: np.ndarray, name: str):
 
 
 def practice_in_cv():
-    # reading
-    img = cv2.imread('imgs/5.jpg', cv2.IMREAD_COLOR)
-    # to grayscale
-    img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    show_with_resize(img, 'gray')
+    # # reading
+    # img = cv2.imread('imgs/5.jpg', cv2.IMREAD_COLOR)
+    # # to grayscale
+    # img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    # read to grayscale
+    img = cv2.imread('imgs/5.jpg', 0)
+
+    # resize to some standard
+    coef = img.shape[0] // 750
+    h = img.shape[0] // coef
+    w = img.shape[1] // coef
+    img = cv2.resize(img, (w, h), interpolation=cv2.INTER_AREA)
+
+    img = cv2.equalizeHist(img)
+
+    # show_with_resize(img, 'gray')
+    cv2.imshow('gray', img)
 
     ksize = 7
+    # median = cv2.medianBlur(img, ksize)
+    # show_with_resize(median, 'median')
     img = cv2.GaussianBlur(img, (ksize, ksize), 0)
+    # cv2.imshow('Gauss', img)
 
-    img = cv2.erode(img, None, iterations=5)
+    # img = cv2.erode(img, None, iterations=5)
     # show_with_resize(img, 'erode')
-    img = cv2.dilate(img, None, iterations=5)
-    show_with_resize(img, 'erode+dilate')
+    it = 3
+    img = cv2.dilate(img, None, iterations=it)
+    img = cv2.erode(img, None, iterations=it)
+    # show_with_resize(img, 'erode+dilate')
 
-    img = cv2.Canny(image=img, threshold1=20, threshold2=25)
+    # cv2.imshow('intermediate', img)
 
-    show_with_resize(img, 'final')
+    min_thresh = 30
+    max_thresh = min_thresh + 100
+    img = cv2.Canny(image=img, threshold1=min_thresh, threshold2=max_thresh, L2gradient=True)
+    #
+    cv2.imshow('final', img)
     cv2.waitKey(0)
 
 
@@ -94,7 +117,12 @@ if __name__ == '__main__':
     # M = generate_max_rank_matr(5, 5)
     # print(M)
 
-    practice_in_cv()
+    # practice_in_cv()
+
+    it1 = [('a', 'b'), 'c']
+    it2 = [1, 2]
+    prod = list(itertools.product(it1, it2))
+    print(prod)
 
     # M = generate_max_rank_matr(3, 3)
     # np.save('./M_3x3.npy', M, allow_pickle=False)
