@@ -1,8 +1,7 @@
 # import \
 #     copy
-
 import scipy.interpolate
-import numpy as np
+# import numpy as np
 import pandas as pd
 # import time
 
@@ -256,7 +255,7 @@ class ProcessController:
     def _initialize_plot_lims(self):
         for kind in ('input', 'output'):
             self.plot_lims[kind] = [np.min(self.process_to_control.get_bounds('min', kind)),
-                               np.max(self.process_to_control.get_bounds('max', kind))]
+                                    np.max(self.process_to_control.get_bounds('max', kind))]
             self.plot_lims[kind][0] = self.plot_lims[kind][0] * (1. - np.sign(self.plot_lims[kind][0]) * 0.03)
             self.plot_lims[kind][1] = self.plot_lims[kind][1] * (1. + np.sign(self.plot_lims[kind][1]) * 0.03)
 
@@ -389,9 +388,9 @@ class ProcessController:
                                  fileName=file_name[:file_name.rfind('.')] + '_add.png',
                                  xlim=time_segment,
                                  plotMoreFunction=plot_more_function2)
-        if time_segment is not None:
-            i = (time_segment[0] <= output_time_stamp) & (output_time_stamp <= time_segment[1])
-            print('CO output integral =', lib.integral(output_time_stamp[i], output[i]))
+        # if time_segment is not None:
+        #     i = (time_segment[0] <= output_time_stamp) & (output_time_stamp <= time_segment[1])
+        #     print('CO output integral =', lib.integral(output_time_stamp[i], output[i]))
 
     def get_and_plot(self,
                      file_name,
@@ -428,6 +427,228 @@ class ProcessController:
         self.process_to_control.reset()
 
 
+def create_func_to_approximate(exp_df: pd.DataFrame, model_obj,
+                               label_name, in_cols,
+                               set_k: list = None, use_k: list = None,
+                               rename_dict: dict = None,
+                               conv_params: dict = None, ):
+    if conv_params is None:
+        conv_params = dict()
+    df_to_process = exp_df[in_cols]
+    if rename_dict is not None:
+        df_to_process.rename(columns=rename_dict, inplace=True)
+    labels = np.array(exp_df[label_name])
+    norm_koef = np.mean(labels)
+    time_step_seq = (exp_df.loc[1:, 'Time'].to_numpy()
+                     - exp_df.loc[:exp_df.shape[0] - 2, 'Time'].to_numpy())
+    labels_x = np.zeros(exp_df.shape[0])
+    labels_x[1:] = time_step_seq.cumsum()
+    PC_obj = ProcessController(model_obj)
+    PC_obj.gas_analyser_delay = 0  # not sure about this
+
+    def func(alphas, DEBUG=False, folder=None, ind_picture=None):
+
+        PC_obj.reset()
+        PC_obj.process_to_control.set_params(alphas)
+        PC_obj.process(time_step_seq, df_to_process)
+        x_conv, conv = PC_obj.get_process_output(**conv_params)
+        model_res = np.interp(labels_x, x_conv, conv)
+        # model_res *= np.mean(labels) / np.mean(model_res)  # bad way to make values comparable
+        if isinstance(set_k, list):
+            set_k[0] = np.max(labels) / np.max(model_res)
+            model_res = model_res * set_k[0]  # TODO: fix this crutch
+        elif isinstance(use_k, list):
+            model_res = model_res * use_k[0]
+        else:
+            model_res = model_res * (np.max(labels) / np.max(model_res))
+        res = np.mean(np.abs(model_res - labels)) / norm_koef
+
+        if DEBUG:
+            fig, ax = lib.plt.subplots(1, figsize=(15, 8))
+            # ax.title('%.2g', %alphas)
+            title = f'relative MAE: {res:.3f}\n'
+            title += f'model: {PC_obj.process_to_control.model_name}\n'
+            for name in PC_obj.process_to_control.params:
+                title += '%s=%.3g ' % (name, alphas[name])
+            ax.set_title(lib.wrap(title, 100))
+            ax.plot(labels_x, labels, label='exp')
+            ax.plot(labels_x, model_res, label='model')
+            ax.legend()
+            if np.isnan(res):
+                fig.savefig(f'{folder}/{res}.png')
+            else:
+                if ind_picture is None:
+                    fig.savefig(f'{folder}/{res:.5f}.png')
+                else:
+                    fig.savefig(f'{folder}/{res:.3f}_iter_{ind_picture}.png')
+            lib.plt.close(fig)
+
+        return res
+
+    return func
+
+
+def create_to_approximate_many_frames(dfs: list, model_obj, label_name, in_cols,
+                                      ind_set_k: int = -1,
+                                      koefs: np.ndarray = None,
+                                      **kargs_glob):
+    funcs = []
+    koef_here = [-1.]
+
+    assert ind_set_k < len(dfs), 'k is too big'
+    for i, df in enumerate(dfs):
+        if i == ind_set_k:
+            funcs.append(create_func_to_approximate(
+                df, model_obj, label_name, in_cols,
+                set_k=koef_here, **kargs_glob))
+        else:
+            funcs.append(create_func_to_approximate(
+                df, model_obj, label_name, in_cols,
+                use_k=koef_here, **kargs_glob))
+
+    if koefs is None:
+        koefs = np.ones(len(funcs))
+    koefs = koefs / np.sum(koefs)
+
+    def func(alphas, **kargs_local):
+        res = 0
+        for k in range(koefs.size):
+            if 'ind_picture' in kargs_local:
+                new_args = copy.deepcopy(kargs_local)
+                new_args['ind_picture'] += f'_exp{k}'
+            else:
+                new_args = kargs_local
+            res += funcs[k](alphas, **new_args) * koefs[k]
+        return res
+
+    return func
+
+
+def func_to_optimize_stationary_sol(PC_obj: ProcessController,
+                                    episode_len):
+    import os
+
+    def f_to_optimize(controlled, DEBUG=False, folder=None, ind_picture=None):
+        if not isinstance(controlled, dict):
+            raise ValueError('Error!')
+        PC_obj.reset()
+        PC_obj.set_controlled(controlled)
+        PC_obj.time_forward(episode_len)
+        R = PC_obj.integrate_along_history(target_mode=True,
+                                           time_segment=[0., episode_len])
+        if DEBUG:
+            if not os.path.exists(f'{folder}/model_info.txt'):
+                with open(f'{folder}/model_info.txt', 'w') as f:
+                    f.write(PC_obj.process_to_control.add_info)
+
+            def ax_func(ax):
+                ax.set_title(f'O2: {controlled["O2"]:.2g}, CO: {controlled["CO"]:.2g},\nintegral: {R:.4g}')
+
+            PC_obj.plot(f'{folder}/try_{ind_picture}_return_{R:.3f}.png',
+                        plot_more_function=ax_func, plot_mode='separately',
+                        time_segment=[0., episode_len])
+        return -R
+
+    return f_to_optimize
+
+
+def func_to_optimize_two_step_sol(PC_obj: ProcessController,
+                                  episode_len, min_step_len=10.):
+    import os
+
+    def f_to_optimize(two_step_description, DEBUG=False, folder=None, ind_picture=None):
+        if not isinstance(two_step_description, dict):
+            raise ValueError('Error!')
+
+        controlled_set_1 = [two_step_description[f'{name}_1'] for name in
+                            PC_obj.controlled_names]
+        controlled_set_2 = [two_step_description[f'{name}_2'] for name in
+                            PC_obj.controlled_names]
+        t1, t2 = two_step_description['time_1'], two_step_description['time_2']
+        t1 = max(t1, min_step_len)
+        t2 = max(t2, min_step_len)
+
+        PC_obj.reset()
+        while PC_obj.get_current_time() <= episode_len:
+            PC_obj.set_controlled(controlled_set_1)
+            PC_obj.time_forward(t1)
+            PC_obj.set_controlled(controlled_set_2)
+            PC_obj.time_forward(t2)
+
+        R = PC_obj.integrate_along_history(target_mode=True,
+                                           time_segment=[0., episode_len])
+        if DEBUG:
+            if not os.path.exists(f'{folder}/model_info.txt'):
+                with open(f'{folder}/model_info.txt', 'w') as f:
+                    f.write(PC_obj.process_to_control.add_info)
+
+            def ax_func(ax):
+                ax.set_title(f'integral: {R:.4g}')
+
+            PC_obj.plot(f'{folder}/try_{ind_picture}_return_{R:.3f}.png',
+                        plot_more_function=ax_func, plot_mode='separately',
+                        time_segment=[0., episode_len])
+        return -R
+
+    return f_to_optimize
+
+
+def func_to_optimize_sin_sol(PC_obj: ProcessController,
+                             episode_len, dt=1.):
+    import os
+
+    dt, episode_len = float(dt), float(episode_len)
+
+    def f_to_optimize(sin_description, DEBUG=False, folder=None, ind_picture=None):
+        if not isinstance(sin_description, dict):
+            raise ValueError('Error!')
+
+        def create_f_per_name(name, name_ind_in_model):
+            A = sin_description[f'{name}_A']
+            k = sin_description[f'{name}_k']
+            bias_t = sin_description[f'{name}_bias_t']
+            bias_f = sin_description[f'{name}_bias_f']
+
+            def func(t):
+                res = A * np.sin(k * t + bias_t) + bias_f
+                lower_bound = PC_obj.process_to_control.limits['input'][name_ind_in_model][0]
+                upper_bound = PC_obj.process_to_control.limits['input'][name_ind_in_model][1]
+                res[res < lower_bound] = lower_bound
+                res[res > upper_bound] = upper_bound
+                return res
+
+            return func
+
+        funcs = [create_f_per_name(name, i) for i, name in enumerate(PC_obj.controlled_names)]
+        time_seq = np.arange(0., episode_len, dt)
+        controlled_to_pass = np.array([func(time_seq) for func in funcs])
+        controlled_to_pass = controlled_to_pass.transpose()
+
+        PC_obj.reset()
+        for i in range(time_seq.size):
+            PC_obj.set_controlled(controlled_to_pass[i])
+            PC_obj.time_forward(dt)
+        while PC_obj.get_current_time() < episode_len:
+            PC_obj.time_forward(dt)
+
+        R = PC_obj.integrate_along_history(target_mode=True,
+                                           time_segment=[0., episode_len])
+        if DEBUG:
+            if not os.path.exists(f'{folder}/model_info.txt'):
+                with open(f'{folder}/model_info.txt', 'w') as f:
+                    f.write(PC_obj.process_to_control.add_info)
+
+            def ax_func(ax):
+                ax.set_title(f'integral: {R:.4g}')
+
+            PC_obj.plot(f'{folder}/try_{ind_picture}_return_{R:.3f}.png',
+                        plot_more_function=ax_func, plot_mode='separately',
+                        time_segment=[0., episode_len])
+        return -R
+
+    return f_to_optimize
+
+
 def custom_experiment():
     # # 1st try
     # PC = ProcessController(TestModel())
@@ -438,25 +659,44 @@ def custom_experiment():
     # for c in '12345678':
     #     PC.plot(f'PC_plots/example{c}.png', out_name=c, plot_mode='separately')
 
-    def target(x):
-        # target_v = np.array([2., 1., 3., -1., 0.,
-        #                      1., -1., 3., -2., 3.])
-        target_v = np.array([2., 1., 3.])
-        return -np.linalg.norm(x - target_v)
+    # def target(x):
+    #     # target_v = np.array([2., 1., 3., -1., 0.,
+    #     #                      1., -1., 3., -2., 3.])
+    #     target_v = np.array([2., 1., 3.])
+    #     return -np.linalg.norm(x - target_v)
+    #
+    # PC = ProcessController(TestModel(), target_func_to_maximize=target)
+    # for i in range(5):
+    #     PC.set_controlled([i + 0.2 * i1 for i1 in range(1, 6)])
+    #     PC.time_forward(30)
+    # print(PC.integrate_along_history(target_mode=True))
+    # for c in [f'out{i}' for i in range(1, 4)]:
+    #     PC.plot(f'PC_plots/example_{c}.png', out_name=c, plot_mode='separately')
+    # PC.plot(f'PC_plots/example_target.png', out_name='target', plot_mode='separately')
 
-    PC = ProcessController(TestModel(), target_func_to_maximize=target)
-    for i in range(5):
-        PC.set_controlled([i + 0.2 * i1 for i1 in range(1, 6)])
-        PC.time_forward(30)
-    print(PC.integrate_along_history(target_mode=True))
-    for c in [f'out{i}' for i in range(1, 4)]:
-        PC.plot(f'PC_plots/example_{c}.png', out_name=c, plot_mode='separately')
-    PC.plot(f'PC_plots/example_target.png', out_name='target', plot_mode='separately')
+    def target(x):
+        return x[0]
+
+    PC_LDegrad = ProcessController(LibudaModelWithDegradation(init_cond={'thetaCO': 0., 'thetaO': 0., }, Ts=273+160,
+                                                              v_d=0.01, v_r=0.1, border=4.),
+                                   target_func_to_maximize=target)
+    PC_LDegrad.set_plot_params(output_lims=[0., 0.06], output_ax_name='CO2_formation_rate',
+                               input_ax_name='Pressure, Pa')
+
+    episode_len = 500
+    for pair in ((2e-5, 10e-5), (3e-5, 10e-5), (4e-5, 10e-5), ):
+        PC_LDegrad.reset()
+        PC_LDegrad.set_controlled({'CO': pair[0], 'O2': pair[1], })
+        PC_LDegrad.time_forward(episode_len)
+        R = PC_LDegrad.integrate_along_history(target_mode=True)
+        PC_LDegrad.plot(file_name=f'PC_plots/LDegrad/O2_{int(pair[1] * 1e+5)}_CO_{int(pair[0] * 1e+5)}_R_{R:.2f}.png',
+                        plot_mode='separately')
 
     pass
 
 
-def test_PC_for_Libuda():
+def test_PC_with_Libuda():
+
     def target(x):
         return x[0]
 
@@ -477,10 +717,34 @@ def test_PC_for_Libuda():
     print(np.log(1 + log_scale))
 
 
+def check_func_to_optimize():
+
+    def target(x):
+        return x[0]
+
+    PC_LDegrad = ProcessController(LibudaModelWithDegradation(init_cond={'thetaCO': 0., 'thetaO': 0., }, Ts=273+160,
+                                                              v_d=0.01, v_r=0.1, border=4.),
+                                   target_func_to_maximize=target)
+    PC_LDegrad.set_plot_params(output_lims=[0., 0.06], output_ax_name='CO2_formation_rate',
+                               input_ax_name='Pressure, Pa')
+
+    # f = func_to_optimize_sin_sol(PC_LDegrad, 500, 1.)
+    # f({'O2_A': 0., 'O2_k': 0.1 * np.pi, 'O2_bias_t': 0., 'O2_bias_f': 10.e-5,
+    #    'CO_A': 2e-5, 'CO_k': 0.1 * np.pi, 'CO_bias_t': 0., 'CO_bias_f': 3.e-5},
+    #   DEBUG=True, folder='PC_plots/test_sin_sol')
+
+    f = func_to_optimize_two_step_sol(PC_LDegrad, 500, 10.)
+    f({'O2_1': 10.e-5, 'O2_2': 10.e-5, 'CO_1': 4.e-5, 'CO_2': 2.e-5,
+       'time_1': 10., 'time_2': 10.},
+      DEBUG=True, folder='PC_plots/test_two_step_sol')
+
+
 if __name__ == '__main__':
 
     # custom_experiment()
 
-    test_PC_for_Libuda()
+    # test_PC_with_Libuda()
+
+    check_func_to_optimize()
 
     pass

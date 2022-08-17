@@ -1,7 +1,7 @@
 # import matplotlib
 # matplotlib.use('Agg')
-import \
-    itertools
+# import \
+#     itertools
 
 import matplotlib.pyplot as plt
 
@@ -13,7 +13,7 @@ from test_models import TestModel, generate_max_rank_matr
 
 def read_and_show():
     # reading
-    img1 = cv2.imread('imgs/1.jpg', cv2.IMREAD_COLOR)
+    # img1 = cv2.imread('imgs/1.jpg', cv2.IMREAD_COLOR)
     # print(img1.shape)
 
     # # show image with cv2
@@ -24,10 +24,12 @@ def read_and_show():
     # cv2.destroyAllWindows()
 
     # without convertation image would have wrong colors
-    img1 = cv2.cvtColor(img1, cv2.COLOR_BGR2RGB)
+    # img1 = cv2.cvtColor(img1, cv2.COLOR_BGR2RGB)
     # # show image with pyplot
     # plt.imshow(img1)
     # plt.show()  # not presented in GFG tutorial!
+
+    pass
 
 
 def increase_contrast():
@@ -99,6 +101,39 @@ def practice_in_cv():
     cv2.waitKey(0)
 
 
+def frames_from_video_to_imgs():
+    for i in range(1, 10):
+
+        cap = cv2.VideoCapture(f'data/video/diff_shapes/{i}.MP4')
+        from_folder = 115
+
+        if not cap.isOpened():
+            print("Error opening video stream or file")
+        else:
+            ret = True
+            i1 = 0
+            while ret and i1 < from_folder:
+                ret, frame = cap.read()
+                if ret:
+
+                    # coef = frame.shape[0] // 650
+                    # h = frame.shape[0] // coef
+                    # w = frame.shape[1] // coef
+                    # frame = cv2.resize(frame, (w, h), interpolation=cv2.INTER_AREA)
+                    #
+                    # cv2.imshow('Frame', frame)
+                    # if cv2.waitKey(25) & 0xFF == ord('q'):
+                    #     break
+
+                    h = frame.shape[0]
+                    frame = frame[:, :h]
+                    frame = cv2.resize(frame, (640, 640), interpolation=cv2.INTER_AREA)
+
+                    cv2.imwrite(f'data/imgs/from_video/{(i - 1) * from_folder + i1}.png', frame)
+                    # print(i)
+                    i1 += 1
+
+
 def run_test_model():
     model_obj = TestModel()
     vector_to_apply = np.random.randint(-5, 5, 5)
@@ -119,10 +154,30 @@ if __name__ == '__main__':
 
     # practice_in_cv()
 
-    it1 = [('a', 'b'), 'c']
-    it2 = [1, 2]
-    prod = list(itertools.product(it1, it2))
-    print(prod)
+    # frames_from_video_to_imgs()
+
+    # d = {'CO_A': 0.0001, 'CO_bias_f': 0.0, 'CO_bias_t': 0.21801443183436786, 'CO_k': 0.6283185307179586, 'O2_A': 0.0001, 'O2_bias_f': 8.623641039884324e-05, 'O2_bias_t': 0.26438923328940805, 'O2_k': 0.3141592653589793}
+
+    # A = 0.0001
+    # k = 0.6283185307179586
+    # b_t = 0.21801443183436786
+    # b_f = 0.0
+
+    A = 2.e-5
+    k = 0.1 * np.pi
+    b_t = 0.0
+    b_f = 3.e-5
+
+    def f(t):
+        res = A * np.sin(k * t + b_t) + b_f
+        res[res < 0.] = 0.
+        res[res > 1.e-4] = 1.e-4
+        return res
+
+    x = np.linspace(0., 500., 5000)
+    y = f(x)
+    plt.plot(x, y)
+    plt.show()
 
     # M = generate_max_rank_matr(3, 3)
     # np.save('./M_3x3.npy', M, allow_pickle=False)

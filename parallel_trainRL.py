@@ -6,25 +6,25 @@ def target(x):
     return x[0]
 
 
-#train_grid_parallel(['full_ep_mean', 'full_ep_mean', 'each_step_base', 'each_step_base'],
-                     #names=('env:reward_spec', ),
-                     #const_params={
-                         #'env': {'model_type': 'continuous',
-                                 #'state_spec': {
-                                     #'rows': 1,
-                                     #'use_differences': False,
-                                     #},
-                                 #'episode_time': 500},
-                         #'agent_name': 'vpg',
-                     #},
-                     #out_path='run_RL_out/current_training/diff_rewards',
-                     #python_interpreter='../RL_10_21/venv/bin/python',
-                     #on_cluster=False,
-                     #controller=ProcessController(TestModel(), target_func_to_maximize=target,
-                                                  #supposed_step_count=2 * episode_time // time_step,  # memory controlling parameters
-                                                  #supposed_exp_time=2 * episode_time),
-                     #n_episodes=10_000,
-                     #unique_folder=False,)
+# train_grid_parallel(['full_ep_mean', 'full_ep_mean', 'each_step_base', 'each_step_base'],
+#                      names=('env:reward_spec', ),
+#                      const_params={
+#                          'env': {'model_type': 'continuous',
+#                                  'state_spec': {
+#                                      'rows': 1,
+#                                      'use_differences': False,
+#                                      },
+#                                  'episode_time': 500},
+#                          'agent_name': 'vpg',
+#                      },
+#                      out_path='run_RL_out/current_training/diff_rewards',
+#                      python_interpreter='../RL_10_21/venv/bin/python',
+#                      on_cluster=False,
+#                      controller=ProcessController(TestModel(), target_func_to_maximize=target,
+#                                                   supposed_step_count=2 * episode_time // time_step,  # memory controlling parameters
+#                                                   supposed_exp_time=2 * episode_time),
+#                      n_episodes=10_000,
+#                      unique_folder=False,)
 
 # train_grid_parallel(['full_ep_mean', 'full_ep_base', 'each_step_base'],
 #                      [(1, False), (2, False), (3, False),
@@ -56,19 +56,19 @@ def target(x):
 episode_time = 500
 time_step = 10
 LibudaDegradPC = ProcessController(LibudaModelWithDegradation(init_cond={'thetaCO': 0., 'thetaO': 0.},
-                                                       Ts=273+160),
-                       target_func_to_maximize=target,
-                       supposed_step_count=2 * episode_time // time_step,  # memory controlling parameters
-                       supposed_exp_time=2 * episode_time)
+                                                              Ts=273+160),
+                                   target_func_to_maximize=target,
+                                   supposed_step_count=2 * episode_time // time_step,  # memory controlling parameters
+                                   supposed_exp_time=2 * episode_time)
 LibudaDegradPC.set_plot_params(input_ax_name='Pressure', input_lims=None,
-                   output_lims=[0., 0.06], output_ax_name='CO2_formation_rate')
+                               output_lims=[0., 0.06], output_ax_name='CO2_formation_rate')
 
 train_grid_parallel([(100.e-5, (1, False), 1e-4, 0.7), (10.e-5, (2, False), 1e-3, 0.7), (1.e-5, (3, False), 1e-4, 0.7), ],
                     ['full_ep_mean', 'each_step_base'],
-                     names=(('model:CO_top', 'env:state_spec',
-                             'agent:learning_rate', 'agent:entropy_regularization'),
-                            'env:reward_spec'),
-                     const_params={
+                    names=(('model:CO_top', 'env:state_spec',
+                            'agent:learning_rate', 'agent:entropy_regularization'),
+                           'env:reward_spec'),
+                    const_params={
                          'env': {'model_type': 'continuous',
                                  'episode_time': episode_time,
                                  'time_step': time_step,
@@ -82,12 +82,12 @@ train_grid_parallel([(100.e-5, (1, False), 1e-4, 0.7), (10.e-5, (2, False), 1e-3
                              'border': 4.,
                              }
                      },
-                     repeat=3,
-                     out_path='run_RL_out/current_training/220810_repeat_old',
-                     file_to_execute_path='repos/parallel_trainRL.py',
-                     python_interpreter='../RL_10_21/venv/bin/python',
-                     on_cluster=False,
-                     controller=LibudaDegradPC,
-                     n_episodes=1_000,
-                     unique_folder=False,
-                     at_same_time=45)
+                    repeat=3,
+                    out_path='run_RL_out/current_training/220810_repeat_old',
+                    file_to_execute_path='repos/parallel_trainRL.py',
+                    python_interpreter='../RL_10_21/venv/bin/python',
+                    on_cluster=False,
+                    controller=LibudaDegradPC,
+                    n_episodes=1_000,
+                    unique_folder=False,
+                    at_same_time=45)

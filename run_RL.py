@@ -7,8 +7,8 @@ import \
 
 # import tensorflow as tflow
 import numpy as np
-import \
-    tensorforce
+# import \
+#     tensorforce
 from tensorforce.agents import Agent
 
 # from test_models import BaseModel
@@ -110,7 +110,7 @@ def run(environment: RL2207_Environment, agent, out_folder='run_RL_out', n_episo
             # plt.close(fig)
             # --DEBUG--
             environment.controller.plot(f'{dir_path}/{environment.integral:.2f}conversion{i}.png',
-                                additional_plot=ADD_PLOTS, plot_mode='separately', out_name='target')
+                                        additional_plot=ADD_PLOTS, plot_mode='separately', out_name='target')
             environment.summary_graphs(f'{dir_path}/')
             prev_graph_ind = i
 
@@ -118,7 +118,7 @@ def run(environment: RL2207_Environment, agent, out_folder='run_RL_out', n_episo
             if (i - prev_graph_ind > 100) or\
                     ((environment.integral - prev_max_integral) / prev_max_integral > 0.07):
                 environment.controller.plot(f'{dir_path}/{environment.integral:.2f}conversion{i}.png',
-                                additional_plot=ADD_PLOTS, plot_mode='separately', out_name='target')
+                                            additional_plot=ADD_PLOTS, plot_mode='separately', out_name='target')
                 environment.summary_graphs(f'{dir_path}/')
                 prev_graph_ind = i
 
@@ -138,10 +138,10 @@ def run(environment: RL2207_Environment, agent, out_folder='run_RL_out', n_episo
 
 
 def test_run(environment: RL2207_Environment, agent, out_folder, n_episodes=None, deterministic=False,
-             reset_mode='random'):
+             reset_mode='normal'):
     environment.describe_to_file(f'{out_folder}/_info.txt')
-    # environment.reset_mode = reset_mode
-    environment.reset_mode = 'normal'
+    environment.reset_mode = reset_mode
+    # environment.reset_mode = 'normal'
     if n_episodes is None:
         n_episodes = 10
     for i in range(n_episodes):
@@ -227,7 +227,7 @@ def train_list(names: tuple,
                 f.write(f'{p}: {agent_params[p]}\n')
         run(env_obj, agent_rl,
             out_folder=the_folder,
-            n_episodes=10000, create_unique_folder=False)
+            n_episodes=n_episodes, create_unique_folder=False)
         # collect training results
         x_vector = np.arange(env_obj.integral_plot['integral'][:env_obj.count_episodes].size)[::20]
         this_train_ress = env_obj.integral_plot['smooth_1000_step']
