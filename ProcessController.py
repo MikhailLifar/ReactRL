@@ -700,21 +700,37 @@ def test_PC_with_Libuda():
     def target(x):
         return x[0]
 
-    PC = ProcessController(LibudaModelWithDegradation(), target_func_to_maximize=target)
-    # for i in range(5):
-    #     PC.set_controlled([(i + 0.2 * i1) * 1.e-5 for i1 in range(1, 3)])
-    #     PC.time_forward(30)
-    PC.set_controlled({'O2': 10.e-5, 'CO': 4.5e-5})
-    PC.time_forward(500)
+    # PC = ProcessController(LibudaModelWithDegradation(init_cond={'thetaO': 0.25, 'thetaCO': 0.5}, Ts=440),
+    #                        target_func_to_maximize=target)
+    # # for i in range(5):
+    # #     PC.set_controlled([(i + 0.2 * i1) * 1.e-5 for i1 in range(1, 3)])
+    # #     PC.time_forward(30)
+    # PC.set_controlled({'O2': 10.e-5, 'CO': 4.2e-5})
+    # PC.time_forward(500)
     # print(PC.integrate_along_history(target_mode=True))
-    # PC.plot(f'PC_plots/example_RL_21_10_task.png', out_name='target', plot_mode='separately')
+    # # PC.plot(f'PC_plots/example_RL_21_10_task.png', out_name='target', plot_mode='separately')
 
-    # find optimal log_scale
-    average_rate = PC.integrate_along_history(target_mode=True) / PC.get_current_time()
-    max_rate, = PC.process_to_control.get_bounds('max', 'output')
-    log_scale = 5_000
-    print(np.log(1 + log_scale * average_rate / max_rate))
-    print(np.log(1 + log_scale))
+    # TEST if more CO is better under the old conditions of the tests for the russian article
+    PC_L001_old = ProcessController(LibudaModelWithDegradation(init_cond={'thetaO': 0.25, 'thetaCO': 0.5}, Ts=440,
+                                                      v_d=0.01, v_r=1.5, border=4.),
+                           target_func_to_maximize=target)
+
+    episode_len = 500
+    for i in range(2, 11, 2):
+        PC_L001_old.reset()
+        O2 = i * 1e-5 / 4
+        CO = i * 1e-5
+        PC_L001_old.set_controlled({'O2': O2, 'CO': i * 1e-5})
+        PC_L001_old.time_forward(episode_len)
+        R = PC_L001_old.integrate_along_history(time_segment=[0., episode_len])
+        print(f'CO: {CO}, O2: {O2}, R: {R}')
+
+    # # find optimal log_scale
+    # average_rate = PC.integrate_along_history(target_mode=True) / PC.get_current_time()
+    # max_rate, = PC.process_to_control.get_bounds('max', 'output')
+    # log_scale = 5_000
+    # print(np.log(1 + log_scale * average_rate / max_rate))
+    # print(np.log(1 + log_scale))
 
 
 def check_func_to_optimize():
@@ -743,8 +759,8 @@ if __name__ == '__main__':
 
     # custom_experiment()
 
-    # test_PC_with_Libuda()
+    test_PC_with_Libuda()
 
-    check_func_to_optimize()
+    # check_func_to_optimize()
 
     pass

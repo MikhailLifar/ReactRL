@@ -265,12 +265,20 @@ class LibudaModelWithDegradation(LibudaModel):
         O2 = data_slice[0]
         CO = data_slice[1]
 
-        if CO <= O2 / 2 / self.ratio_border:  # if CO flow is too small
-            # if O2 <= 0.5 * CO:  # if O2 flow is too small
+        # # deactivation like the old one used during the tests for the russian article
+        # # deactivation parameters for the tests: Vd = 0.01, Vr = 1.5, border = 4.
+        # # other parameters: Ts = 440, init_cond = {'thetaO': 0.25, 'thetaCO': 0.5}
+        if O2 <= CO / 2 / self.ratio_border:  # if O2 flow is too small
             ratio = 2 * self.ratio_border
         else:
-            ratio = O2 / CO
-            # ratio = CO / O2
+            ratio = CO / O2
+
+        # # more physical deactivation
+        # if CO <= O2 / 2 / self.ratio_border:  # if CO flow is too small
+        #     ratio = 2 * self.ratio_border
+        # else:
+        #     ratio = O2 / CO
+
         ratio_border = self.ratio_border
         if ratio >= ratio_border:
             # i.e. if O2(or CO) > ratio_border * CO(or O2),

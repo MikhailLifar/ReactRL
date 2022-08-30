@@ -94,6 +94,13 @@ def train_list_parallel(
         model_obj = controller.process_to_control
         set_values = params_variants[iter_arg]
         variable_params = fill_variable_dict(set_values, names)
+        # delete parameters that cannot be passed in one iteration,
+        # byt need to be passed in other iteration
+        # discarding is performing with usage of '#exclude' - special parameter value
+        for name in ('env', 'model', 'agent'):
+            for sub_name in list(variable_params[name].keys()):
+                if variable_params[name][sub_name] == '#exclude':
+                    del variable_params[name][sub_name]
         # print(set_values)
         model_obj.reset()
         if (len(variable_params['model'])) or (len(const_params['model'])):
@@ -108,7 +115,7 @@ def train_list_parallel(
         else:
             agent_name = variable_params['agent_name']
         agent_rl = create_tforce_agent(env_obj, agent_name,
-                                       params={**(const_params['agent']), **(variable_params['agent'])})
+                                       **(const_params['agent']), **(variable_params['agent']))
         the_folder = make_subdir_return_path(out_path, name=f'_{iter_arg}', with_date=False, unique=False)
         # describe the agent to file
         with open(f'{the_folder}/_info.txt', 'a') as f:

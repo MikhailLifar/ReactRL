@@ -12,7 +12,7 @@ import numpy as np
 from tensorforce.agents import Agent
 
 # from test_models import BaseModel
-from test_models import TestModel
+from test_models import *
 from ProcessController import ProcessController
 
 from RL2207_Environment import RL2207_Environment, Environment
@@ -23,15 +23,13 @@ from usable_functions import make_subdir_return_path, make_unique_filename
 ADD_PLOTS = ['theta_CO', 'theta_O']
 
 
-def create_tforce_agent(environment: RL2207_Environment, agent_name, params: dict = None):
-    if params is None:
-        params = dict()
+def create_tforce_agent(environment: RL2207_Environment, agent_name, **params):
     if 'memory' not in params:
         if agent_name == 'dqn':
             params['memory'] = 100
         # elif agent_name == 'vpg':
-        elif agent_name == 'dpg':
-            params['memory'] = 10000
+        elif (agent_name == 'dpg') or (agent_name == 'ddpg'):
+            params['memory'] = 10_000
         # elif agent_name == 'ppo':
     if 'batch_size' not in params:
         params['batch_size'] = 16
@@ -200,6 +198,13 @@ def train_list(names: tuple,
     model_obj = controller.process_to_control
     for set_values in params_variants:
         variable_params = fill_variable_dict(set_values, names)
+        # delete parameters that cannot be passed in one iteration,
+        # byt need to be passed in other iteration
+        # discarding is performing with usage of '#exclude' - special parameter value
+        for name in ('env', 'model', 'agent'):
+            for sub_name in list(variable_params[name].keys()):
+                if variable_params[name][sub_name] == '#exclude':
+                    del variable_params[name][sub_name]
         # model parametrization
         model_obj.reset()
         if len(variable_params['model']) or len(const_params['model']):
@@ -215,7 +220,7 @@ def train_list(names: tuple,
         else:
             agent_name = variable_params['agent_name']
         agent_rl = create_tforce_agent(env_obj, agent_name,
-                                       params={**(const_params['agent']), **(variable_params['agent'])})
+                                       **(const_params['agent']), **(variable_params['agent']))
         # run training
         the_folder = make_subdir_return_path(out_path, name='_', with_date=False, unique=True)
         # describe the agent to file
@@ -288,16 +293,48 @@ if __name__ == '__main__':
 
     np.random.seed(100)
 
-    def target(x):
-        target_v = np.array([2., 1., 3.])
-        return -np.linalg.norm(x - target_v)
+    # TEST RUN
 
-    my_env = RL2207_Environment(ProcessController(TestModel(), target_func_to_maximize=target,
-                                                  supposed_step_count=100, supposed_exp_time=1000),
-                                state_spec={'rows': 1, 'use_differences': False},
-                                reward_spec='each_step_base')
-    env = Environment.create(environment=my_env,
-                             max_episode_timesteps=100000)
-    rl_agent = create_tforce_agent(env, 'vpg')
-    run(env, rl_agent, test=False, out_folder='run_RL_out/current_training',
-        n_episodes=10000)
+    # def target(x):
+    #     target_v = np.array([2., 1., 3.])
+    #     return -np.linalg.norm(x - target_v)
+
+    # my_env = RL2207_Environment(ProcessController(TestModel(), target_func_to_maximize=target,
+    #                                               supposed_step_count=100, supposed_exp_time=1000),
+    #                             state_spec={'rows': 1, 'use_differences': False},
+    #                             reward_spec='each_step_base')
+    # env = Environment.create(environment=my_env,
+    #                          max_episode_timesteps=100000)
+    # rl_agent = create_tforce_agent(env, 'vpg')
+    # run(env, rl_agent, test=False, out_folder='run_RL_out/current_training',
+    #     n_episodes=10000)
+
+    # PRETRAINED AGENT ARCHITECTURE
+    def target(x):
+        return x[0]
+
+    my_env = RL2207_Environment(
+        ProcessController(
+            LibudaModelWithDegradation(
+                init_cond={'thetaCO': 0., 'thetaO': 0.},
+                Ts=273+160,
+                v_d=0.01,
+                v_r=0.1,
+                border=4.),
+            target_func_to_maximize=target,
+            supposed_step_count=100, supposed_exp_time=1000),
+        state_spec={'rows': 3, 'use_differences': False},
+        reward_spec='full_ep_mean',
+        episode_time=500,
+        time_step=10)
+    my_env = Environment.create(environment=my_env, max_episode_timesteps=6000)
+    # rl_agent = create_tforce_agent(my_env, 'ac',
+    #                                network=dict(type='layered',
+    #                                             layers=[dict(type='flatten'),
+    #                                                     dict(type='dense', size=16, activation='relu')]),
+    #                                critic=dict(type='layered',
+    #                                             layers=[dict(type='flatten'),
+    #                                                     dict(type='dense', size=16, activation='relu')]))
+    rl_agent = create_tforce_agent(my_env, 'vpg')
+    # rl_agent = Agent.load('run_RL_out/agents/220804_LMT_0_agent', format='numpy', environment=my_env)
+    print(rl_agent.get_architecture())

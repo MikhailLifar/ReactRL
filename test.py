@@ -101,37 +101,59 @@ def practice_in_cv():
     cv2.waitKey(0)
 
 
-def frames_from_video_to_imgs():
-    for i in range(1, 10):
+def frames_from_video_to_imgs(skip_frames):
+    cap = cv2.VideoCapture(f'data/video/220822.mp4')
+    from_video = 150
 
-        cap = cv2.VideoCapture(f'data/video/diff_shapes/{i}.MP4')
-        from_folder = 115
+    if not cap.isOpened():
+        print("Error opening video stream or file")
 
-        if not cap.isOpened():
-            print("Error opening video stream or file")
-        else:
-            ret = True
-            i1 = 0
-            while ret and i1 < from_folder:
-                ret, frame = cap.read()
-                if ret:
+    ret = True
+    i0 = 0
+    while ret and i0 < from_video:
+        ret, frame = cap.read()
+        if ret:
+            h = frame.shape[0]
+            frame = frame[:, :h]
+            frame = cv2.resize(frame, (640, 640), interpolation=cv2.INTER_AREA)
 
-                    # coef = frame.shape[0] // 650
-                    # h = frame.shape[0] // coef
-                    # w = frame.shape[1] // coef
-                    # frame = cv2.resize(frame, (w, h), interpolation=cv2.INTER_AREA)
-                    #
-                    # cv2.imshow('Frame', frame)
-                    # if cv2.waitKey(25) & 0xFF == ord('q'):
-                    #     break
+            cv2.imwrite(f'data/imgs/from_video_test/{i0}.png', frame)
+            # print(i)
+            i0 += 1
 
-                    h = frame.shape[0]
-                    frame = frame[:, :h]
-                    frame = cv2.resize(frame, (640, 640), interpolation=cv2.INTER_AREA)
-
-                    cv2.imwrite(f'data/imgs/from_video/{(i - 1) * from_folder + i1}.png', frame)
-                    # print(i)
-                    i1 += 1
+    # for i in range(1, 10):
+    #
+    #     cap = cv2.VideoCapture(f'data/video/diff_shapes/{i}.MP4')
+    #     from_video = 115
+    #
+    #     if not cap.isOpened():
+    #         print("Error opening video stream or file")
+    #     else:
+    #         ret = True
+    #         i1 = 0
+    #         while ret and i1 < skip_frames + from_video:
+    #             ret, frame = cap.read()
+    #             if i1 < skip_frames:
+    #                 i1 += 1
+    #                 continue
+    #             if ret:
+    #
+    #                 # coef = frame.shape[0] // 650
+    #                 # h = frame.shape[0] // coef
+    #                 # w = frame.shape[1] // coef
+    #                 # frame = cv2.resize(frame, (w, h), interpolation=cv2.INTER_AREA)
+    #                 #
+    #                 # cv2.imshow('Frame', frame)
+    #                 # if cv2.waitKey(25) & 0xFF == ord('q'):
+    #                 #     break
+    #
+    #                 h = frame.shape[0]
+    #                 frame = frame[:, :h]
+    #                 frame = cv2.resize(frame, (640, 640), interpolation=cv2.INTER_AREA)
+    #
+    #                 cv2.imwrite(f'data/imgs/from_video_test/{(i - 1) * from_video + (i1 - skip_frames)}.png', frame)
+    #                 # print(i)
+    #                 i1 += 1
 
 
 def run_test_model():
@@ -154,7 +176,7 @@ if __name__ == '__main__':
 
     # practice_in_cv()
 
-    # frames_from_video_to_imgs()
+    frames_from_video_to_imgs(300)
 
     # d = {'CO_A': 0.0001, 'CO_bias_f': 0.0, 'CO_bias_t': 0.21801443183436786, 'CO_k': 0.6283185307179586, 'O2_A': 0.0001, 'O2_bias_f': 8.623641039884324e-05, 'O2_bias_t': 0.26438923328940805, 'O2_k': 0.3141592653589793}
 
@@ -163,21 +185,21 @@ if __name__ == '__main__':
     # b_t = 0.21801443183436786
     # b_f = 0.0
 
-    A = 2.e-5
-    k = 0.1 * np.pi
-    b_t = 0.0
-    b_f = 3.e-5
-
-    def f(t):
-        res = A * np.sin(k * t + b_t) + b_f
-        res[res < 0.] = 0.
-        res[res > 1.e-4] = 1.e-4
-        return res
-
-    x = np.linspace(0., 500., 5000)
-    y = f(x)
-    plt.plot(x, y)
-    plt.show()
+    # A = 2.e-5
+    # k = 0.1 * np.pi
+    # b_t = 0.0
+    # b_f = 3.e-5
+    #
+    # def f(t):
+    #     res = A * np.sin(k * t + b_t) + b_f
+    #     res[res < 0.] = 0.
+    #     res[res > 1.e-4] = 1.e-4
+    #     return res
+    #
+    # x = np.linspace(0., 500., 5000)
+    # y = f(x)
+    # plt.plot(x, y)
+    # plt.show()
 
     # M = generate_max_rank_matr(3, 3)
     # np.save('./M_3x3.npy', M, allow_pickle=False)

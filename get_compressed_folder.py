@@ -73,17 +73,18 @@ def collect_along_folder(folder_path,
             print(f'Error with folder: {d}')
 
 
-def collect_training_results(folder):
+def collect_training_results(folder, subfolder_path='testing_deterministic', dest_name='collected'):
     for name_part in (
             '_all_data',
             '_in',
             '_out'
                       ):
         collect_along_folder(folder,
-                             'testing_deterministic',
+                             subfolder_path,
                              choose_folder_key=lambda s: s[0] == '_' and s[1].isdigit(),
                              choose_file_key=lambda s: s[0].isdigit() and name_part in s,
-                             take_key=lambda s: float(s[:s.find('c')]))
+                             take_key=lambda s: float(s[:s.find('c')]),
+                             dest_name=dest_name)
 
 
 if __name__ == '__main__':
