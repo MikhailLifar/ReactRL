@@ -209,6 +209,21 @@ class LibudaModel(BaseModel):
         self.theta_O = self.init_thetaO
         # self.plot = {'theta_CO': self.theta_CO * 0.01, 'theta_O': self.theta_O * 0.01}
 
+    # measures manipulations
+    def pressure_norm_func(self, gas_name):
+        gas_inds = {'O2': 3, 'CO': 1}
+
+        def norm(pressure):
+            return pressure * self[f'k{gas_inds[gas_name]}_koef']
+
+        return norm
+
+    def pressure_to_F_value(self, flow, gas_name):
+        return self[f'F_{gas_name}_koef'] * flow
+
+    def CO2_rate_to_F_value(self, rate):
+        return self[f'nPd'] * rate
+
 
 class LibudaModelWithDegradation(LibudaModel):
 

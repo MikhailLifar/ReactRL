@@ -2,6 +2,8 @@
 # matplotlib.use('Agg')
 # import \
 #     itertools
+import \
+    os
 
 import matplotlib.pyplot as plt
 
@@ -101,59 +103,55 @@ def practice_in_cv():
     cv2.waitKey(0)
 
 
-def frames_from_video_to_imgs(skip_frames):
-    cap = cv2.VideoCapture(f'data/video/220822.mp4')
-    from_video = 150
+def take_from_video(source_path, dest_folder_path, from_video, skip_frames=0, freqency=30, first_number=0):
+    cap = cv2.VideoCapture(source_path)
 
     if not cap.isOpened():
         print("Error opening video stream or file")
+    else:
 
-    ret = True
-    i0 = 0
-    while ret and i0 < from_video:
-        ret, frame = cap.read()
-        if ret:
-            h = frame.shape[0]
-            frame = frame[:, :h]
-            frame = cv2.resize(frame, (640, 640), interpolation=cv2.INTER_AREA)
+        if not os.path.exists(dest_folder_path):
+            os.makedirs(dest_folder_path)
 
-            cv2.imwrite(f'data/imgs/from_video_test/{i0}.png', frame)
-            # print(i)
-            i0 += 1
+        prob = 1. / freqency
 
+        ret = True
+        i1 = 0
+        while ret and (i1 < skip_frames + from_video):
+            ret, frame = cap.read()
+            if i1 < skip_frames:
+                i1 += 1
+                continue
+            if ret and (np.random.random() < prob):
+
+                # coef = frame.shape[0] // 650
+                # h = frame.shape[0] // coef
+                # w = frame.shape[1] // coef
+                # frame = cv2.resize(frame, (w, h), interpolation=cv2.INTER_AREA)
+                #
+                # cv2.imshow('Frame', frame)
+                # if cv2.waitKey(25) & 0xFF == ord('q'):
+                #     break
+
+                # cut frame to be quadratic
+                h = frame.shape[0]
+                frame = frame[:, -h:]  # cut left side
+                # frame = frame[:, :h]  # cut right side
+
+                frame = cv2.resize(frame, (640, 640), interpolation=cv2.INTER_AREA)
+
+                cv2.imwrite(f'{dest_folder_path}/{first_number + (i1 - skip_frames)}.png', frame)
+                i1 += 1
+
+
+def frames_from_video_to_imgs(dest_folder_path, skip_frames=0, from_video=115, take_frequency=15):
+    # images for testing
+    take_from_video(f'data/video/220822.mp4', 'data/imgs/test', 115, freqency=10)
+
+    # images for training
     # for i in range(1, 10):
-    #
-    #     cap = cv2.VideoCapture(f'data/video/diff_shapes/{i}.MP4')
-    #     from_video = 115
-    #
-    #     if not cap.isOpened():
-    #         print("Error opening video stream or file")
-    #     else:
-    #         ret = True
-    #         i1 = 0
-    #         while ret and i1 < skip_frames + from_video:
-    #             ret, frame = cap.read()
-    #             if i1 < skip_frames:
-    #                 i1 += 1
-    #                 continue
-    #             if ret:
-    #
-    #                 # coef = frame.shape[0] // 650
-    #                 # h = frame.shape[0] // coef
-    #                 # w = frame.shape[1] // coef
-    #                 # frame = cv2.resize(frame, (w, h), interpolation=cv2.INTER_AREA)
-    #                 #
-    #                 # cv2.imshow('Frame', frame)
-    #                 # if cv2.waitKey(25) & 0xFF == ord('q'):
-    #                 #     break
-    #
-    #                 h = frame.shape[0]
-    #                 frame = frame[:, :h]
-    #                 frame = cv2.resize(frame, (640, 640), interpolation=cv2.INTER_AREA)
-    #
-    #                 cv2.imwrite(f'data/imgs/from_video_test/{(i - 1) * from_video + (i1 - skip_frames)}.png', frame)
-    #                 # print(i)
-    #                 i1 += 1
+    #     take_from_video(f'data/video/diff_shapes/{i}.MP4', dest_folder_path, from_video, skip_frames, take_frequency,
+    #                     (i - 1) * from_video)
 
 
 def run_test_model():
@@ -164,7 +162,26 @@ def run_test_model():
         print(f'out vector: {model_obj.update(vector_to_apply, 1.)}')
 
 
+def show_droplet_color(filepath, box):
+    img = cv2.imread(filepath)
+
+    img_part = img[box[1]:box[3], box[0]:box[2]]
+
+    average_color = np.mean(img_part[img_part.shape[0]//3: 2 * img_part.shape[0]//3, img_part.shape[1]//3: 2 * img_part.shape[1]//3],
+                            axis=(0, 1))
+    average_color = average_color.astype('uint8')
+
+    cv2.imshow('droplet', img_part)
+
+    color_img = np.tile(np.array(average_color), (640, 640, 1))
+    cv2.imshow('color', color_img)
+
+    cv2.waitKey(0)
+
+
 if __name__ == '__main__':
+    show_droplet_color('data/imgs/220909_from_vertical/right_side/0.png', [498, 464, 520, 485])
+
     # model testing
     # run_test_model()
 
@@ -176,7 +193,8 @@ if __name__ == '__main__':
 
     # practice_in_cv()
 
-    frames_from_video_to_imgs(300)
+    # frames_from_video_to_imgs('data/imgs/220909_from_video')
+    # take_from_video('./data/video/220909_vertical.mp4', './data/imgs/220909_from_vertical_right_side', 200, freqency=10)
 
     # d = {'CO_A': 0.0001, 'CO_bias_f': 0.0, 'CO_bias_t': 0.21801443183436786, 'CO_k': 0.6283185307179586, 'O2_A': 0.0001, 'O2_bias_f': 8.623641039884324e-05, 'O2_bias_t': 0.26438923328940805, 'O2_k': 0.3141592653589793}
 

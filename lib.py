@@ -227,6 +227,27 @@ def plot_to_file(*p, fileName=None, save_csv=True, title='', xlabel='', ylabel='
                 save(f, p[i * 3 + 1])
 
 
+def read_flot_to_file_csv(datapath, create_normal: bool = False) -> pd.DataFrame:
+    df = pd.read_csv(datapath, header=None)
+    df = df.T
+    cols = []
+    for i, elem in enumerate(df.loc[0, :]):
+        cols.append(elem[:elem.find(':')])
+        df.loc[0, i] = elem[elem.rfind(' ') + 1:]
+    df.columns = cols
+    df = df.astype('float64')
+    # print(df.shape)
+    # print(df.dtypes)
+    # print(df.columns)
+    # print(df)
+    if create_normal:
+        dir_part, file_part = os.path.split(datapath)
+        f_name, ext = os.path.splitext(file_part)
+        df.to_csv(f'{dir_part}/{f_name}_new{ext}',
+                  sep=';', index=False)
+    return df
+
+
 def integral(x, y):
     if isinstance(x, pd.Series):
         x = x.to_numpy()

@@ -1,12 +1,12 @@
-# import \
-#     copy
+import copy
+
 import scipy.interpolate
-# import numpy as np
+import numpy as np
 import pandas as pd
 # import time
 
 import lib
-from test_models import *
+from test_models import BaseModel
 
 # from usable_functions import wrap
 
@@ -229,8 +229,10 @@ class ProcessController:
         return self.target_history[np.isfinite(self.target_history)]
 
     def integrate_along_history(self, time_segment=None, out_name=None,
-                                target_mode=False):
-        output_time_stamp, output = self.get_process_output()
+                                target_mode=False, **kwargs):
+        if 'RESOLUTION' not in kwargs:
+            kwargs['RESOLUTION'] = 2
+        output_time_stamp, output = self.get_process_output(kwargs['RESOLUTION'])
         if target_mode:
             output = np.apply_along_axis(self.target_func, 1, output)
             assert output.shape[0] == output_time_stamp.shape[0]
@@ -274,7 +276,7 @@ class ProcessController:
         if 'target_name' in kwargs:
             self.target_func_name = kwargs['target_name']
 
-    def plot(self, file_name, time_segment=None, plot_more_function=None, additional_plot=None, plot_mode='together',
+    def plot(self, file_name, time_segment=None, plot_more_function=None, additional_plot: [str, list] = None, plot_mode='together',
              out_name=None):
 
         inds = self.output_history_dt > -1
@@ -647,120 +649,3 @@ def func_to_optimize_sin_sol(PC_obj: ProcessController,
         return -R
 
     return f_to_optimize
-
-
-def custom_experiment():
-    # # 1st try
-    # PC = ProcessController(TestModel())
-    # for i in range(5):
-    #     PC.set_controlled([i + 0.2 * i1 for i1 in range(1, 6)])
-    #     PC.time_forward(30)
-    # PC.get_process_output()
-    # for c in '12345678':
-    #     PC.plot(f'PC_plots/example{c}.png', out_name=c, plot_mode='separately')
-
-    # def target(x):
-    #     # target_v = np.array([2., 1., 3., -1., 0.,
-    #     #                      1., -1., 3., -2., 3.])
-    #     target_v = np.array([2., 1., 3.])
-    #     return -np.linalg.norm(x - target_v)
-    #
-    # PC = ProcessController(TestModel(), target_func_to_maximize=target)
-    # for i in range(5):
-    #     PC.set_controlled([i + 0.2 * i1 for i1 in range(1, 6)])
-    #     PC.time_forward(30)
-    # print(PC.integrate_along_history(target_mode=True))
-    # for c in [f'out{i}' for i in range(1, 4)]:
-    #     PC.plot(f'PC_plots/example_{c}.png', out_name=c, plot_mode='separately')
-    # PC.plot(f'PC_plots/example_target.png', out_name='target', plot_mode='separately')
-
-    def target(x):
-        return x[0]
-
-    PC_LDegrad = ProcessController(LibudaModelWithDegradation(init_cond={'thetaCO': 0., 'thetaO': 0., }, Ts=273+160,
-                                                              v_d=0.01, v_r=0.1, border=4.),
-                                   target_func_to_maximize=target)
-    PC_LDegrad.set_plot_params(output_lims=[0., 0.06], output_ax_name='CO2_formation_rate',
-                               input_ax_name='Pressure, Pa')
-
-    episode_len = 500
-    for pair in ((2e-5, 10e-5), (3e-5, 10e-5), (4e-5, 10e-5), ):
-        PC_LDegrad.reset()
-        PC_LDegrad.set_controlled({'CO': pair[0], 'O2': pair[1], })
-        PC_LDegrad.time_forward(episode_len)
-        R = PC_LDegrad.integrate_along_history(target_mode=True)
-        PC_LDegrad.plot(file_name=f'PC_plots/LDegrad/O2_{int(pair[1] * 1e+5)}_CO_{int(pair[0] * 1e+5)}_R_{R:.2f}.png',
-                        plot_mode='separately')
-
-    pass
-
-
-def test_PC_with_Libuda():
-
-    def target(x):
-        return x[0]
-
-    # PC = ProcessController(LibudaModelWithDegradation(init_cond={'thetaO': 0.25, 'thetaCO': 0.5}, Ts=440),
-    #                        target_func_to_maximize=target)
-    # # for i in range(5):
-    # #     PC.set_controlled([(i + 0.2 * i1) * 1.e-5 for i1 in range(1, 3)])
-    # #     PC.time_forward(30)
-    # PC.set_controlled({'O2': 10.e-5, 'CO': 4.2e-5})
-    # PC.time_forward(500)
-    # print(PC.integrate_along_history(target_mode=True))
-    # # PC.plot(f'PC_plots/example_RL_21_10_task.png', out_name='target', plot_mode='separately')
-
-    # TEST if more CO is better under the old conditions of the tests for the russian article
-    PC_L001_old = ProcessController(LibudaModelWithDegradation(init_cond={'thetaO': 0.25, 'thetaCO': 0.5}, Ts=440,
-                                                      v_d=0.01, v_r=1.5, border=4.),
-                           target_func_to_maximize=target)
-
-    episode_len = 500
-    for i in range(2, 11, 2):
-        PC_L001_old.reset()
-        O2 = i * 1e-5 / 4
-        CO = i * 1e-5
-        PC_L001_old.set_controlled({'O2': O2, 'CO': i * 1e-5})
-        PC_L001_old.time_forward(episode_len)
-        R = PC_L001_old.integrate_along_history(time_segment=[0., episode_len])
-        print(f'CO: {CO}, O2: {O2}, R: {R}')
-
-    # # find optimal log_scale
-    # average_rate = PC.integrate_along_history(target_mode=True) / PC.get_current_time()
-    # max_rate, = PC.process_to_control.get_bounds('max', 'output')
-    # log_scale = 5_000
-    # print(np.log(1 + log_scale * average_rate / max_rate))
-    # print(np.log(1 + log_scale))
-
-
-def check_func_to_optimize():
-
-    def target(x):
-        return x[0]
-
-    PC_LDegrad = ProcessController(LibudaModelWithDegradation(init_cond={'thetaCO': 0., 'thetaO': 0., }, Ts=273+160,
-                                                              v_d=0.01, v_r=0.1, border=4.),
-                                   target_func_to_maximize=target)
-    PC_LDegrad.set_plot_params(output_lims=[0., 0.06], output_ax_name='CO2_formation_rate',
-                               input_ax_name='Pressure, Pa')
-
-    # f = func_to_optimize_sin_sol(PC_LDegrad, 500, 1.)
-    # f({'O2_A': 0., 'O2_k': 0.1 * np.pi, 'O2_bias_t': 0., 'O2_bias_f': 10.e-5,
-    #    'CO_A': 2e-5, 'CO_k': 0.1 * np.pi, 'CO_bias_t': 0., 'CO_bias_f': 3.e-5},
-    #   DEBUG=True, folder='PC_plots/test_sin_sol')
-
-    f = func_to_optimize_two_step_sol(PC_LDegrad, 500, 10.)
-    f({'O2_1': 10.e-5, 'O2_2': 10.e-5, 'CO_1': 4.e-5, 'CO_2': 2.e-5,
-       'time_1': 10., 'time_2': 10.},
-      DEBUG=True, folder='PC_plots/test_two_step_sol')
-
-
-if __name__ == '__main__':
-
-    # custom_experiment()
-
-    test_PC_with_Libuda()
-
-    # check_func_to_optimize()
-
-    pass

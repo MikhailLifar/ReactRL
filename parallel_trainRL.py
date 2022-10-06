@@ -55,59 +55,152 @@ def target(x):
 
 episode_time = 500
 time_step = 10
-LibudaDegradPC = ProcessController(LibudaModelWithDegradation(init_cond={'thetaCO': 0., 'thetaO': 0.},
-                                                              Ts=273+160),
-                                   target_func_to_maximize=target,
-                                   supposed_step_count=2 * episode_time // time_step,  # memory controlling parameters
-                                   supposed_exp_time=2 * episode_time)
-LibudaDegradPC.set_plot_params(input_ax_name='Pressure', input_lims=None,
-                               output_lims=[0., 0.06], output_ax_name='CO2_formation_rate')
 
-train_grid_parallel(['vpg', 'ppo'],
-                    [(dict(type='layered', layers=[dict(type='flatten'),
-                                                   dict(type='dense', size=32, activation='relu')]),
-                      dict(optimizer='adam', learning_rate=1e-3)),
-                     (dict(type='layered', layers=[dict(type='flatten'),
-                                                   dict(type='dense', size=32, activation='relu')]),
-                      0.3),
-                     (dict(type='layered', layers=[dict(type='flatten'),
-                                                   dict(type='dense', size=32, activation='relu')]),
-                      1.)],
-                    ['full_ep_mean', 'full_ep_base', 'each_step_base'],
-                    names=('agent_name',
-                           ('agent:baseline',
-                            'agent:baseline_optimizer',),
-                           'env:reward_spec'),
-                    const_params={
+# LibudaDegradPC = ProcessController(LibudaModelWithDegradation(init_cond={'thetaCO': 0., 'thetaO': 0.},
+#                                                               Ts=273+160),
+#                                    target_func_to_maximize=target,
+#                                    supposed_step_count=2 * episode_time // time_step,  # memory controlling parameters
+#                                    supposed_exp_time=2 * episode_time)
+# LibudaDegradPC.set_plot_params(input_ax_name='Pressure', input_lims=None,
+#                                output_lims=[0., 0.06], output_ax_name='CO2_formation_rate')
+
+Pt2210_PC = ProcessController(PtModel(init_cond={'thetaO': 0., 'thetaCO': 0.}),
+                                  target_func_to_maximize=target,
+                                  supposed_step_count=2 * episode_time // time_step,  # memory controlling parameters
+                                  supposed_exp_time=2 * episode_time)
+Pt2210_PC.set_plot_params(input_ax_name='Pressure', input_lims=None,
+                            output_ax_name='CO2 form. rate', output_lims=None)
+
+train_grid_parallel(['full_ep_mean', 'full_ep_base', 'each_step_base'],
+                     [(1, False), (2, False), (3, False),
+                      (4, False), (5, False)],
+                     names=('env:reward_spec', 'env:state_spec'),
+                     const_params={
                          'env': {'model_type': 'continuous',
                                  'episode_time': episode_time,
                                  'time_step': time_step,
-                                 'state_spec': {'rows': 3, 'use_differences': False},
                                  'log_scaling_dict': None,
                                  },
+                         'agent_name': 'vpg',
                          'model': {
                              'O2_top': 10.e-5,
                              'CO_top': 10.e-5,
-                             'v_r': 0.1,
-                             'v_d': 0.01,
-                             'border': 4.,
-                             },
-                         'agent': {
-                             'batch_size': 32,
-                             'update_frequency': 32,
-                             'network': dict(type='layered', layers=[dict(type='flatten'),
-                                                                     dict(type='dense', size=32, activation='relu')])
-                         }
+                             }
                      },
-                    repeat=3,
-                    out_path='run_RL_out/current_training/220826_vpg_ppo_baseline',
-                    file_to_execute_path='repos/parallel_trainRL.py',
-                    python_interpreter='../RL_10_21/venv/bin/python',
-                    on_cluster=False,
-                    controller=LibudaDegradPC,
-                    n_episodes=30_000,
-                    unique_folder=False,
-                    at_same_time=60)
+                     repeat=3,
+                     out_path='run_RL_out/Pt_model_1st_try',
+                     file_to_execute_path='repos/parallel_trainRL.py',
+                     python_interpreter='../RL_10_21/venv/bin/python',
+                     on_cluster=False,
+                     controller=Pt2210_PC,
+                     n_episodes=30_000,
+                     unique_folder=False,
+                     at_same_time=60)
+
+# agent, actor, critic, critic_opt, baseline, baseline_opt
+# train_grid_parallel([('ac', 'auto', 'auto', '#exclude', '#exclude', '#exclude',),
+#                      ('ac', 'auto', 'auto', dict(optimizer='adam', learning_rate=1e-3), '#exclude', '#exclude',),
+#                      ('ppo', 'auto', '#exclude', '#exclude', '#exclude', '#exclude',),
+#                      ('ppo',
+#                       dict(type='layered', layers=[dict(type='flatten'),
+#                                                    dict(type='dense', size=32, activation='relu')]),
+#                       '#exclude', '#exclude',
+#                       dict(type='layered', layers=[dict(type='flatten'),
+#                                                    dict(type='dense', size=32, activation='relu')]),
+#                       0.3),
+#                      ('ppo',
+#                       dict(type='layered', layers=[dict(type='flatten'),
+#                                                    dict(type='dense', size=32, activation='relu')]),
+#                       '#exclude', '#exclude',
+#                       dict(type='layered', layers=[dict(type='flatten'),
+#                                                    dict(type='dense', size=32, activation='relu')]),
+#                       dict(optimizer='adam', learning_rate=1e-3)),
+#                      ],
+#                     ['full_ep_mean', 'each_step_base',
+#                      ],
+#                     names=(('agent_name',
+#                             'agent:network',
+#                             'agent:critic',
+#                             'agent:critic_optimizer',
+#                             'agent:baseline',
+#                             'agent:baseline_optimizer',
+#                             ),
+#                            'env:reward_spec'),
+#                     const_params={
+#                          'env': {'model_type': 'continuous',
+#                                  'episode_time': episode_time,
+#                                  'time_step': time_step,
+#                                  'state_spec': {'rows': 3, 'use_differences': False},
+#                                  'log_scaling_dict': None,
+#                                  },
+#                          'model': {
+#                              'O2_top': 10.e-5,
+#                              'CO_top': 100.e-5,
+#                              'v_r': 0.1,
+#                              'v_d': 0.01,
+#                              'border': 4.,
+#                              },
+#                          'agent': {
+#                              'batch_size': 32,
+#                              'update_frequency': 32,
+#                          }
+#                      },
+#                     repeat=5,
+#                     out_path='run_RL_out/current_training/220909_new_agents_CO_top_100',
+#                     file_to_execute_path='repos/parallel_trainRL.py',
+#                     python_interpreter='../RL_10_21/venv/bin/python',
+#                     on_cluster=False,
+#                     controller=LibudaDegradPC,
+#                     n_episodes=30_000,
+#                     unique_folder=False,
+#                     at_same_time=60
+#                     )
+
+# train_grid_parallel(['vpg', 'ppo'],
+#                     [(dict(type='layered', layers=[dict(type='flatten'),
+#                                                    dict(type='dense', size=32, activation='relu')]),
+#                       dict(optimizer='adam', learning_rate=1e-3)),
+#                      (dict(type='layered', layers=[dict(type='flatten'),
+#                                                    dict(type='dense', size=32, activation='relu')]),
+#                       0.3),
+#                      (dict(type='layered', layers=[dict(type='flatten'),
+#                                                    dict(type='dense', size=32, activation='relu')]),
+#                       1.)],
+#                     ['full_ep_mean', 'full_ep_base', 'each_step_base'],
+#                     names=('agent_name',
+#                            ('agent:baseline',
+#                             'agent:baseline_optimizer',),
+#                            'env:reward_spec'),
+#                     const_params={
+#                          'env': {'model_type': 'continuous',
+#                                  'episode_time': episode_time,
+#                                  'time_step': time_step,
+#                                  'state_spec': {'rows': 3, 'use_differences': False},
+#                                  'log_scaling_dict': None,
+#                                  },
+#                          'model': {
+#                              'O2_top': 10.e-5,
+#                              'CO_top': 10.e-5,
+#                              'v_r': 0.1,
+#                              'v_d': 0.01,
+#                              'border': 4.,
+#                              },
+#                          'agent': {
+#                              'batch_size': 32,
+#                              'update_frequency': 32,
+#                              'network': dict(type='layered', layers=[dict(type='flatten'),
+#                                                                      dict(type='dense', size=32, activation='relu')])
+#                          }
+#                      },
+#                     repeat=3,
+#                     out_path='run_RL_out/current_training/220826_vpg_ppo_baseline',
+#                     file_to_execute_path='repos/parallel_trainRL.py',
+#                     python_interpreter='../RL_10_21/venv/bin/python',
+#                     on_cluster=False,
+#                     controller=LibudaDegradPC,
+#                     n_episodes=30_000,
+#                     unique_folder=False,
+#                     at_same_time=60)
 
 # train_grid_parallel([('vpg', '#exclude'),
 #                      ('ac', dict(type='layered', layers=[dict(type='flatten'), dict(type='dense', size=16, activation='relu')])),
