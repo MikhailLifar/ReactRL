@@ -6,6 +6,13 @@ def target(x):
     return x[0]
 
 
+def target_1(x):
+    # formula, roughly: cost = CO2 * (1 - O2_out/O2_in - CO_out/CO_in)
+    # formula was rewriting, considering O2_out = O2_in - 2 * CO2; CO_out = CO_in - CO2;
+    # and using protection from division by zero
+    return x[0] * (2 * x[0] / (x[1] + 1e-7) + x[0] / (x[2] + 1e-7))
+
+
 # train_grid_parallel(['full_ep_mean', 'full_ep_mean', 'each_step_base', 'each_step_base'],
 #                      names=('env:reward_spec', ),
 #                      const_params={
@@ -64,22 +71,29 @@ time_step = 10
 # LibudaDegradPC.set_plot_params(input_ax_name='Pressure', input_lims=None,
 #                                output_lims=[0., 0.06], output_ax_name='CO2_formation_rate')
 
-Pt2210_PC = ProcessController(PtModel(init_cond={'thetaO': 0., 'thetaCO': 0.}),
-                                  target_func_to_maximize=target,
-                                  supposed_step_count=2 * episode_time // time_step,  # memory controlling parameters
-                                  supposed_exp_time=2 * episode_time)
-Pt2210_PC.set_plot_params(input_ax_name='Pressure', input_lims=None,
-                            output_ax_name='CO2 form. rate', output_lims=None)
+# Pt2210_PC = ProcessController(PtModel(init_cond={'thetaO': 0., 'thetaCO': 0.}),
+#                                   target_func_to_maximize=target,
+#                                   supposed_step_count=2 * episode_time // time_step,  # memory controlling parameters
+#                                   supposed_exp_time=2 * episode_time)
+# Pt2210_PC.set_plot_params(input_ax_name='Pressure', input_lims=None,
+#                             output_ax_name='CO2 form. rate', output_lims=None)
+
+PC_LReturnK3K1 = ProcessController(LibudaModelReturnK3K1(init_cond={'thetaO': 0., 'thetaCO': 0.}, Ts=273+160),
+                                   target_func_to_maximize=target_1,
+                                   supposed_step_count=2 * episode_time // time_step,  # memory controlling parameters
+                                   supposed_exp_time=2 * episode_time)
+PC_LReturnK3K1.set_plot_params(input_ax_name='Pressure', input_lims=[0., None],
+                               output_ax_name='CO2 form. rate', output_lims=[0., None])
 
 train_grid_parallel(['full_ep_mean', 'full_ep_base', 'each_step_base'],
-                     [(1, False), (2, False), (3, False),
-                      (4, False), (5, False)],
+                     [(1, False), (2, False), (3, False)],
                      names=('env:reward_spec', 'env:state_spec'),
                      const_params={
                          'env': {'model_type': 'continuous',
                                  'episode_time': episode_time,
                                  'time_step': time_step,
                                  'log_scaling_dict': None,
+                                 'PC_resolution': 10
                                  },
                          'agent_name': 'vpg',
                          'model': {
@@ -88,11 +102,11 @@ train_grid_parallel(['full_ep_mean', 'full_ep_base', 'each_step_base'],
                              }
                      },
                      repeat=3,
-                     out_path='run_RL_out/Pt_model_1st_try',
-                     file_to_execute_path='repos/parallel_trainRL.py',
-                     python_interpreter='../RL_10_21/venv/bin/python',
-                     on_cluster=False,
-                     controller=Pt2210_PC,
+                     out_path='run_RL_out/221021_new_cost_1',
+                     file_to_execute_path='code/parallel_trainRL.py',
+                     python_interpreter='../RL_21/venv/bin/python',
+                     on_cluster=True,
+                     controller=PC_LReturnK3K1,
                      n_episodes=30_000,
                      unique_folder=False,
                      at_same_time=60)

@@ -36,7 +36,8 @@ class RL2207_Environment(Environment):
                  state_spec: dict = None,
                  initial_values: dict = None,
                  preprocess_time=0,
-                 log_scaling_dict=None):
+                 log_scaling_dict=None,
+                 PC_resolution=2):
 
         """
 
@@ -134,6 +135,8 @@ class RL2207_Environment(Environment):
             self.norm_to_log = np.vstack(((self.model.get_bounds('max', 'output') -
                                            self.model.get_bounds('min', 'output'))[self.to_log_inds],
                                           self.model.get_bounds('min', 'output')[self.to_log_inds]))
+
+        self.PC_resolution = PC_resolution
 
         # self.save_policy = False
         # self.policy_df = pd.DataFrame(columns=[*self.in_gas_names, 'time_steps'])
@@ -258,7 +261,7 @@ class RL2207_Environment(Environment):
 
         self.controller.set_controlled(model_inputs)
         self.controller.time_forward(dt=self.time_step)
-        current_measurement = self.controller.get_process_output()[1][-1]
+        current_measurement = self.controller.get_process_output(RESOLUTION=self.PC_resolution)[1][-1]
         if self.if_use_log_scale:
             current_measurement = copy.deepcopy(current_measurement)
             self.log_preprocess(current_measurement)

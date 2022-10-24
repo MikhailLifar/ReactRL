@@ -1,3 +1,6 @@
+import \
+    warnings
+
 import numpy as np
 
 from .BaseModel import BaseModel
@@ -40,13 +43,15 @@ class PtModel(LibudaModel):
         # limitations
         constants['O2_bottom'] = 0.
         constants['CO_bottom'] = 0.
-        constants['O2_top'] = 10.e-10
-        constants['CO_top'] = 10.e-10
+        constants['O2_top'] = 10.
+        constants['CO_top'] = 10.
 
         return constants
 
     def __init__(self, init_cond: dict = None,
                  **kws):
+        warnings.warn('WARNING! CRUTCH WITH THE FLOWS IN UPDATE METHOD')
+
         BaseModel.__init__(self)
         self.constants = self.default_constants()
         self.values = dict()
@@ -86,6 +91,8 @@ class PtModel(LibudaModel):
 
         self.fill_limits()
 
+        self.plot = {'theta_CO': self.theta_CO, 'theta_O': self.theta_O}
+
         self.add_info = LibudaModel.get_add_info(self)
 
     def assign_and_eval_values(self, **kw):
@@ -108,10 +115,10 @@ class PtModel(LibudaModel):
         CO_p = data_slice[1]
 
         # estimation values of k:
-        # k1:
-        # k2:
-        # k3:
-        # k4:
+        # k1:  1.6e3
+        # k2:  6e-3
+        # k3:  2.2e2
+        # k4:  1.8e2
 
         # TODO: CRUTCH HERE
         O2_p = O2_p * 1e-5
@@ -158,7 +165,7 @@ class PtModel(LibudaModel):
     def pressure_norm_func(self, gas_name):
         raise NotImplementedError
 
-    def pressure_to_F_value(self, flow, gas_name):
+    def pressure_to_F_value(self, pressure, gas_name):
         raise NotImplementedError
 
     def CO2_rate_to_F_value(self, rate):

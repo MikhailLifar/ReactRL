@@ -9,6 +9,7 @@ import lib
 from test_models import BaseModel
 
 # from usable_functions import wrap
+from predefined_policies import AbstractPolicy
 
 
 class ProcessController:
@@ -132,6 +133,16 @@ class ProcessController:
         for i in range(time_step_seq.size):
             self.time_forward(time_step_seq[i])
             self.set_controlled({name: in_data_df.loc[i + 1, name] for name in in_data_df.columns})
+
+    def process_by_policy_objs(self, policies, episode_time, resolution):
+        time_seq = np.arange(0., episode_time, resolution)
+        controlled_to_pass = np.array([p(time_seq) for p in policies]).transpose()
+
+        for i in range(time_seq.size):
+            self.set_controlled(controlled_to_pass[i])
+            self.time_forward(resolution)
+        while self.get_current_time() < episode_time:
+            self.time_forward(resolution)
 
     def const_preprocess(self, in_values, process_time=300, RESOLUTION=20):
         """
@@ -548,7 +559,7 @@ def func_to_optimize_stationary_sol(PC_obj: ProcessController,
 
             PC_obj.plot(f'{folder}/try_{ind_picture}_return_{R:.3f}.png',
                         plot_more_function=ax_func, plot_mode='separately',
-                        time_segment=[0., episode_len])
+                        time_segment=[0., episode_len], additional_plot=['thetaCO', 'thetaO'])
         return -R
 
     return f_to_optimize
@@ -589,7 +600,7 @@ def func_to_optimize_two_step_sol(PC_obj: ProcessController,
 
             PC_obj.plot(f'{folder}/try_{ind_picture}_return_{R:.3f}.png',
                         plot_more_function=ax_func, plot_mode='separately',
-                        time_segment=[0., episode_len])
+                        time_segment=[0., episode_len], additional_plot=['thetaCO', 'thetaO'])
         return -R
 
     return f_to_optimize
@@ -607,12 +618,12 @@ def func_to_optimize_sin_sol(PC_obj: ProcessController,
 
         def create_f_per_name(name, name_ind_in_model):
             A = sin_description[f'{name}_A']
-            k = sin_description[f'{name}_k']
-            bias_t = sin_description[f'{name}_bias_t']
-            bias_f = sin_description[f'{name}_bias_f']
+            omega = sin_description[f'{name}_omega']
+            alpha = sin_description[f'{name}_alpha']
+            bias = sin_description[f'{name}_bias']
 
             def func(t):
-                res = A * np.sin(k * t + bias_t) + bias_f
+                res = A * np.sin(omega * t + alpha) + bias
                 lower_bound = PC_obj.process_to_control.limits['input'][name_ind_in_model][0]
                 upper_bound = PC_obj.process_to_control.limits['input'][name_ind_in_model][1]
                 res[res < lower_bound] = lower_bound
@@ -623,8 +634,7 @@ def func_to_optimize_sin_sol(PC_obj: ProcessController,
 
         funcs = [create_f_per_name(name, i) for i, name in enumerate(PC_obj.controlled_names)]
         time_seq = np.arange(0., episode_len, dt)
-        controlled_to_pass = np.array([func(time_seq) for func in funcs])
-        controlled_to_pass = controlled_to_pass.transpose()
+        controlled_to_pass = np.array([func(time_seq) for func in funcs]).transpose()
 
         PC_obj.reset()
         for i in range(time_seq.size):
@@ -645,7 +655,57 @@ def func_to_optimize_sin_sol(PC_obj: ProcessController,
 
             PC_obj.plot(f'{folder}/try_{ind_picture}_return_{R:.3f}.png',
                         plot_more_function=ax_func, plot_mode='separately',
-                        time_segment=[0., episode_len])
+                        time_segment=[0., episode_len], additional_plot=['theta_CO', 'theta_O'])
         return -R
 
     return f_to_optimize
+
+
+def func_to_optimize_policy(PC_obj: ProcessController, policy_obj: AbstractPolicy, episode_len, time_step):
+    import os.path
+    time_step, episode_len = float(time_step), float(episode_len)
+
+    def f_to_optimize(func_description: dict, DEBUG=False, folder=None, ind_picture=None):
+
+        def create_f_per_name(controlled_name, name_ind_in_model):
+            controlled_name_dict = dict()
+            for param_name in func_description:
+                if f'{controlled_name}_' in param_name:
+                    controlled_name_dict[param_name.replace(f'{controlled_name}_', '')] = func_description[param_name]
+
+            func = copy.deepcopy(policy_obj)
+            func.set_policy(controlled_name_dict)
+            func.set_limitations(
+                *(PC_obj.process_to_control.limits['input'][name_ind_in_model]),
+            )
+
+            return func
+
+        funcs = [create_f_per_name(name, i) for i, name in enumerate(PC_obj.controlled_names)]
+        time_seq = np.arange(0., episode_len, time_step)
+        controlled_to_pass = np.array([func(time_seq) for func in funcs]).transpose()
+
+        PC_obj.reset()
+        for i in range(time_seq.size):
+            PC_obj.set_controlled(controlled_to_pass[i])
+            PC_obj.time_forward(time_step)
+        while PC_obj.get_current_time() < episode_len:
+            PC_obj.time_forward(time_step)
+
+        R = PC_obj.integrate_along_history(target_mode=True,
+                                           time_segment=[0., episode_len])
+        if DEBUG:
+            if not os.path.exists(f'{folder}/model_info.txt'):
+                with open(f'{folder}/model_info.txt', 'w') as f:
+                    f.write(PC_obj.process_to_control.add_info)
+
+            def ax_func(ax):
+                ax.set_title(f'integral: {R:.4g}')
+
+            PC_obj.plot(f'{folder}/try_{ind_picture}_return_{R:.3f}.png',
+                        plot_more_function=ax_func, plot_mode='separately',
+                        time_segment=[0., episode_len], additional_plot=['theta_CO', 'theta_O'])
+        return -R
+
+    return f_to_optimize
+

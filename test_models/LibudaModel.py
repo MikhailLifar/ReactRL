@@ -218,11 +218,64 @@ class LibudaModel(BaseModel):
 
         return norm
 
-    def pressure_to_F_value(self, flow, gas_name):
-        return self[f'F_{gas_name}_koef'] * flow
+    def pressure_to_F_value(self, pressure, gas_name):
+        return self[f'F_{gas_name}_koef'] * pressure
 
     def CO2_rate_to_F_value(self, rate):
         return self[f'nPd'] * rate
+
+
+class LibudaModelReturnK3K1(LibudaModel):
+
+    def __init__(self, **kwargs):
+        LibudaModel.__init__(self, **kwargs)
+        self.names['output'] = ['CO2', 'O2(k3)', 'CO(k1)']
+        for name in self.names['output']:
+            self.bottom['output'][name] = 0.
+        self.top['output']['CO2'] = self['k4'] * self['thetaO_max'] * self['thetaCO_max']
+        self.top['output']['O2(k3)'] = self['k3_koef'] * self.top['input']['O2']
+        self.top['output']['CO(k1)'] = self['k1_koef'] * self.top['input']['CO']
+        self.fill_limits()
+
+    def update(self, data_slice, delta_t, save_for_plot=False):
+        O2_p = data_slice[0]
+        CO_p = data_slice[1]
+
+        k1 = self['k1_koef'] * CO_p
+        k2 = self['k2']
+        k3 = self['k3_koef'] * O2_p
+        k4 = self['k4']
+
+        theta_CO = self.theta_CO
+        theta_O = self.theta_O
+
+        S_multiplier_CO = 1 - theta_CO / self['thetaCO_max'] - self['CTs'] * theta_O / self['thetaO_max']
+        S_multiplier_O2 = 1 - theta_CO / self['thetaCO_max'] - theta_O / self['thetaO_max']
+        S_CO = self['S0_CO'] * S_multiplier_CO
+
+        if S_multiplier_O2 > 0:
+            S_O2 = self['S0_O2'] * S_multiplier_O2 * S_multiplier_O2
+        else:
+            S_O2 = 0
+
+        self.theta_CO += (k1 * S_CO - k2 * theta_CO - k4 * theta_CO * theta_O) * delta_t
+        self.theta_O += (2 * k3 * S_O2 - k4 * theta_CO * theta_O) * delta_t
+
+        # this code makes me doubt...
+        self.theta_CO = min(max(0, self.theta_CO), self['thetaCO_max'])
+        self.theta_O = min(max(0, self.theta_O), self['thetaO_max'])
+        # but it didn't influence much on results
+
+        if save_for_plot:
+            self.plot['theta_CO'] = self.theta_CO
+            self.plot['theta_O'] = self.theta_O
+
+        # CHANGES COMES HERE
+        CO2_flow = k4 * self.theta_O * self.theta_CO
+        self.model_output = np.array([CO2_flow, k3, k1])
+
+        self.t += delta_t
+        return self.model_output
 
 
 class LibudaModelWithDegradation(LibudaModel):

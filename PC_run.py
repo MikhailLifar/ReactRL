@@ -10,55 +10,122 @@ def check_func_to_optimize():
     def target(x):
         return x[0]
 
-    PC_LDegrad = ProcessController(LibudaModelWithDegradation(init_cond={'thetaCO': 0., 'thetaO': 0., }, Ts=273+160,
-                                                              v_d=0.01, v_r=0.1, border=4.),
-                                   target_func_to_maximize=target)
-    PC_LDegrad.set_plot_params(output_lims=[0., 0.06], output_ax_name='CO2_formation_rate',
+    PC_L2001 = ProcessController(LibudaModel(init_cond={'thetaCO': 0., 'thetaO': 0., }, Ts=273+160),
+                                 target_func_to_maximize=target,
+                                 # supposed_step_count=2 * round(episode_time / time_step),  # memory controlling parameters
+                                 # supposed_exp_time=2 * episode_time
+                                 )
+    PC_L2001.set_plot_params(output_lims=[0., None], output_ax_name='CO2_formation_rate',
                                input_ax_name='Pressure, Pa')
+
+    # PC_LDegrad = ProcessController(LibudaModelWithDegradation(init_cond={'thetaCO': 0., 'thetaO': 0., }, Ts=273+160,
+    #                                                           v_d=0.01, v_r=0.1, border=4.),
+    #                                target_func_to_maximize=target)
+    # PC_LDegrad.set_plot_params(output_lims=[0., 0.06], output_ax_name='CO2_formation_rate',
+    #                            input_ax_name='Pressure, Pa')
 
     # f = func_to_optimize_sin_sol(PC_LDegrad, 500, 1.)
     # f({'O2_A': 0., 'O2_k': 0.1 * np.pi, 'O2_bias_t': 0., 'O2_bias_f': 10.e-5,
     #    'CO_A': 2e-5, 'CO_k': 0.1 * np.pi, 'CO_bias_t': 0., 'CO_bias_f': 3.e-5},
     #   DEBUG=True, folder='PC_plots/test_sin_sol')
 
-    f = func_to_optimize_two_step_sol(PC_LDegrad, 500, 10.)
-    f({'O2_1': 10.e-5, 'O2_2': 10.e-5, 'CO_1': 4.e-5, 'CO_2': 2.e-5,
-       'time_1': 10., 'time_2': 10.},
-      DEBUG=True, folder='PC_plots/test_two_step_sol')
+    # f = func_to_optimize_policy(PC_LDegrad, TwoStepPolicy(dict()), 500, 0.5)
+    # f({'O2_1': 2.e-5, 'O2_2': 8.e-5, 'CO_1': 4.e-5, 'CO_2': 6.e-5,
+    #    'O2_t1': 20., 'O2_t2': 40., 'CO_t1': 10., 'CO_t2': 20., },
+    #   DEBUG=True, folder='PC_plots/test_func_for_any_policy/two_step_policy')
+
+    # f = func_to_optimize_policy(PC_LDegrad, SinPolicy(dict()), 500, 1.)
+    # f({'O2_A': 2.e-5, 'O2_omega': np.pi * 0.033, 'O2_alpha': np.pi, 'O2_bias': 7.e-5,
+    #    'CO_A': 7.e-5, 'CO_omega': np.pi * 0.15, 'CO_alpha': np.pi / 4, 'CO_bias': 3.e-5},
+    #   DEBUG=True, folder='PC_plots/test_func_for_any_policy/sin_policy')
+
+    # f = func_to_optimize_policy(PC_LDegrad, SinOfPowerPolicy(dict()), 500, 0.5)
+    # f({'O2_power': 4., 'O2_A': 4.e-5, 'O2_omega': np.pi * 0.003, 'O2_alpha': np.pi, 'O2_bias': 7.e-5,
+    #    'CO_power': 1.4, 'CO_A': 4.e-5, 'CO_omega': np.pi * 0.01, 'CO_alpha': np.pi / 4, 'CO_bias': 3.e-5},
+    #   DEBUG=True, folder='PC_plots/test_func_for_any_policy/sin_power_policy')
+
+    # f = func_to_optimize_policy(PC_L2001, ConstantPolicy(dict()), 500, 1.)
+    # f({'O2_value': 9.5e-5,
+    #    'CO_value': 4.4e-5},
+    #   DEBUG=True, folder='PC_plots/test_func_for_any_policy/constant_policy')
 
 
-def try_policy(PC_obj: ProcessController, time_seq: np.ndarray, policy_funcs, path: str) -> float:
-    def create_f_consider_bounds(func, ind_in_model):
+# def try_policy(PC_obj: ProcessController, time_seq: np.ndarray, policy_funcs, path: str) -> float:
+#     def create_f_consider_bounds(func, ind_in_model):
+#
+#         def f(t):
+#             res = func(t)
+#             lower_bound = PC_obj.process_to_control.limits['input'][ind_in_model][0]
+#             upper_bound = PC_obj.process_to_control.limits['input'][ind_in_model][1]
+#             res[res < lower_bound] = lower_bound
+#             res[res > upper_bound] = upper_bound
+#             return res
+#
+#         return f
+#
+#     new_policy_funcs = [create_f_consider_bounds(f, i) for i, f in enumerate(policy_funcs)]
+#
+#     controlled_to_pass = np.array([func(time_seq) for func in new_policy_funcs])
+#     controlled_to_pass = controlled_to_pass.transpose()
+#
+#     PC_obj.reset()
+#     for i, dt in enumerate(time_seq):
+#         PC_obj.set_controlled(controlled_to_pass[i])
+#         PC_obj.time_forward(dt)
+#     R = PC_obj.integrate_along_history(target_mode=True, time_segment=[0., np.sum(time_seq)])
+#
+#     def ax_func(ax):
+#         ax.set_title(f'integral: {R:.4g}')
+#
+#     PC_obj.plot(path,
+#                 plot_more_function=ax_func, plot_mode='separately',
+#                 time_segment=[0., np.sum(time_seq)])
+#
+#     return R
 
-        def f(t):
-            res = func(t)
-            lower_bound = PC_obj.process_to_control.limits['input'][ind_in_model][0]
-            upper_bound = PC_obj.process_to_control.limits['input'][ind_in_model][1]
-            res[res < lower_bound] = lower_bound
-            res[res > upper_bound] = upper_bound
-            return res
 
-        return f
+def bunch_of_policies(PC: ProcessController):
+    lims = PC.process_to_control.limits['input']
+    if lims.shape[0] == 2:
+        # constant policy
+        first_policy = ConstantPolicy(dict())
+        second_policy = ConstantPolicy(dict())
+        coefs = np.array([[0.2, 1.], [0.4, 0.7], [0.5, 0.5], [0.7, 0.4], [1., 0.2], ])
+        for p in coefs:
+            first_policy.set_policy({'value': p[0] * lims[0][1]})
+            second_policy.set_policy({'value': p[1] * lims[1][1]})
+    raise NotImplementedError
 
-    new_policy_funcs = [create_f_consider_bounds(f, i) for i, f in enumerate(policy_funcs)]
 
-    controlled_to_pass = np.array([func(time_seq) for func in new_policy_funcs])
-    controlled_to_pass = controlled_to_pass.transpose()
+def test_new_k1k3_model_new_targets():
+    episode_time = 500.
+    resolution = 1.
 
-    PC_obj.reset()
-    for i, dt in enumerate(time_seq):
-        PC_obj.set_controlled(controlled_to_pass[i])
-        PC_obj.time_forward(dt)
-    R = PC_obj.integrate_along_history(target_mode=True, time_segment=[0., np.sum(time_seq)])
+    def target_1(x):
+        # formula, roughly: cost = CO2 * (1 - O2_out/O2_in - CO_out/CO_in)
+        # formula was rewriting, considering O2_out = O2_in - 2 * CO2; CO_out = CO_in - CO2;
+        # and using protection from division by zero
+        return x[0] * (2 * x[0] / (x[1] + 1e-7) + x[0] / (x[2] + 1e-7))
 
-    def ax_func(ax):
-        ax.set_title(f'integral: {R:.4g}')
-
-    PC_obj.plot(path,
-                plot_more_function=ax_func, plot_mode='separately',
-                time_segment=[0., np.sum(time_seq)])
-
-    return R
+    PC_obj = ProcessController(LibudaModelReturnK3K1(init_cond={'thetaCO': 0., 'thetaO': 0., }, Ts=440),
+                               supposed_step_count=2 * round(episode_time / resolution),  # memory controlling parameters
+                               supposed_exp_time=2 * episode_time,
+                               target_func_to_maximize=target_1
+                               )
+    PC_obj.set_plot_params(output_lims=None, output_ax_name='CO2_formation_rate',
+                           input_lims=[0., 10.e-5], input_ax_name='Pressure, Pa')
+    policies = (SinPolicy({'A': 2.e-5, 'omega': 0.05 * np.pi, 'alpha': 0., 'bias': 10.e-5, }),
+                TwoStepPolicy({'1': 2.e-5, '2': 5.e-5, 't1': 30, 't2': 20, }))
+    # policies = (ConstantPolicy({'value': 9.e-5}),
+    #             ConstantPolicy({'value': 4.4e-5}))
+    PC_obj.process_by_policy_objs(policies, episode_time, resolution)
+    R = PC_obj.integrate_along_history(target_mode=True,
+                                       time_segment=[0., episode_time])
+    PC_obj.plot(f'PC_plots/new_target_1/return_{R:.3f}.png',
+                plot_mode='separately',
+                time_segment=[0., episode_time],
+                additional_plot=['theta_CO', 'theta_O'],
+                out_name='CO2')
 
 
 def custom_experiment():
@@ -200,8 +267,8 @@ def Pt_exp(path: str):
                               output_ax_name='CO2 form. rate', output_lims=None)
 
     # first experiment
-    low_value = 4e-9
-    high_value = 10e-9
+    low_value = 4
+    high_value = 10
     reps = 10
     for i in range(reps):
         PC_Pt2210.set_controlled({'O2': low_value, 'CO': high_value})
@@ -209,7 +276,7 @@ def Pt_exp(path: str):
         PC_Pt2210.set_controlled({'O2': high_value, 'CO': low_value})
         PC_Pt2210.time_forward(30)
     R = PC_Pt2210.integrate_along_history(target_mode=True, time_segment=[0., 50 * reps],
-                                          RESOLUTION=2)
+                                          RESOLUTION=10)
 
     def ax_func(ax):
         ax.set_title(f'integral: {R:.4g}')
@@ -235,6 +302,8 @@ if __name__ == '__main__':
     # plot_conv('run_RL_out/conversion/220928_8_conv.csv')
     # plot_conv('run_RL_out/conversion/220830_4_conv.csv')
 
-    Pt_exp('PC_plots/Pt/1_.png')
+    # Pt_exp('PC_plots/Pt/1_.png')
+
+    test_new_k1k3_model_new_targets()
 
     pass
