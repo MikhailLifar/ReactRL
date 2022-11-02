@@ -37,7 +37,8 @@ class RL2207_Environment(Environment):
                  initial_values: dict = None,
                  preprocess_time=0,
                  log_scaling_dict=None,
-                 PC_resolution=2):
+                 PC_resolution=2,
+                 **kwargs):
 
         """
 
@@ -148,6 +149,12 @@ class RL2207_Environment(Environment):
                                f'use_differences {self.state_spec["use_differences"]}\n' \
                                f'length of episode: {self.episode_time}\n' \
                                f'step length: {self.time_step}\n'
+
+        self.names_to_plot = None
+        if 'names_to_plot' in kwargs:
+            self.names_to_plot = kwargs['names_to_plot']
+        else:
+            self.names_to_plot = ['target']
 
     def assign_reward(self, reward_spec: [str, callable]):
         if reward_spec is None:

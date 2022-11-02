@@ -1,16 +1,6 @@
 from parallel_trainRL_funcs import *
 from test_models import *
-
-
-def target(x):
-    return x[0]
-
-
-def target_1(x):
-    # formula, roughly: cost = CO2 * (1 - O2_out/O2_in - CO_out/CO_in)
-    # formula was rewriting, considering O2_out = O2_in - 2 * CO2; CO_out = CO_in - CO2;
-    # and using protection from division by zero
-    return x[0] * (2 * x[0] / (x[1] + 1e-7) + x[0] / (x[2] + 1e-7))
+from targets_metrics import *
 
 
 # train_grid_parallel(['full_ep_mean', 'full_ep_mean', 'each_step_base', 'each_step_base'],
@@ -27,7 +17,7 @@ def target_1(x):
 #                      out_path='run_RL_out/current_training/diff_rewards',
 #                      python_interpreter='../RL_10_21/venv/bin/python',
 #                      on_cluster=False,
-#                      controller=ProcessController(TestModel(), target_func_to_maximize=target,
+#                      controller=ProcessController(TestModel(), target_func_to_maximize=CO2_value,
 #                                                   supposed_step_count=2 * episode_time // time_step,  # memory controlling parameters
 #                                                   supposed_exp_time=2 * episode_time),
 #                      n_episodes=10_000,
@@ -53,7 +43,7 @@ def target_1(x):
 #                      python_interpreter='../RL_21/venv/bin/python',
 #                      on_cluster=True,
 #                      controller=ProcessController(LibudaModelWithDegradation(init_cond={'thetaCO': 0., 'thetaO': 0.},
-#                                                        Ts=273+160), target_func_to_maximize=target,
+#                                                        Ts=273+160), target_func_to_maximize=CO2_value,
 #                                                   supposed_step_count=2 * episode_time // time_step,  # memory controlling parameters
 #                                                   supposed_exp_time=2 * episode_time),
 #                      n_episodes=30000,
@@ -65,48 +55,60 @@ time_step = 10
 
 # LibudaDegradPC = ProcessController(LibudaModelWithDegradation(init_cond={'thetaCO': 0., 'thetaO': 0.},
 #                                                               Ts=273+160),
-#                                    target_func_to_maximize=target,
+#                                    target_func_to_maximize=CO2_value,
 #                                    supposed_step_count=2 * episode_time // time_step,  # memory controlling parameters
 #                                    supposed_exp_time=2 * episode_time)
 # LibudaDegradPC.set_plot_params(input_ax_name='Pressure', input_lims=None,
 #                                output_lims=[0., 0.06], output_ax_name='CO2_formation_rate')
 
 # Pt2210_PC = ProcessController(PtModel(init_cond={'thetaO': 0., 'thetaCO': 0.}),
-#                                   target_func_to_maximize=target,
+#                                   target_func_to_maximize=CO2_value,
 #                                   supposed_step_count=2 * episode_time // time_step,  # memory controlling parameters
 #                                   supposed_exp_time=2 * episode_time)
 # Pt2210_PC.set_plot_params(input_ax_name='Pressure', input_lims=None,
 #                             output_ax_name='CO2 form. rate', output_lims=None)
 
-PC_LReturnK3K1 = ProcessController(LibudaModelReturnK3K1(init_cond={'thetaO': 0., 'thetaCO': 0.}, Ts=273+160),
-                                   target_func_to_maximize=target_1,
+# PC_LReturnK3K1 = ProcessController(LibudaModelReturnK3K1(init_cond={'thetaO': 0., 'thetaCO': 0.}, Ts=273+160),
+#                                    target_func_to_maximize=CO2xConversion,
+#                                    supposed_step_count=2 * episode_time // time_step,  # memory controlling parameters
+#                                    supposed_exp_time=2 * episode_time)
+# PC_LReturnK3K1.set_plot_params(input_ax_name='Pressure', input_lims=[0., None],
+#                                output_ax_name='???', output_lims=[0., None])
+PC_PtReturnK3K1 = ProcessController(PtReturnK1K3Model(init_cond={'thetaO': 0., 'thetaCO': 0.}, Ts=440),
+                                   target_func_to_maximize=CO2xConversion,
                                    supposed_step_count=2 * episode_time // time_step,  # memory controlling parameters
                                    supposed_exp_time=2 * episode_time)
-PC_LReturnK3K1.set_plot_params(input_ax_name='Pressure', input_lims=[0., None],
-                               output_ax_name='CO2 form. rate', output_lims=[0., None])
 
-train_grid_parallel(['full_ep_mean', 'full_ep_base', 'each_step_base'],
-                     [(1, False), (2, False), (3, False)],
-                     names=('env:reward_spec', 'env:state_spec'),
+PC_obj = PC_PtReturnK3K1
+
+PC_obj.set_plot_params(input_ax_name='Pressure', input_lims=[0., None],
+                       output_ax_name='CO2 form. rate', output_lims=[0., None])
+PC_obj.set_metrics(('CO2', CO2_integral),
+                   ('O2 conversion', overall_O2_conversion),
+                   ('CO conversion', overall_CO_conversion))
+
+train_grid_parallel([(10., 10.), (2., 10.), (10., 2.)],
+                     ['full_ep_mean', 'full_ep_base', 'each_step_base'],
+                     [(1, False), (3, False)],
+                     names=(('model:O2_top', 'model:CO_top'), 'env:reward_spec', 'env:state_spec'),
                      const_params={
                          'env': {'model_type': 'continuous',
                                  'episode_time': episode_time,
                                  'time_step': time_step,
                                  'log_scaling_dict': None,
-                                 'PC_resolution': 10
+                                 'PC_resolution': 10,
+                                 'names_to_plot': ['target', 'CO2']
                                  },
                          'agent_name': 'vpg',
                          'model': {
-                             'O2_top': 10.e-5,
-                             'CO_top': 10.e-5,
                              }
                      },
                      repeat=3,
-                     out_path='run_RL_out/221021_new_cost_1',
-                     file_to_execute_path='code/parallel_trainRL.py',
-                     python_interpreter='../RL_21/venv/bin/python',
-                     on_cluster=True,
-                     controller=PC_LReturnK3K1,
+                     out_path='run_RL_out/221028_test',
+                     file_to_execute_path='repos/parallel_trainRL.py',
+                     python_interpreter='../RL_10_21/venv/bin/python',
+                     on_cluster=False,
+                     controller=PC_obj,
                      n_episodes=30_000,
                      unique_folder=False,
                      at_same_time=60)

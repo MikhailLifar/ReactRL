@@ -93,6 +93,8 @@ class ProcessController:
         self.target_func_name = 'target'
         self._initialize_plot_params()
 
+        self.metrics_put_on_plot = None
+
     def set_controlled(self, new_values):
         """
         :param new_values: array of new values for each controlled parameter
@@ -287,23 +289,41 @@ class ProcessController:
         if 'target_name' in kwargs:
             self.target_func_name = kwargs['target_name']
 
+    def set_metrics(self, *args):
+        """
+        args: args should have the form: (name1, func1), (name2, func2), ...
+        """
+        self.metrics_put_on_plot = dict()
+        for p in args:
+            self.metrics_put_on_plot[p[0]] = p[1]
+
     def plot(self, file_name, time_segment=None, plot_more_function=None, additional_plot: [str, list] = None, plot_mode='together',
-             out_name=None):
+             out_names=None, with_metrics: bool = True):
 
         inds = self.output_history_dt > -1
         output_time_stamp, output = self.output_history_dt[inds], self.output_history[inds]
-        if out_name == 'target':
-            output = np.apply_along_axis(self.target_func, 1, output)
-        elif len(self.output_names) == 1:
-            out_name = self.output_names[0]
-        elif len(self.output_names) > 1:
-            assert out_name is not None
-            assigned = False
-            for i, name in enumerate(self.output_names):
-                if name == out_name:
-                    output = output[:, i]
-                    assigned = True
-            assert assigned
+        if isinstance(out_names, str):
+            out_names = [out_names]
+        if out_names is None:
+            assert len(self.output_names) == 1
+            out_names = self.output_names
+        # sort as in self.output_names, if 'target' in out_names - target will be the last col
+        out_names = [name for name in (self.output_names + ['target']) if name in out_names]
+        # process out_names as a list
+        idxs = [i for i, name in enumerate(self.output_names) if name in out_names]
+        if idxs:
+            output = output[:, idxs]
+        else:
+            output = None
+        if 'target' in out_names:
+            target_history = np.apply_along_axis(self.target_func, 1, self.output_history[inds])
+            target_history = target_history.reshape(-1, 1)
+            if output is not None:
+                output = np.hstack((output, target_history))
+            else:
+                output = target_history
+        if output is None:
+            raise ValueError('Cannot assign output names!')
 
         time_history = np.cumsum(self.controlling_signals_history_dt[:self.step_count])
         interp_funcs = []
@@ -346,25 +366,32 @@ class ProcessController:
             additional_plot = False
 
         common_title = ''
-        if out_name == 'target':
+        if 'target' in out_names:
             integral = lib.integral(output_time_stamp, self.get_target_for_passed())
-            common_title = f'Cumulative {self.target_func_name}: {integral:.3g}'
+            common_title = f'Integral {self.target_func_name}: {integral:.3g}\n'
+        if with_metrics and self.metrics_put_on_plot is not None:
+            for name in self.metrics_put_on_plot:
+                common_title += f'{name}: {self.metrics_put_on_plot[name](self.output_history[inds]):.3g}, '
 
         if plot_mode == 'together':
-            list_to_plot = []
+            common_plot_list = []
             for i, name in enumerate(self.controlled_names):
-                list_to_plot += [output_time_stamp, interp_funcs[i](output_time_stamp), name]
-            list_to_plot += [output_time_stamp, output, out_name]
-            lib.plot_to_file(*list_to_plot, *additional, title=common_title, xlabel='Time, s', ylabel='?',
+                common_plot_list += [output_time_stamp, interp_funcs[i](output_time_stamp), name]
+            for i, name in enumerate(out_names):
+                common_plot_list += [output_time_stamp, output[:, i], name]
+            lib.plot_to_file(*common_plot_list, *additional, title=common_title, xlabel='Time, s', ylabel='?',
                              fileName=file_name, xlim=time_segment, plotMoreFunction=plot_more_function2)
         else:
-            list_to_plot = []
+            input_plot_list = []
             for i, name in enumerate(self.controlled_names):
-                list_to_plot += [output_time_stamp, interp_funcs[i](output_time_stamp), name]
+                input_plot_list += [output_time_stamp, interp_funcs[i](output_time_stamp), name]
+            output_plot_list = []
+            for i, name in enumerate(out_names):
+                output_plot_list += [output_time_stamp, output[:, i], name]
                 # # Check if limits for plotting are correct, it is computationally expensive!
                 # if self.plot_lims['input'] is not None:
-                #     if (np.min(list_to_plot[-1]) < self.plot_lims['input'][0]) or \
-                #             (np.max(list_to_plot[-1]) > self.plot_lims['input'][1]):
+                #     if (np.min(input_plot_list[-1]) < self.plot_lims['input'][0]) or \
+                #             (np.max(input_plot_list[-1]) > self.plot_lims['input'][1]):
                 #         self.plot_lims['input'] = None
 
             # # Check if limits for plotting are correct, it is computationally expensive!
@@ -373,25 +400,31 @@ class ProcessController:
             #             (np.max(output) > self.plot_lims['output'][1]):
             #         self.plot_lims['output'] = None
 
-            lib.save_to_file(*list_to_plot,
-                             output_time_stamp, output, out_name,
+            lib.save_to_file(*input_plot_list,
+                             *output_plot_list,
                              *additional,
-                             fileName=file_name[:file_name.rfind('.')] + '_all_data.csv',)
-            lib.plot_to_file(*list_to_plot,
+                             fileName=file_name[:file_name.rfind('.')] + '_all_data.csv', )
+            lib.plot_to_file(*input_plot_list,
                              title=common_title,
                              xlabel='Time, s', ylabel=self.plot_axes_names['input'],
                              save_csv=False,
                              fileName=file_name[:file_name.rfind('.')] + '_in.png',
                              xlim=time_segment, ylim=self.plot_lims['input'],
                              plotMoreFunction=plot_more_function2)
-            lib.plot_to_file(output_time_stamp, output, out_name,
-                             title=common_title,
-                             xlabel='Time, s',
-                             ylabel=self.plot_axes_names['output'],
-                             save_csv=False,
-                             fileName=file_name[:file_name.rfind('.')] + '_out.png',
-                             xlim=time_segment, ylim=self.plot_lims['output'],
-                             plotMoreFunction=plot_more_function2)
+            for i, name in enumerate(out_names):
+                # if name == 'target:':
+                #     title = common_title
+                # else:
+                #     integral = self.integrate_along_history(out_name=name)
+                #     title = f'Integral {name} output: {integral}'
+                lib.plot_to_file(*(output_plot_list[3 * i: 3 * (i + 1)]),
+                                 title=common_title,
+                                 xlabel='Time, s',
+                                 ylabel=self.plot_axes_names['output'],
+                                 save_csv=False,
+                                 fileName=file_name[:file_name.rfind('.')] + f'_{name}_out.png',
+                                 xlim=time_segment, ylim=self.plot_lims['output'],
+                                 plotMoreFunction=plot_more_function2)
             if additional_plot and len(additional):
                 lib.plot_to_file(*additional,
                                  title=common_title,
@@ -537,130 +570,6 @@ def create_to_approximate_many_frames(dfs: list, model_obj, label_name, in_cols,
     return func
 
 
-def func_to_optimize_stationary_sol(PC_obj: ProcessController,
-                                    episode_len):
-    import os
-
-    def f_to_optimize(controlled, DEBUG=False, folder=None, ind_picture=None):
-        if not isinstance(controlled, dict):
-            raise ValueError('Error!')
-        PC_obj.reset()
-        PC_obj.set_controlled(controlled)
-        PC_obj.time_forward(episode_len)
-        R = PC_obj.integrate_along_history(target_mode=True,
-                                           time_segment=[0., episode_len])
-        if DEBUG:
-            if not os.path.exists(f'{folder}/model_info.txt'):
-                with open(f'{folder}/model_info.txt', 'w') as f:
-                    f.write(PC_obj.process_to_control.add_info)
-
-            def ax_func(ax):
-                ax.set_title(f'O2: {controlled["O2"]:.2g}, CO: {controlled["CO"]:.2g},\nintegral: {R:.4g}')
-
-            PC_obj.plot(f'{folder}/try_{ind_picture}_return_{R:.3f}.png',
-                        plot_more_function=ax_func, plot_mode='separately',
-                        time_segment=[0., episode_len], additional_plot=['thetaCO', 'thetaO'])
-        return -R
-
-    return f_to_optimize
-
-
-def func_to_optimize_two_step_sol(PC_obj: ProcessController,
-                                  episode_len, min_step_len=10.):
-    import os
-
-    def f_to_optimize(two_step_description, DEBUG=False, folder=None, ind_picture=None):
-        if not isinstance(two_step_description, dict):
-            raise ValueError('Error!')
-
-        controlled_set_1 = [two_step_description[f'{name}_1'] for name in
-                            PC_obj.controlled_names]
-        controlled_set_2 = [two_step_description[f'{name}_2'] for name in
-                            PC_obj.controlled_names]
-        t1, t2 = two_step_description['time_1'], two_step_description['time_2']
-        t1 = max(t1, min_step_len)
-        t2 = max(t2, min_step_len)
-
-        PC_obj.reset()
-        while PC_obj.get_current_time() <= episode_len:
-            PC_obj.set_controlled(controlled_set_1)
-            PC_obj.time_forward(t1)
-            PC_obj.set_controlled(controlled_set_2)
-            PC_obj.time_forward(t2)
-
-        R = PC_obj.integrate_along_history(target_mode=True,
-                                           time_segment=[0., episode_len])
-        if DEBUG:
-            if not os.path.exists(f'{folder}/model_info.txt'):
-                with open(f'{folder}/model_info.txt', 'w') as f:
-                    f.write(PC_obj.process_to_control.add_info)
-
-            def ax_func(ax):
-                ax.set_title(f'integral: {R:.4g}')
-
-            PC_obj.plot(f'{folder}/try_{ind_picture}_return_{R:.3f}.png',
-                        plot_more_function=ax_func, plot_mode='separately',
-                        time_segment=[0., episode_len], additional_plot=['thetaCO', 'thetaO'])
-        return -R
-
-    return f_to_optimize
-
-
-def func_to_optimize_sin_sol(PC_obj: ProcessController,
-                             episode_len, dt=1.):
-    import os
-
-    dt, episode_len = float(dt), float(episode_len)
-
-    def f_to_optimize(sin_description, DEBUG=False, folder=None, ind_picture=None):
-        if not isinstance(sin_description, dict):
-            raise ValueError('Error!')
-
-        def create_f_per_name(name, name_ind_in_model):
-            A = sin_description[f'{name}_A']
-            omega = sin_description[f'{name}_omega']
-            alpha = sin_description[f'{name}_alpha']
-            bias = sin_description[f'{name}_bias']
-
-            def func(t):
-                res = A * np.sin(omega * t + alpha) + bias
-                lower_bound = PC_obj.process_to_control.limits['input'][name_ind_in_model][0]
-                upper_bound = PC_obj.process_to_control.limits['input'][name_ind_in_model][1]
-                res[res < lower_bound] = lower_bound
-                res[res > upper_bound] = upper_bound
-                return res
-
-            return func
-
-        funcs = [create_f_per_name(name, i) for i, name in enumerate(PC_obj.controlled_names)]
-        time_seq = np.arange(0., episode_len, dt)
-        controlled_to_pass = np.array([func(time_seq) for func in funcs]).transpose()
-
-        PC_obj.reset()
-        for i in range(time_seq.size):
-            PC_obj.set_controlled(controlled_to_pass[i])
-            PC_obj.time_forward(dt)
-        while PC_obj.get_current_time() < episode_len:
-            PC_obj.time_forward(dt)
-
-        R = PC_obj.integrate_along_history(target_mode=True,
-                                           time_segment=[0., episode_len])
-        if DEBUG:
-            if not os.path.exists(f'{folder}/model_info.txt'):
-                with open(f'{folder}/model_info.txt', 'w') as f:
-                    f.write(PC_obj.process_to_control.add_info)
-
-            def ax_func(ax):
-                ax.set_title(f'integral: {R:.4g}')
-
-            PC_obj.plot(f'{folder}/try_{ind_picture}_return_{R:.3f}.png',
-                        plot_more_function=ax_func, plot_mode='separately',
-                        time_segment=[0., episode_len], additional_plot=['theta_CO', 'theta_O'])
-        return -R
-
-    return f_to_optimize
-
-
 def func_to_optimize_policy(PC_obj: ProcessController, policy_obj: AbstractPolicy, episode_len, time_step):
     import os.path
     time_step, episode_len = float(time_step), float(episode_len)
@@ -700,12 +609,136 @@ def func_to_optimize_policy(PC_obj: ProcessController, policy_obj: AbstractPolic
                     f.write(PC_obj.process_to_control.add_info)
 
             def ax_func(ax):
-                ax.set_title(f'integral: {R:.4g}')
+                # ax.set_title(f'integral: {R:.4g}')
+                pass
 
             PC_obj.plot(f'{folder}/try_{ind_picture}_return_{R:.3f}.png',
                         plot_more_function=ax_func, plot_mode='separately',
-                        time_segment=[0., episode_len], additional_plot=['theta_CO', 'theta_O'])
+                        time_segment=[0., episode_len], additional_plot=['theta_CO', 'theta_O'],
+                        out_names='target')  # SMALL CRUTCH HERE!
         return -R
 
     return f_to_optimize
 
+
+# def func_to_optimize_stationary_sol(PC_obj: ProcessController,
+#                                     episode_len):
+#     import os
+#
+#     def f_to_optimize(controlled, DEBUG=False, folder=None, ind_picture=None):
+#         if not isinstance(controlled, dict):
+#             raise ValueError('Error!')
+#         PC_obj.reset()
+#         PC_obj.set_controlled(controlled)
+#         PC_obj.time_forward(episode_len)
+#         R = PC_obj.integrate_along_history(target_mode=True,
+#                                            time_segment=[0., episode_len])
+#         if DEBUG:
+#             if not os.path.exists(f'{folder}/model_info.txt'):
+#                 with open(f'{folder}/model_info.txt', 'w') as f:
+#                     f.write(PC_obj.process_to_control.add_info)
+#
+#             def ax_func(ax):
+#                 ax.set_title(f'O2: {controlled["O2"]:.2g}, CO: {controlled["CO"]:.2g},\nintegral: {R:.4g}')
+#
+#             PC_obj.plot(f'{folder}/try_{ind_picture}_return_{R:.3f}.png',
+#                         plot_more_function=ax_func, plot_mode='separately',
+#                         time_segment=[0., episode_len], additional_plot=['thetaCO', 'thetaO'])
+#         return -R
+#
+#     return f_to_optimize
+
+
+# def func_to_optimize_sin_sol(PC_obj: ProcessController,
+#                              episode_len, dt=1.):
+#     import os
+#
+#     dt, episode_len = float(dt), float(episode_len)
+#
+#     def f_to_optimize(sin_description, DEBUG=False, folder=None, ind_picture=None):
+#         if not isinstance(sin_description, dict):
+#             raise ValueError('Error!')
+#
+#         def create_f_per_name(name, name_ind_in_model):
+#             A = sin_description[f'{name}_A']
+#             omega = sin_description[f'{name}_omega']
+#             alpha = sin_description[f'{name}_alpha']
+#             bias = sin_description[f'{name}_bias']
+#
+#             def func(t):
+#                 res = A * np.sin(omega * t + alpha) + bias
+#                 lower_bound = PC_obj.process_to_control.limits['input'][name_ind_in_model][0]
+#                 upper_bound = PC_obj.process_to_control.limits['input'][name_ind_in_model][1]
+#                 res[res < lower_bound] = lower_bound
+#                 res[res > upper_bound] = upper_bound
+#                 return res
+#
+#             return func
+#
+#         funcs = [create_f_per_name(name, i) for i, name in enumerate(PC_obj.controlled_names)]
+#         time_seq = np.arange(0., episode_len, dt)
+#         controlled_to_pass = np.array([func(time_seq) for func in funcs]).transpose()
+#
+#         PC_obj.reset()
+#         for i in range(time_seq.size):
+#             PC_obj.set_controlled(controlled_to_pass[i])
+#             PC_obj.time_forward(dt)
+#         while PC_obj.get_current_time() < episode_len:
+#             PC_obj.time_forward(dt)
+#
+#         R = PC_obj.integrate_along_history(target_mode=True,
+#                                            time_segment=[0., episode_len])
+#         if DEBUG:
+#             if not os.path.exists(f'{folder}/model_info.txt'):
+#                 with open(f'{folder}/model_info.txt', 'w') as f:
+#                     f.write(PC_obj.process_to_control.add_info)
+#
+#             def ax_func(ax):
+#                 ax.set_title(f'integral: {R:.4g}')
+#
+#             PC_obj.plot(f'{folder}/try_{ind_picture}_return_{R:.3f}.png',
+#                         plot_more_function=ax_func, plot_mode='separately',
+#                         time_segment=[0., episode_len], additional_plot=['theta_CO', 'theta_O'])
+#         return -R
+#
+#     return f_to_optimize
+
+# def func_to_optimize_two_step_sol(PC_obj: ProcessController,
+#                                   episode_len, min_step_len=10.):
+#     import os
+#
+#     def f_to_optimize(two_step_description, DEBUG=False, folder=None, ind_picture=None):
+#         if not isinstance(two_step_description, dict):
+#             raise ValueError('Error!')
+#
+#         controlled_set_1 = [two_step_description[f'{name}_1'] for name in
+#                             PC_obj.controlled_names]
+#         controlled_set_2 = [two_step_description[f'{name}_2'] for name in
+#                             PC_obj.controlled_names]
+#         t1, t2 = two_step_description['time_1'], two_step_description['time_2']
+#         t1 = max(t1, min_step_len)
+#         t2 = max(t2, min_step_len)
+#
+#         PC_obj.reset()
+#         while PC_obj.get_current_time() <= episode_len:
+#             PC_obj.set_controlled(controlled_set_1)
+#             PC_obj.time_forward(t1)
+#             PC_obj.set_controlled(controlled_set_2)
+#             PC_obj.time_forward(t2)
+#
+#         R = PC_obj.integrate_along_history(target_mode=True,
+#                                            time_segment=[0., episode_len])
+#         if DEBUG:
+#             if not os.path.exists(f'{folder}/model_info.txt'):
+#                 with open(f'{folder}/model_info.txt', 'w') as f:
+#                     f.write(PC_obj.process_to_control.add_info)
+#
+#             def ax_func(ax):
+#                 ax.set_title(f'integral: {R:.4g}')
+#
+#             PC_obj.plot(f'{folder}/try_{ind_picture}_return_{R:.3f}.png',
+#                         plot_more_function=ax_func, plot_mode='separately',
+#                         time_segment=[0., episode_len], additional_plot=['thetaCO', 'thetaO'])
+#         return -R
+#
+#     return f_to_optimize

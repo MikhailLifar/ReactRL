@@ -1,5 +1,4 @@
-import \
-    warnings
+import warnings
 
 import numpy as np
 
@@ -132,17 +131,17 @@ class PtModel(LibudaModel):
         theta_CO = self.theta_CO
         theta_O = self.theta_O
 
-        b_CO = theta_CO / self['thetaCO_max']
-        b_CO = 1 - b_CO * b_CO
-        # if b_CO < 0:
-        #     b_CO = 0
-        self.theta_CO += (k1 * CO_p * b_CO - k2 * theta_CO - k4 * theta_CO * theta_O) * delta_t
-        b_O2 = 1 - (theta_CO / self['thetaCO_max']) - (theta_O / self['thetaO_max'])
-        if b_O2 > 0:
-            b_O2 *= b_O2
+        sticking_coef_CO = theta_CO / self['thetaCO_max']
+        sticking_coef_CO = 1 - sticking_coef_CO * sticking_coef_CO
+        # if sticking_coef_CO < 0:
+        #     sticking_coef_CO = 0
+        self.theta_CO += (k1 * CO_p * sticking_coef_CO - k2 * theta_CO - k4 * theta_CO * theta_O) * delta_t
+        sticking_coef_O2 = 1 - (theta_CO / self['thetaCO_max']) - (theta_O / self['thetaO_max'])
+        if sticking_coef_O2 > 0:
+            sticking_coef_O2 *= sticking_coef_O2
         else:
-            b_O2 = 0
-        self.theta_O += (k3 * O2_p * b_O2 - k4 * theta_CO * theta_O) * delta_t
+            sticking_coef_O2 = 0
+        self.theta_O += (k3 * O2_p * sticking_coef_O2 - k4 * theta_CO * theta_O) * delta_t
 
         # self.plot['k1*S_CO'] = k1 * S_CO
         # self.plot['k2*theta_CO'] = k2 * theta_CO
@@ -170,3 +169,58 @@ class PtModel(LibudaModel):
 
     def CO2_rate_to_F_value(self, rate):
         raise NotImplementedError
+
+
+class PtReturnK1K3Model(PtModel):
+    def __init__(self, **kwargs):
+        PtModel.__init__(self, **kwargs)
+        self.names['output'] = ['CO2', 'O2(k3xO2)', 'CO(k1xCO)']
+        for name in self.names['output']:
+            self.bottom['output'][name] = 0.
+        self.top['output']['CO2'] = self['k4'] * self['thetaO_max'] * self['thetaCO_max']
+        self.top['output']['O2(k3xO2)'] = self['k3'] * self.top['input']['O2']
+        self.top['output']['CO(k1xCO)'] = self['k1'] * self.top['input']['CO']
+        self.fill_limits()
+
+    def update(self, data_slice, delta_t, save_for_plot=False):
+        O2_p = data_slice[0]
+        CO_p = data_slice[1]
+
+        # TODO: CRUTCH HERE
+        O2_p = O2_p * 1e-5
+        CO_p = CO_p * 1e-5
+
+        k1 = self['k1']
+        k2 = self['k2']
+        k3 = self['k3']
+        k4 = self['k4']
+
+        theta_CO = self.theta_CO
+        theta_O = self.theta_O
+
+        sticking_coef_CO = theta_CO / self['thetaCO_max']
+        sticking_coef_CO = 1 - sticking_coef_CO * sticking_coef_CO
+        self.theta_CO += (k1 * CO_p * sticking_coef_CO - k2 * theta_CO - k4 * theta_CO * theta_O) * delta_t
+        sticking_coef_O2 = 1 - (theta_CO / self['thetaCO_max']) - (theta_O / self['thetaO_max'])
+        if sticking_coef_O2 > 0:
+            sticking_coef_O2 *= sticking_coef_O2
+        else:
+            sticking_coef_O2 = 0
+        self.theta_O += (k3 * O2_p * sticking_coef_O2 - k4 * theta_CO * theta_O) * delta_t
+
+        # this code makes me doubt...
+        self.theta_CO = min(max(0, self.theta_CO), self['thetaCO_max'])
+        self.theta_O = min(max(0, self.theta_O), self['thetaO_max'])
+        # but it didn't influence much on results
+
+        if save_for_plot:
+            self.plot['theta_CO'] = self.theta_CO
+            self.plot['theta_O'] = self.theta_O
+
+        CO2_out = k4 * self.theta_O * self.theta_CO
+
+        self.model_output = np.array([CO2_out, k3 * O2_p, k1 * CO_p])
+
+        self.t += delta_t
+        return self.model_output
+

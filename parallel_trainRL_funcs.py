@@ -206,7 +206,7 @@ if __name__ == '__main__':
     #                          'agent_name': 'vpg',
     #                      },
     #                     out_path='run_RL_out/train_greed/high_border_diff_rewards',
-    #                     controller=ProcessController(TestModel(), target_func_to_maximize=target),
+    #                     controller=ProcessController(TestModel(), target_func_to_maximize=CO2_value),
     #                     n_episodes=30000,
     #                     unique_folder=False,
     #                     at_same_time=30)
@@ -225,7 +225,7 @@ if __name__ == '__main__':
     #                  out_path='run_RL_out/current_training/diff_rewards',
     #                  python_interpreter='../RL_10_21/venv/bin/python',
     #                  on_cluster=False,
-    #                  controller=ProcessController(TestModel(), target_func_to_maximize=target,
+    #                  controller=ProcessController(TestModel(), target_func_to_maximize=CO2_value,
     #                                               supposed_step_count=2 * episode_time // time_step,  # memory controlling parameters
     #                                               supposed_exp_time=2 * episode_time),
     #                  n_episodes=10_000,

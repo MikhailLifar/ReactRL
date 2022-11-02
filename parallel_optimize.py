@@ -1,8 +1,9 @@
 from optimize_funcs import iter_optimize_cluster
 # from parse_and_run import *
-import test_models
+from test_models import *
 from ProcessController import *
 from predefined_policies import *
+from targets_metrics import *
 
 
 def main_cluster_function():
@@ -56,31 +57,38 @@ def main_cluster_function():
     #                                                 debug_params={'DEBUG': True, 'folder': 'auto', 'ind_picture': None},
     #                                                 cut_left=False, cut_right=False,)
 
-    def target(x):
-        return x[0]
-
-    time_step = 0.1
+    model_discret_step = 1.
     episode_time = 500
 
-    PC_LDegrad = ProcessController(test_models.LibudaModelWithDegradation(init_cond={'thetaCO': 0., 'thetaO': 0., }, Ts=273+160,
-                                                                                    v_d=0.01, v_r=0.1, border=4.),
-                                             target_func_to_maximize=target)
-    PC_LDegrad.set_plot_params(output_lims=[0., 0.06], output_ax_name='CO2_formation_rate',
-                               input_ax_name='Pressure, Pa')
+    # PC_LDegrad = ProcessController(LibudaModelWithDegradation(init_cond={'thetaCO': 0., 'thetaO': 0., }, Ts=273+160,
+    #                                                                                 v_d=0.01, v_r=0.1, border=4.),
+    #                                          target_func_to_maximize=CO2_value)
+    # PC_LDegrad.set_plot_params(output_lims=[0., 0.06], output_ax_name='CO2_formation_rate',
+    #                            input_ax_name='Pressure, Pa')
 
     # Pt2210_PC = ProcessController(test_models.PtModel(init_cond={'thetaO': 0., 'thetaCO': 0.}),
-    #                               target_func_to_maximize=target,
-    #                               supposed_step_count=2 * round(episode_time / time_step),  # memory controlling parameters
+    #                               target_func_to_maximize=CO2_value,
+    #                               supposed_step_count=2 * round(episode_time / model_discret_step),  # memory controlling parameters
     #                               supposed_exp_time=2 * episode_time)
     # Pt2210_PC.set_plot_params(input_ax_name='Pressure, x10^5', input_lims=None,
     #                         output_ax_name='CO2 form. rate', output_lims=None)
 
-    # Pt TESTS
+    PC_LReturnK3K1 = ProcessController(LibudaModelReturnK3K1(init_cond={'thetaO': 0., 'thetaCO': 0.}, Ts=273+160),
+                                       target_func_to_maximize=CO2xConversion)
+    # PC_PtReturnK3K1 = ProcessController(PtReturnK1K3Model(init_cond={'thetaO': 0., 'thetaCO': 0.}, Ts=440),
+    #                                     target_func_to_maximize=CO2xConversion,
+    #                                     supposed_step_count=2 * (int(episode_time / model_discret_step) + 1),  # memory controlling parameters
+    #                                     supposed_exp_time=2 * episode_time)
 
-    iter_optimize_cluster(func_to_optimize_policy(PC_LDegrad, SinPolicy(dict()), episode_time, 1.),
+    PC_obj = PC_LReturnK3K1
+
+    PC_obj.set_plot_params(output_lims=[0., None], output_ax_name='CO2_formation_rate',
+                           input_ax_name='Pressure, Pa')
+    # PC_obj.process_to_control.assign_and_eval_values(O2_top=2., CO_top=10.)
+
+    iter_optimize_cluster(func_to_optimize_policy(PC_obj, ConstantPolicy(dict()), episode_time, model_discret_step),
                           optimize_bounds={
-                              'O2_A': [0., 10.e-5], 'O2_omega': [0.02 * np.pi, 0.2 * np.pi], 'O2_alpha': [0., 2 * np.pi], 'O2_bias': [0., 10.e-5],
-                              'CO_A': [0., 10.e-5], 'CO_omega': [0.02 * np.pi, 0.2 * np.pi], 'CO_alpha': [0., 2 * np.pi], 'CO_bias': [0., 10.e-5],
+                              'O2_value': [0., 10e-5], 'CO_value': [0., 10e-5],
                               },
                           cut_left=False, cut_right=False,
                           method='Nelder-Mead',
@@ -89,9 +97,26 @@ def main_cluster_function():
                           python_interpreter='../RL_10_21/venv/bin/python',
                           file_to_execute_path='repos/parallel_optimize.py',
                           unique_folder=False,
-                          out_path='optimize_out/221020_test_new_func_sin',
+                          out_path='optimize_out/221027_new_target1_optimize',
                           debug_params={'DEBUG': True, 'folder': 'auto'},
                           )
+
+    # Pt TESTS
+    # iter_optimize_cluster(func_to_optimize_policy(PC_LDegrad, SinPolicy(dict()), episode_time, 1.),
+    #                       optimize_bounds={
+    #                           'O2_A': [0., 10.e-5], 'O2_omega': [0.02 * np.pi, 0.2 * np.pi], 'O2_alpha': [0., 2 * np.pi], 'O2_bias': [0., 10.e-5],
+    #                           'CO_A': [0., 10.e-5], 'CO_omega': [0.02 * np.pi, 0.2 * np.pi], 'CO_alpha': [0., 2 * np.pi], 'CO_bias': [0., 10.e-5],
+    #                           },
+    #                       cut_left=False, cut_right=False,
+    #                       method='Nelder-Mead',
+    #                       try_num=30,
+    #                       on_cluster=False,
+    #                       python_interpreter='../RL_10_21/venv/bin/python',
+    #                       file_to_execute_path='repos/parallel_optimize.py',
+    #                       unique_folder=False,
+    #                       out_path='optimize_out/221020_test_new_func_sin',
+    #                       debug_params={'DEBUG': True, 'folder': 'auto'},
+    #                       )
 
     # iter_optimize_cluster(func_to_optimize_sin_sol(PC_LDegrad, episode_len=500,
     #                                                dt=50),

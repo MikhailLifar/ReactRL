@@ -1,17 +1,17 @@
 import os
 
+# import numpy as np
+
 from ProcessController import *
 from predefined_policies import *
 from test_models import *
+from targets_metrics import *
 
 
 def check_func_to_optimize():
 
-    def target(x):
-        return x[0]
-
     PC_L2001 = ProcessController(LibudaModel(init_cond={'thetaCO': 0., 'thetaO': 0., }, Ts=273+160),
-                                 target_func_to_maximize=target,
+                                 target_func_to_maximize=CO2_value,
                                  # supposed_step_count=2 * round(episode_time / time_step),  # memory controlling parameters
                                  # supposed_exp_time=2 * episode_time
                                  )
@@ -20,7 +20,7 @@ def check_func_to_optimize():
 
     # PC_LDegrad = ProcessController(LibudaModelWithDegradation(init_cond={'thetaCO': 0., 'thetaO': 0., }, Ts=273+160,
     #                                                           v_d=0.01, v_r=0.1, border=4.),
-    #                                target_func_to_maximize=target)
+    #                                target_func_to_maximize=CO2_value)
     # PC_LDegrad.set_plot_params(output_lims=[0., 0.06], output_ax_name='CO2_formation_rate',
     #                            input_ax_name='Pressure, Pa')
 
@@ -101,16 +101,10 @@ def test_new_k1k3_model_new_targets():
     episode_time = 500.
     resolution = 1.
 
-    def target_1(x):
-        # formula, roughly: cost = CO2 * (1 - O2_out/O2_in - CO_out/CO_in)
-        # formula was rewriting, considering O2_out = O2_in - 2 * CO2; CO_out = CO_in - CO2;
-        # and using protection from division by zero
-        return x[0] * (2 * x[0] / (x[1] + 1e-7) + x[0] / (x[2] + 1e-7))
-
     PC_obj = ProcessController(LibudaModelReturnK3K1(init_cond={'thetaCO': 0., 'thetaO': 0., }, Ts=440),
                                supposed_step_count=2 * round(episode_time / resolution),  # memory controlling parameters
                                supposed_exp_time=2 * episode_time,
-                               target_func_to_maximize=target_1
+                               target_func_to_maximize=CO2xConversion
                                )
     PC_obj.set_plot_params(output_lims=None, output_ax_name='CO2_formation_rate',
                            input_lims=[0., 10.e-5], input_ax_name='Pressure, Pa')
@@ -121,11 +115,15 @@ def test_new_k1k3_model_new_targets():
     PC_obj.process_by_policy_objs(policies, episode_time, resolution)
     R = PC_obj.integrate_along_history(target_mode=True,
                                        time_segment=[0., episode_time])
-    PC_obj.plot(f'PC_plots/new_target_1/return_{R:.3f}.png',
+    PC_obj.set_metrics(('CO2', CO2_integral),
+                       ('O2 conversion', overall_O2_conversion),
+                       ('CO conversion', overall_CO_conversion))
+    PC_obj.plot(f'PC_plots/test_new_plot_method/return_{R:.3f}.png',
                 plot_mode='separately',
                 time_segment=[0., episode_time],
                 additional_plot=['theta_CO', 'theta_O'],
-                out_name='CO2')
+                out_names=['CO2', 'target'],
+                with_metrics=True)
 
 
 def custom_experiment():
@@ -138,32 +136,29 @@ def custom_experiment():
     # for c in '12345678':
     #     PC.plot(f'PC_plots/example{c}.png', out_name=c, plot_mode='separately')
 
-    # def target(x):
+    # def CO2_value(x):
     #     # target_v = np.array([2., 1., 3., -1., 0.,
     #     #                      1., -1., 3., -2., 3.])
     #     target_v = np.array([2., 1., 3.])
     #     return -np.linalg.norm(x - target_v)
     #
-    # PC = ProcessController(TestModel(), target_func_to_maximize=target)
+    # PC = ProcessController(TestModel(), target_func_to_maximize=CO2_value)
     # for i in range(5):
     #     PC.set_controlled([i + 0.2 * i1 for i1 in range(1, 6)])
     #     PC.time_forward(30)
     # print(PC.integrate_along_history(target_mode=True))
     # for c in [f'out{i}' for i in range(1, 4)]:
     #     PC.plot(f'PC_plots/example_{c}.png', out_name=c, plot_mode='separately')
-    # PC.plot(f'PC_plots/example_target.png', out_name='target', plot_mode='separately')
-
-    def target(x):
-        return x[0]
+    # PC.plot(f'PC_plots/example_target.png', out_name='CO2_value', plot_mode='separately')
 
     T = 273 + 160
     PC_L2001 = ProcessController(LibudaModelWithDegradation(init_cond={'thetaCO': 0., 'thetaO': 0., }, Ts=T),
-                                 target_func_to_maximize=target)
+                                 target_func_to_maximize=CO2_value)
     PC_L2001.set_plot_params(output_lims=[0., 0.06], output_ax_name='CO2_formation_rate',
                              input_ax_name='Pressure, Pa')
     # PC_LDegrad = ProcessController(LibudaModelWithDegradation(init_cond={'thetaCO': 0., 'thetaO': 0., }, Ts=273+160,
     #                                                           v_d=0.01, v_r=0.1, border=4.),
-    #                                target_func_to_maximize=target)
+    #                                target_func_to_maximize=CO2_value)
     # PC_LDegrad.set_plot_params(output_lims=[0., 0.06], output_ax_name='CO2_formation_rate',
     #                            input_ax_name='Pressure, Pa')
 
@@ -187,23 +182,20 @@ def custom_experiment():
 
 def test_PC_with_Libuda():
 
-    def target(x):
-        return x[0]
-
     # PC = ProcessController(LibudaModelWithDegradation(init_cond={'thetaO': 0.25, 'thetaCO': 0.5}, Ts=440),
-    #                        target_func_to_maximize=target)
+    #                        target_func_to_maximize=CO2_value)
     # # for i in range(5):
     # #     PC.set_controlled([(i + 0.2 * i1) * 1.e-5 for i1 in range(1, 3)])
     # #     PC.time_forward(30)
     # PC.set_controlled({'O2': 10.e-5, 'CO': 4.2e-5})
     # PC.time_forward(500)
     # print(PC.integrate_along_history(target_mode=True))
-    # # PC.plot(f'PC_plots/example_RL_21_10_task.png', out_name='target', plot_mode='separately')
+    # # PC.plot(f'PC_plots/example_RL_21_10_task.png', out_name='CO2_value', plot_mode='separately')
 
     # TEST if more CO is better under the old conditions of the tests for the russian article
     PC_L2001_old = ProcessController(LibudaModelWithDegradation(init_cond={'thetaO': 0.25, 'thetaCO': 0.5}, Ts=440,
                                                                 v_d=0.01, v_r=1.5, border=4.),
-                                     target_func_to_maximize=target)
+                                     target_func_to_maximize=CO2_value)
 
     episode_len = 500
     for i in range(2, 11, 2):
@@ -258,11 +250,8 @@ def plot_conv(csv_path):
 
 def Pt_exp(path: str):
 
-    def target(x):
-        return x[0]
-
     PC_Pt2210 = ProcessController(PtModel(init_cond={'thetaO': 0., 'thetaCO': 0.}),
-                                  target_func_to_maximize=target)
+                                  target_func_to_maximize=CO2_value)
     PC_Pt2210.set_plot_params(input_ax_name='Pressure', input_lims=None,
                               output_ax_name='CO2 form. rate', output_lims=None)
 

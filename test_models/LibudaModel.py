@@ -107,7 +107,7 @@ class LibudaModel(BaseModel):
         self.values[key] = value
 
     def get_add_info(self):
-        s = ''
+        s = f'Model name: {self.model_name}\n' + ('-' * 10) + '\n'
         for name in self.constants:
             s += f'{name}: {self[name]}\n'
         return s
@@ -226,6 +226,7 @@ class LibudaModel(BaseModel):
 
 
 class LibudaModelReturnK3K1(LibudaModel):
+    model_name = 'LibudaReturnK3K1'
 
     def __init__(self, **kwargs):
         LibudaModel.__init__(self, **kwargs)
@@ -279,6 +280,7 @@ class LibudaModelReturnK3K1(LibudaModel):
 
 
 class LibudaModelWithDegradation(LibudaModel):
+    model_name = 'LibudaDegrad'
 
     def __init__(self, Ts=440., init_cond: dict = None,
                  **kwargs):

@@ -77,7 +77,8 @@ def collect_training_results(folder, subfolder_path='testing_deterministic', des
     for name_part in (
             '_all_data',
             '_in',
-            '_out'
+            '_out',
+            '_target',
                       ):
         collect_along_folder(folder,
                              subfolder_path,
