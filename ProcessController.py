@@ -23,6 +23,7 @@ class ProcessController:
     def __init__(self, process_to_control_obj: BaseModel,
                  controlled_names: list = None, output_names: list = None,
                  target_func_to_maximize=None,
+                 long_term_target_to_maximize=None,
                  real_exp=False,
                  supposed_step_count: int = None,
                  supposed_exp_time: float = None):
@@ -32,7 +33,7 @@ class ProcessController:
         self.analyser_delay = 0
 
         if supposed_step_count is None:
-            self.max_step_count = 1000000
+            self.max_step_count = 1000000  # depends on available RAM
         else:
             self.max_step_count = supposed_step_count  # depends on available RAM
         if supposed_exp_time is None:
@@ -76,6 +77,8 @@ class ProcessController:
         self.target_history = None
         if target_func_to_maximize is not None:
             self.target_history = np.full(size, np.nan, dtype=np.float)
+        if long_term_target_to_maximize is not None:
+            self.long_term_target = long_term_target_to_maximize
 
         self.controlling_signals_history[0] = self.controlled
 
@@ -267,6 +270,10 @@ class ProcessController:
         inds = (time_segment[0] <= output_time_stamp) & (output_time_stamp <= time_segment[1])
         return lib.integral(output_time_stamp[inds], output[inds])
 
+    def get_long_term_target(self, **kwargs):
+        output_dt, output = self.get_process_output(**kwargs)
+        return self.long_term_target(output_dt, output)
+
     def _initialize_plot_lims(self):
         for kind in ('input', 'output'):
             self.plot_lims[kind] = [np.min(self.process_to_control.get_bounds('min', kind)),
@@ -283,11 +290,16 @@ class ProcessController:
         for kind in ('input', 'output'):
             if f'{kind}_lims' in kwargs:
                 self.plot_lims[kind] = kwargs[f'{kind}_lims']
+                del kwargs[f'{kind}_lims']
         for kind in ('input', 'output', 'additional', 'target'):
             if f'{kind}_ax_name' in kwargs:
                 self.plot_axes_names[kind] = kwargs[f'{kind}_ax_name']
+                del kwargs[f'{kind}_ax_name']
         if 'target_name' in kwargs:
             self.target_func_name = kwargs['target_name']
+            del kwargs['target_name']
+        if len(kwargs):
+            raise ValueError('At least one name contains error')
 
     def set_metrics(self, *args):
         """
@@ -301,14 +313,15 @@ class ProcessController:
              out_names=None, with_metrics: bool = True):
 
         inds = self.output_history_dt > -1
-        output_time_stamp, output = self.output_history_dt[inds], self.output_history[inds]
+        output_time_stamp, no_change_output = self.output_history_dt[inds], self.output_history[inds]
+        output = no_change_output
         if isinstance(out_names, str):
             out_names = [out_names]
         if out_names is None:
             assert len(self.output_names) == 1
             out_names = self.output_names
         # sort as in self.output_names, if 'target' in out_names - target will be the last col
-        out_names = [name for name in (self.output_names + ['target']) if name in out_names]
+        out_names = [name for name in (self.output_names + ['target', 'long_term_target']) if name in out_names]
         # process out_names as a list
         idxs = [i for i, name in enumerate(self.output_names) if name in out_names]
         if idxs:
@@ -316,7 +329,7 @@ class ProcessController:
         else:
             output = None
         if 'target' in out_names:
-            target_history = np.apply_along_axis(self.target_func, 1, self.output_history[inds])
+            target_history = np.apply_along_axis(self.target_func, 1, no_change_output)
             target_history = target_history.reshape(-1, 1)
             if output is not None:
                 output = np.hstack((output, target_history))
@@ -369,9 +382,13 @@ class ProcessController:
         if 'target' in out_names:
             integral = lib.integral(output_time_stamp, self.get_target_for_passed())
             common_title = f'Integral {self.target_func_name}: {integral:.3g}\n'
+        if 'long_term_target' in out_names:
+            integral = self.long_term_target(output_time_stamp, no_change_output)
+            common_title = f'Target: {integral:.3g}\n'
+            out_names.remove('long_term_target')
         if with_metrics and self.metrics_put_on_plot is not None:
             for name in self.metrics_put_on_plot:
-                common_title += f'{name}: {self.metrics_put_on_plot[name](self.output_history[inds]):.3g}, '
+                common_title += f'{name}: {self.metrics_put_on_plot[name](no_change_output):.3g}, '
 
         if plot_mode == 'together':
             common_plot_list = []
@@ -570,7 +587,8 @@ def create_to_approximate_many_frames(dfs: list, model_obj, label_name, in_cols,
     return func
 
 
-def func_to_optimize_policy(PC_obj: ProcessController, policy_obj: AbstractPolicy, episode_len, time_step):
+def func_to_optimize_policy(PC_obj: ProcessController, policy_obj: AbstractPolicy, episode_len, time_step,
+                            **kwargs):
     import os.path
     time_step, episode_len = float(time_step), float(episode_len)
 
@@ -601,8 +619,13 @@ def func_to_optimize_policy(PC_obj: ProcessController, policy_obj: AbstractPolic
         while PC_obj.get_current_time() < episode_len:
             PC_obj.time_forward(time_step)
 
-        R = PC_obj.integrate_along_history(target_mode=True,
-                                           time_segment=[0., episode_len])
+        if PC_obj.target_func is not None:
+            R = PC_obj.integrate_along_history(target_mode=True,
+                                               time_segment=[0., episode_len])
+
+        elif PC_obj.long_term_target is not None:
+            R = PC_obj.get_long_term_target()
+
         if DEBUG:
             if not os.path.exists(f'{folder}/model_info.txt'):
                 with open(f'{folder}/model_info.txt', 'w') as f:
@@ -614,8 +637,8 @@ def func_to_optimize_policy(PC_obj: ProcessController, policy_obj: AbstractPolic
 
             PC_obj.plot(f'{folder}/try_{ind_picture}_return_{R:.3f}.png',
                         plot_more_function=ax_func, plot_mode='separately',
-                        time_segment=[0., episode_len], additional_plot=['theta_CO', 'theta_O'],
-                        out_names='target')  # SMALL CRUTCH HERE!
+                        time_segment=[0., episode_len],
+                        **kwargs['to_plot'])  # SMALL CRUTCH HERE!
         return -R
 
     return f_to_optimize
@@ -698,47 +721,53 @@ def func_to_optimize_policy(PC_obj: ProcessController, policy_obj: AbstractPolic
 #
 #             PC_obj.plot(f'{folder}/try_{ind_picture}_return_{R:.3f}.png',
 #                         plot_more_function=ax_func, plot_mode='separately',
-#                         time_segment=[0., episode_len], additional_plot=['theta_CO', 'theta_O'])
-#         return -R
-#
-#     return f_to_optimize
-
-# def func_to_optimize_two_step_sol(PC_obj: ProcessController,
-#                                   episode_len, min_step_len=10.):
-#     import os
-#
-#     def f_to_optimize(two_step_description, DEBUG=False, folder=None, ind_picture=None):
-#         if not isinstance(two_step_description, dict):
-#             raise ValueError('Error!')
-#
-#         controlled_set_1 = [two_step_description[f'{name}_1'] for name in
-#                             PC_obj.controlled_names]
-#         controlled_set_2 = [two_step_description[f'{name}_2'] for name in
-#                             PC_obj.controlled_names]
-#         t1, t2 = two_step_description['time_1'], two_step_description['time_2']
-#         t1 = max(t1, min_step_len)
-#         t2 = max(t2, min_step_len)
-#
-#         PC_obj.reset()
-#         while PC_obj.get_current_time() <= episode_len:
-#             PC_obj.set_controlled(controlled_set_1)
-#             PC_obj.time_forward(t1)
-#             PC_obj.set_controlled(controlled_set_2)
-#             PC_obj.time_forward(t2)
-#
-#         R = PC_obj.integrate_along_history(target_mode=True,
-#                                            time_segment=[0., episode_len])
-#         if DEBUG:
-#             if not os.path.exists(f'{folder}/model_info.txt'):
-#                 with open(f'{folder}/model_info.txt', 'w') as f:
-#                     f.write(PC_obj.process_to_control.add_info)
-#
-#             def ax_func(ax):
-#                 ax.set_title(f'integral: {R:.4g}')
-#
-#             PC_obj.plot(f'{folder}/try_{ind_picture}_return_{R:.3f}.png',
-#                         plot_more_function=ax_func, plot_mode='separately',
 #                         time_segment=[0., episode_len], additional_plot=['thetaCO', 'thetaO'])
 #         return -R
 #
 #     return f_to_optimize
+
+def func_to_optimize_two_step_sol(PC_obj: ProcessController,
+                                  episode_len, min_step_len=10.,
+                                  **kwargs):
+    import os
+
+    def f_to_optimize(two_step_description, DEBUG=False, folder=None, ind_picture=None):
+        if not isinstance(two_step_description, dict):
+            raise ValueError('Error!')
+
+        controlled_set_1 = [two_step_description[f'{name}_1'] for name in
+                            PC_obj.controlled_names]
+        controlled_set_2 = [two_step_description[f'{name}_2'] for name in
+                            PC_obj.controlled_names]
+        t1, t2 = two_step_description['time_1'], two_step_description['time_2']
+        t1 = max(t1, min_step_len)
+        t2 = max(t2, min_step_len)
+
+        PC_obj.reset()
+        while PC_obj.get_current_time() <= episode_len:
+            PC_obj.set_controlled(controlled_set_1)
+            PC_obj.time_forward(t1)
+            PC_obj.set_controlled(controlled_set_2)
+            PC_obj.time_forward(t2)
+
+        if PC_obj.target_func is not None:
+            R = PC_obj.integrate_along_history(target_mode=True,
+                                               time_segment=[0., episode_len])
+        elif PC_obj.long_term_target is not None:
+            R = PC_obj.get_long_term_target()
+
+        if DEBUG:
+            if not os.path.exists(f'{folder}/model_info.txt'):
+                with open(f'{folder}/model_info.txt', 'w') as f:
+                    f.write(PC_obj.process_to_control.add_info)
+
+            def ax_func(ax):
+                # ax.set_title(f'integral: {R:.4g}')
+                pass
+
+            PC_obj.plot(f'{folder}/try_{ind_picture}_return_{R:.3f}.png',
+                        plot_more_function=ax_func, plot_mode='separately',
+                        time_segment=[0., episode_len], **(kwargs['to_plot']))
+        return -R
+
+    return f_to_optimize

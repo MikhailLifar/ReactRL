@@ -1,6 +1,8 @@
 import os
 
 # import numpy as np
+import \
+    pandas as pd
 
 from ProcessController import *
 from predefined_policies import *
@@ -104,7 +106,8 @@ def test_new_k1k3_model_new_targets():
     PC_obj = ProcessController(LibudaModelReturnK3K1(init_cond={'thetaCO': 0., 'thetaO': 0., }, Ts=440),
                                supposed_step_count=2 * round(episode_time / resolution),  # memory controlling parameters
                                supposed_exp_time=2 * episode_time,
-                               target_func_to_maximize=CO2xConversion
+                               # target_func_to_maximize=get_target_func('CO2_sub_outs', alpha=0.1),
+                               long_term_target_to_maximize=get_target_func('CO2_sub_outs_I', alpha=0.1),
                                )
     PC_obj.set_plot_params(output_lims=None, output_ax_name='CO2_formation_rate',
                            input_lims=[0., 10.e-5], input_ax_name='Pressure, Pa')
@@ -113,16 +116,27 @@ def test_new_k1k3_model_new_targets():
     # policies = (ConstantPolicy({'value': 9.e-5}),
     #             ConstantPolicy({'value': 4.4e-5}))
     PC_obj.process_by_policy_objs(policies, episode_time, resolution)
-    R = PC_obj.integrate_along_history(target_mode=True,
-                                       time_segment=[0., episode_time])
+    # R = PC_obj.integrate_along_history(target_mode=True,
+    #                                    time_segment=[0., episode_time])
+    R = PC_obj.get_long_term_target(RESOLUTION=10)
+    print(R)
+
+    # save to csv
+    names = ['CO2', 'O2(k3)', 'CO(k1)']
+    output = PC_obj.output_history
+    df = pd.DataFrame(columns=names)
+    for i, name in enumerate(names):
+        df[name] = output[:, i]
+    df.to_csv(f'PC_plots/test_k3k1_model/CO2_O2_CO.csv', index=False)
+
     PC_obj.set_metrics(('CO2', CO2_integral),
                        ('O2 conversion', overall_O2_conversion),
                        ('CO conversion', overall_CO_conversion))
-    PC_obj.plot(f'PC_plots/test_new_plot_method/return_{R:.3f}.png',
+    PC_obj.plot(f'PC_plots/test_k3k1_model/return_{R:.3f}.png',
                 plot_mode='separately',
                 time_segment=[0., episode_time],
-                additional_plot=['theta_CO', 'theta_O'],
-                out_names=['CO2', 'target'],
+                additional_plot=['thetaCO', 'thetaO'],
+                out_names=['CO2', 'long_term_target'],
                 with_metrics=True)
 
 
@@ -248,6 +262,38 @@ def plot_conv(csv_path):
                      ylim=None, save_csv=False, fileName=plot_file_path)
 
 
+def Libuda2001_original_simulation():
+    PC_obj = ProcessController(LibudaModel(init_cond={'thetaCO': 0., 'thetaO': 0.25}, Ts=440.),
+                               target_func_to_maximize=get_target_func('CO2_value'))
+    PC_obj.set_plot_params(output_lims=[-1.e-3, 0.05], output_ax_name='CO2 formation rate')
+    p_total = 1e-4
+
+    def one_co_on(x_co):
+
+        # CO_p = p_total * x_co  # simple formula
+        CO_p = p_total * x_co * 7 / np.sqrt(8) / (np.sqrt(7) + 7 * x_co / np.sqrt(8) - np.sqrt(7) * x_co)
+        O2_p = p_total - CO_p
+        PC_obj.reset()
+        PC_obj.set_controlled({'O2': O2_p, 'CO': CO_p})
+        PC_obj.time_forward(150)
+        PC_obj.set_controlled({'O2': O2_p, 'CO': 0.})
+        PC_obj.time_forward(50)
+        PC_obj.get_and_plot(f'./PC_plots/Libuda_orginal/x_co_{x_co:.2f}.png',
+                        plot_params={'time_segment': [0, 200], 'additional_plot': ['thetaCO', 'thetaO'],
+                                     'plot_mode': 'separately', 'out_names': ['CO2']},
+                        get_params={'RESOLUTION': 100})
+
+    one_co_on(0.5)
+    one_co_on(0.2)
+
+    # x_co = 0.05
+    # while x_co < 0.96:
+    #     CO_p = p_total * x_co
+    #     O2_p = p_total - CO_p
+    #     x_co += 0.05
+
+
+
 def Pt_exp(path: str):
 
     PC_Pt2210 = ProcessController(PtModel(init_cond={'thetaO': 0., 'thetaCO': 0.}),
@@ -272,7 +318,7 @@ def Pt_exp(path: str):
 
     PC_Pt2210.plot(path,
                 plot_more_function=ax_func, plot_mode='separately',
-                time_segment=[0., 50 * reps], additional_plot=['theta_CO', 'theta_O'])
+                time_segment=[0., 50 * reps], additional_plot=['thetaCO', 'thetaO'])
 
 
 if __name__ == '__main__':
@@ -293,6 +339,8 @@ if __name__ == '__main__':
 
     # Pt_exp('PC_plots/Pt/1_.png')
 
-    test_new_k1k3_model_new_targets()
+    # test_new_k1k3_model_new_targets()
+
+    Libuda2001_original_simulation()
 
     pass

@@ -22,7 +22,7 @@ def get_reward_func(params: dict):
 
         def full_ep_base(env_obj) -> float:
             if env_obj.end_episode:
-                return env_obj.integral * env_obj.normalize_coef - bias
+                return env_obj.cumm_episode_target * env_obj.normalize_coef - bias
             return 0.
 
         out_func = full_ep_base
@@ -49,11 +49,11 @@ def get_reward_func(params: dict):
                 std_lasts = np.std(int_arr[-depth:])
                 std_lasts = max(std_lasts, 5.e-3 / env_obj.normalize_coef)
                 if subtype == 'mean_mode':
-                    rew = (env_obj.integral - np.mean(int_arr[-depth:])) / std_lasts
+                    rew = (env_obj.cumm_episode_target - np.mean(int_arr[-depth:])) / std_lasts
                 elif subtype == 'median_mode':
-                    rew = (env_obj.integral - np.median(int_arr[-depth:])) / std_lasts
+                    rew = (env_obj.cumm_episode_target - np.median(int_arr[-depth:])) / std_lasts
                 elif subtype == 'max_mode':
-                    rew = (env_obj.integral - np.max(int_arr[-depth:])) / std_lasts
+                    rew = (env_obj.cumm_episode_target - np.max(int_arr[-depth:])) / std_lasts
                 else:
                     rew = None
                 if rew == 0:

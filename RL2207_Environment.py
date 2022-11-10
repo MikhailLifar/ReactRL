@@ -1,17 +1,9 @@
-# import \
-#     copy
-# import \
-#     warnings
-import \
-    copy
-from types import \
-    MethodType
+# import copy
+# import warnings
+from types import MethodType
 
 import matplotlib
-# import \
-#     numpy as np
-import \
-    numpy as np
+# import numpy as np
 
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -83,8 +75,8 @@ class RL2207_Environment(Environment):
         else:
             self.PC_preprocess = None
 
-        self.integral = 0.
-        self.best_integral = -np.inf
+        self.cumm_episode_target = 0.
+        self.best_episode_target = -np.inf
 
         self.end_episode = False
         self.success = False
@@ -101,7 +93,7 @@ class RL2207_Environment(Environment):
             state_spec['rows'] = 2
         if 'use_differences' not in state_spec:
             state_spec['use_differences'] = False
-        state_spec['shape'] = (state_spec['rows'], len(self.model.limits['input']) + len(self.model.limits['output']))
+        state_spec['shape'] = (state_spec['rows'], one_state_row_len)
         self.state_spec = copy.deepcopy(state_spec)
 
         self.state_memory = np.zeros((10, one_state_row_len))
@@ -112,6 +104,10 @@ class RL2207_Environment(Environment):
         self.reward_name = ''
         self.reward = None
         self.assign_reward(reward_spec)
+
+        self.target_type = 'one_row'
+        if kwargs['target_type'] == 'episode':
+            self.target_type = 'episode'
 
         # TODO try to generalize normalize_coef evaluation
         self.normalize_coef = normalize_coef(self)
@@ -239,20 +235,23 @@ class RL2207_Environment(Environment):
         if self.controller.get_current_time() >= self.episode_time:
             self.end_episode = True
             self.success = False
-            self.integral = self.controller.integrate_along_history([0, self.episode_time],
-                                                                    target_mode=True)
-            integral = self.integral
+            if self.target_type == 'one_row':
+                self.cumm_episode_target = self.controller.integrate_along_history([0, self.episode_time],
+                                                                                   target_mode=True)
+            elif self.target_type == 'episode':
+                self.cumm_episode_target = self.controller.get_long_term_target()
+            cumm_target = self.cumm_episode_target
             int_arr_size = self.stored_integral_data['integral'].size
             if self.count_episodes >= int_arr_size:
                 new_integral_arr = np.full(int_arr_size + 1000, -1.)
                 new_integral_arr[:self.count_episodes] = self.stored_integral_data['integral']
                 self.stored_integral_data['integral'] = new_integral_arr
-            self.stored_integral_data['integral'][self.count_episodes] = integral
-            if integral > self.best_integral:
-                self.best_integral = integral
+            self.stored_integral_data['integral'][self.count_episodes] = cumm_target
+            if cumm_target > self.best_episode_target:
+                self.best_episode_target = cumm_target
                 self.success = True
                 print('ATTENTION!')
-                print(f'new record: {integral:.2f}')
+                print(f'new record: {cumm_target:.2f}')
             self.count_episodes += 1
             # if self.save_policy:
             #     self.policy_df.to_excel(f'policy_store/policy{self.count_episodes}.xlsx')
@@ -391,10 +390,13 @@ def normalize_coef(env_obj):
             env_obj.controller.reset()
             env_obj.controller.set_controlled({'O2': max_inputs['O2'] * d['O2'], 'CO': max_inputs['CO'] * d['CO']})
             env_obj.controller.time_forward(env_obj.episode_time)
-            integral = env_obj.controller.integrate_along_history(target_mode=True)
-            # assert integral > 0, 'integral should be positive'
-            if integral > 0:
-                koefs.append(1 / integral)
+            if env_obj.target_type == 'one_row':
+                cumm_target = env_obj.controller.integrate_along_history(target_mode=True)
+            else:
+                cumm_target = env_obj.controller.get_long_term_target()
+            # assert cumm_target > 0, 'cumm. target should be positive'
+            if cumm_target > 0:
+                koefs.append(1 / cumm_target)
         if len(koefs):
             return np.min(koefs)
         else:

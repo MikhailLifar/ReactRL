@@ -59,19 +59,19 @@ class PtModel(LibudaModel):
 
         # initial conditions
         if init_cond is None:
-            self.theta_CO = 0
-            self.theta_O = self.constants['thetaO_max']
+            self.thetaCO = 0
+            self.thetaO = self.constants['thetaO_max']
         else:
             for name in init_cond:
                 assert init_cond[name] <= self.constants[f'{name}_max'],\
                     'This initial conditions are not allowed'
-            self.theta_CO = init_cond['thetaCO']
-            self.theta_O = init_cond['thetaO']
+            self.thetaCO = init_cond['thetaCO']
+            self.thetaO = init_cond['thetaO']
         # save initial conds
-        self.init_thetaCO = self.theta_CO
-        self.init_thetaO = self.theta_O
-        # self.plot = {'k1*S_CO': None, 'k2*theta_CO': None, 'k4*theta_CO*theta_O': None}
-        self.plot = {'theta_CO': self.theta_CO, 'theta_O': self.theta_O}
+        self.init_thetaCO = self.thetaCO
+        self.init_thetaO = self.thetaO
+        # self.plot = {'k1*S_CO': None, 'k2*thetaCO': None, 'k4*thetaCO*thetaO': None}
+        self.plot = {'thetaCO': self.thetaCO, 'thetaO': self.thetaO}
 
         # LIMITATIONS ASSIGNMENT
         self.names['input'] = ['O2', 'CO']
@@ -90,7 +90,7 @@ class PtModel(LibudaModel):
 
         self.fill_limits()
 
-        self.plot = {'theta_CO': self.theta_CO, 'theta_O': self.theta_O}
+        self.plot = {'thetaCO': self.thetaCO, 'thetaO': self.thetaO}
 
         self.add_info = LibudaModel.get_add_info(self)
 
@@ -128,35 +128,35 @@ class PtModel(LibudaModel):
         k3 = self['k3']
         k4 = self['k4']
 
-        theta_CO = self.theta_CO
-        theta_O = self.theta_O
+        thetaCO = self.thetaCO
+        thetaO = self.thetaO
 
-        sticking_coef_CO = theta_CO / self['thetaCO_max']
+        sticking_coef_CO = thetaCO / self['thetaCO_max']
         sticking_coef_CO = 1 - sticking_coef_CO * sticking_coef_CO
         # if sticking_coef_CO < 0:
         #     sticking_coef_CO = 0
-        self.theta_CO += (k1 * CO_p * sticking_coef_CO - k2 * theta_CO - k4 * theta_CO * theta_O) * delta_t
-        sticking_coef_O2 = 1 - (theta_CO / self['thetaCO_max']) - (theta_O / self['thetaO_max'])
+        self.thetaCO += (k1 * CO_p * sticking_coef_CO - k2 * thetaCO - k4 * thetaCO * thetaO) * delta_t
+        sticking_coef_O2 = 1 - (thetaCO / self['thetaCO_max']) - (thetaO / self['thetaO_max'])
         if sticking_coef_O2 > 0:
             sticking_coef_O2 *= sticking_coef_O2
         else:
             sticking_coef_O2 = 0
-        self.theta_O += (k3 * O2_p * sticking_coef_O2 - k4 * theta_CO * theta_O) * delta_t
+        self.thetaO += (k3 * O2_p * sticking_coef_O2 - k4 * thetaCO * thetaO) * delta_t
 
         # self.plot['k1*S_CO'] = k1 * S_CO
-        # self.plot['k2*theta_CO'] = k2 * theta_CO
-        # self.plot['k4*theta_CO*theta_O'] = k4 * theta_CO * theta_O
+        # self.plot['k2*thetaCO'] = k2 * thetaCO
+        # self.plot['k4*thetaCO*thetaO'] = k4 * thetaCO * thetaO
 
         # this code makes me doubt...
-        self.theta_CO = min(max(0, self.theta_CO), self['thetaCO_max'])
-        self.theta_O = min(max(0, self.theta_O), self['thetaO_max'])
+        self.thetaCO = min(max(0, self.thetaCO), self['thetaCO_max'])
+        self.thetaO = min(max(0, self.thetaO), self['thetaO_max'])
         # but it didn't influence much on results
 
         if save_for_plot:
-            self.plot['theta_CO'] = self.theta_CO
-            self.plot['theta_O'] = self.theta_O
+            self.plot['thetaCO'] = self.thetaCO
+            self.plot['thetaO'] = self.thetaO
 
-        self.model_output = k4 * self.theta_O * self.theta_CO
+        self.model_output = k4 * self.thetaO * self.thetaCO
         self.t += delta_t
         return self.model_output
 
@@ -195,29 +195,29 @@ class PtReturnK1K3Model(PtModel):
         k3 = self['k3']
         k4 = self['k4']
 
-        theta_CO = self.theta_CO
-        theta_O = self.theta_O
+        thetaCO = self.thetaCO
+        thetaO = self.thetaO
 
-        sticking_coef_CO = theta_CO / self['thetaCO_max']
+        sticking_coef_CO = thetaCO / self['thetaCO_max']
         sticking_coef_CO = 1 - sticking_coef_CO * sticking_coef_CO
-        self.theta_CO += (k1 * CO_p * sticking_coef_CO - k2 * theta_CO - k4 * theta_CO * theta_O) * delta_t
-        sticking_coef_O2 = 1 - (theta_CO / self['thetaCO_max']) - (theta_O / self['thetaO_max'])
+        self.thetaCO += (k1 * CO_p * sticking_coef_CO - k2 * thetaCO - k4 * thetaCO * thetaO) * delta_t
+        sticking_coef_O2 = 1 - (thetaCO / self['thetaCO_max']) - (thetaO / self['thetaO_max'])
         if sticking_coef_O2 > 0:
             sticking_coef_O2 *= sticking_coef_O2
         else:
             sticking_coef_O2 = 0
-        self.theta_O += (k3 * O2_p * sticking_coef_O2 - k4 * theta_CO * theta_O) * delta_t
+        self.thetaO += (k3 * O2_p * sticking_coef_O2 - k4 * thetaCO * thetaO) * delta_t
 
         # this code makes me doubt...
-        self.theta_CO = min(max(0, self.theta_CO), self['thetaCO_max'])
-        self.theta_O = min(max(0, self.theta_O), self['thetaO_max'])
+        self.thetaCO = min(max(0, self.thetaCO), self['thetaCO_max'])
+        self.thetaO = min(max(0, self.thetaO), self['thetaO_max'])
         # but it didn't influence much on results
 
         if save_for_plot:
-            self.plot['theta_CO'] = self.theta_CO
-            self.plot['theta_O'] = self.theta_O
+            self.plot['thetaCO'] = self.thetaCO
+            self.plot['thetaO'] = self.thetaO
 
-        CO2_out = k4 * self.theta_O * self.theta_CO
+        CO2_out = k4 * self.thetaO * self.thetaCO
 
         self.model_output = np.array([CO2_out, k3 * O2_p, k1 * CO_p])
 

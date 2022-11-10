@@ -26,24 +26,24 @@ class LibudaModel(BaseModel):
         constants['nPd'] = 1.53e+19
 
         # # currently this parameters are in self.values dict
-        # constants['F_CO_koef'] = (2 * 3.1415926 * 28e-26 / 6.02 * 1.38e-23 * constants['Ts']) ** (-0.5)  # current
+        # constants['F_CO_coef'] = (2 * 3.1415926 * 28e-26 / 6.02 * 1.38e-23 * constants['Ts']) ** (-0.5)  # current
         # (2 * 3.14 * 28e-23 / 6.02 * 1.38e-23 * constants['Ts']) ** (-0.5) others
-        # constants['F_O2_koef'] = (2 * 3.1415926 * 32e-26 / 6.02 * 1.38e-23 * constants['Ts']) ** (-0.5)  # current
+        # constants['F_O2_coef'] = (2 * 3.1415926 * 32e-26 / 6.02 * 1.38e-23 * constants['Ts']) ** (-0.5)  # current
         # (2 * 3.14 * 32e-23 / 6.02 * 1.38e-23 * constants['Ts']) ** (-0.5) others
 
         constants['v2'] = 1e+15
-        constants['v4'] = 1e+8 * (10 ** (-0.1))  # 1e+7, 1e+8 * (10 ** (-0.1)) others
-        constants['E2'] = 136  # 134, 136
-        constants['E4'] = 60  # 62, 59 others
+        constants['v4'] = 1e+8 * (10 ** (-0.1))  # 1e+7, 1e+8, !1e+8 * (10 ** (-0.1)) others
+        constants['E2'] = 136  # 134, !136
+        constants['E4'] = 60  # 62, !60, 59 others
         constants['k_B'] = 0.008314463
 
         # in exp is always met: p_CO + p_O2 == p_lim
         constants['p_lim'] = 1e-4  # 1e-4 Pa, according to paper
 
         # # currently this parameters are in self.values dict
-        # constants['k1_koef'] = constants['F_CO_koef'] / constants['nPd']
+        # constants['k1_coef'] = constants['F_CO_coef'] / constants['nPd']
         # constants['k2'] = constants['v2'] * np.exp(-constants['E2'] / constants['k_B'] / constants['Ts'])
-        # constants['k3_koef'] = constants['F_O2_koef'] / constants['nPd']
+        # constants['k3_coef'] = constants['F_O2_coef'] / constants['nPd']
         # constants['k4'] = constants['v4'] * np.exp(-constants['E4'] / constants['k_B'] / constants['Ts'])
 
         # limitations
@@ -64,19 +64,19 @@ class LibudaModel(BaseModel):
 
         # initial conditions
         if init_cond is None:
-            self.theta_CO = 0
-            self.theta_O = self.constants['thetaO_max']
+            self.thetaCO = 0
+            self.thetaO = self.constants['thetaO_max']
         else:
             for name in init_cond:
                 assert init_cond[name] <= self.constants[f'{name}_max'],\
                     'This initial conditions are not allowed'
-            self.theta_CO = init_cond['thetaCO']
-            self.theta_O = init_cond['thetaO']
+            self.thetaCO = init_cond['thetaCO']
+            self.thetaO = init_cond['thetaO']
         # save initial cond
-        self.init_thetaCO = self.theta_CO
-        self.init_thetaO = self.theta_O
-        # self.plot = {'k1*S_CO': None, 'k2*theta_CO': None, 'k4*theta_CO*theta_O': None}
-        self.plot = {'theta_CO': self.theta_CO, 'theta_O': self.theta_O}
+        self.init_thetaCO = self.thetaCO
+        self.init_thetaO = self.thetaO
+        # self.plot = {'k1*S_CO': None, 'k2*thetaCO': None, 'k4*thetaCO*thetaO': None}
+        self.plot = {'thetaCO': self.thetaCO, 'thetaO': self.thetaO}
 
         # LIMITATIONS ASSIGNMENT
         self.names['input'] = ['O2', 'CO']
@@ -134,14 +134,15 @@ class LibudaModel(BaseModel):
 
     def new_values(self):
         Ts = self['Ts']
+        # Ts = 300
         self['S0_O2'] = 0.78 - 7.4e-4 * Ts
-        self['F_CO_koef'] = (2 * 3.1415926 * 28e-26 / 6.02 * 1.38e-23 * Ts) ** (-0.5)
-        self['F_O2_koef'] = (2 * 3.1415926 * 32e-26 / 6.02 * 1.38e-23 * Ts) ** (-0.5)
+        self['F_CO_coef'] = (2 * np.pi * 28e-26 / 6.02 * 1.38e-23 * Ts) ** (-0.5)
+        self['F_O2_coef'] = (2 * np.pi * 32e-26 / 6.02 * 1.38e-23 * Ts) ** (-0.5)
 
-        self['k1_koef'] = self['F_CO_koef'] / self['nPd']
-        self['k2'] = self['v2'] * np.exp(-self['E2'] / self['k_B'] / self['Ts'])
-        self['k3_koef'] = self['F_O2_koef'] / self['nPd']
-        self['k4'] = self['v4'] * np.exp(-self['E4'] / self['k_B'] / self['Ts'])
+        self['k1_coef'] = self['F_CO_coef'] / self['nPd']
+        self['k2'] = self['v2'] * np.exp(-self['E2'] / self['k_B'] / Ts)
+        self['k3_coef'] = self['F_O2_coef'] / self['nPd']
+        self['k4'] = self['v4'] * np.exp(-self['E4'] / self['k_B'] / Ts)
 
         # LIMITATIONS ASSIGNMENT
         for name in self.names['input']:
@@ -159,67 +160,66 @@ class LibudaModel(BaseModel):
         CO_p = data_slice[1]
 
         # estimation values of k:
-        # k1_koef: 1500
+        # k1_coef: 1500
         # k2: 0.04
-        # k3_koef: 1500
+        # k3_coef: 1500
         # k4: 5
 
-        k1 = self['k1_koef'] * CO_p
+        k1 = self['k1_coef'] * CO_p
         k2 = self['k2']
-        k3 = self['k3_koef'] * O2_p
+        k3 = self['k3_coef'] * O2_p
         k4 = self['k4']
 
-        theta_CO = self.theta_CO
-        theta_O = self.theta_O
+        thetaCO = self.thetaCO
+        thetaO = self.thetaO
 
-        S_multiplier_CO = 1 - theta_CO / self['thetaCO_max'] - self['CTs'] * theta_O / self['thetaO_max']
-        S_multiplier_O2 = 1 - theta_CO / self['thetaCO_max'] - theta_O / self['thetaO_max']
+        S_multiplier_CO = 1 - thetaCO / self['thetaCO_max'] - self['CTs'] * thetaO / self['thetaO_max']
         S_CO = self['S0_CO'] * S_multiplier_CO
-
         # S_CO = max(S_CO, 0)  # optional statement. Doesn't accord Libuda2001 article
 
+        S_multiplier_O2 = 1 - thetaCO / self['thetaCO_max'] - thetaO / self['thetaO_max']
         if S_multiplier_O2 > 0:
             S_O2 = self['S0_O2'] * S_multiplier_O2 * S_multiplier_O2
         else:
-            S_O2 = 0
+            S_O2 = 0.
 
-        self.theta_CO += (k1 * S_CO - k2 * theta_CO - k4 * theta_CO * theta_O) * delta_t
-        self.theta_O += (2 * k3 * S_O2 - k4 * theta_CO * theta_O) * delta_t
+        self.thetaCO += (k1 * S_CO - k2 * thetaCO - k4 * thetaCO * thetaO) * delta_t
+        self.thetaO += (2 * k3 * S_O2 - k4 * thetaCO * thetaO) * delta_t
 
         # self.plot['k1*S_CO'] = k1 * S_CO
-        # self.plot['k2*theta_CO'] = k2 * theta_CO
-        # self.plot['k4*theta_CO*theta_O'] = k4 * theta_CO * theta_O
+        # self.plot['k2*thetaCO'] = k2 * thetaCO
+        # self.plot['k4*thetaCO*thetaO'] = k4 * thetaCO * thetaO
 
         # this code makes me doubt...
-        self.theta_CO = min(max(0, self.theta_CO), self['thetaCO_max'])
-        self.theta_O = min(max(0, self.theta_O), self['thetaO_max'])
+        self.thetaCO = min(max(0., self.thetaCO), self['thetaCO_max'])
+        self.thetaO = min(max(0., self.thetaO), self['thetaO_max'])
         # but it didn't influence much on results
 
         if save_for_plot:
-            self.plot['theta_CO'] = self.theta_CO
-            self.plot['theta_O'] = self.theta_O
+            self.plot['thetaCO'] = self.thetaCO
+            self.plot['thetaO'] = self.thetaO
 
-        self.model_output = k4 * self.theta_O * self.theta_CO
+        self.model_output = k4 * self.thetaO * self.thetaCO
         self.t += delta_t
         return self.model_output
 
     def reset(self):
         BaseModel.reset(self)
-        self.theta_CO = self.init_thetaCO
-        self.theta_O = self.init_thetaO
-        # self.plot = {'theta_CO': self.theta_CO * 0.01, 'theta_O': self.theta_O * 0.01}
+        self.thetaCO = self.init_thetaCO
+        self.thetaO = self.init_thetaO
+        # self.plot = {'thetaCO': self.thetaCO * 0.01, 'thetaO': self.thetaO * 0.01}
 
     # measures manipulations
     def pressure_norm_func(self, gas_name):
         gas_inds = {'O2': 3, 'CO': 1}
 
         def norm(pressure):
-            return pressure * self[f'k{gas_inds[gas_name]}_koef']
+            return pressure * self[f'k{gas_inds[gas_name]}_coef']
 
         return norm
 
     def pressure_to_F_value(self, pressure, gas_name):
-        return self[f'F_{gas_name}_koef'] * pressure
+        return self[f'F_{gas_name}_coef'] * pressure
 
     def CO2_rate_to_F_value(self, rate):
         return self[f'nPd'] * rate
@@ -234,24 +234,31 @@ class LibudaModelReturnK3K1(LibudaModel):
         for name in self.names['output']:
             self.bottom['output'][name] = 0.
         self.top['output']['CO2'] = self['k4'] * self['thetaO_max'] * self['thetaCO_max']
-        self.top['output']['O2(k3)'] = self['k3_koef'] * self.top['input']['O2']
-        self.top['output']['CO(k1)'] = self['k1_koef'] * self.top['input']['CO']
+        self.top['output']['O2(k3)'] = self['k3_coef'] * self.top['input']['O2']
+        self.top['output']['CO(k1)'] = self['k1_coef'] * self.top['input']['CO']
+        self.fill_limits()
+
+    def new_values(self):
+        LibudaModel.new_values(self)
+        self.top['output']['CO2'] = self['k4'] * self['thetaO_max'] * self['thetaCO_max']
+        self.top['output']['O2(k3)'] = self['k3_coef'] * self.top['input']['O2']
+        self.top['output']['CO(k1)'] = self['k1_coef'] * self.top['input']['CO']
         self.fill_limits()
 
     def update(self, data_slice, delta_t, save_for_plot=False):
         O2_p = data_slice[0]
         CO_p = data_slice[1]
 
-        k1 = self['k1_koef'] * CO_p
+        k1 = self['k1_coef'] * CO_p
         k2 = self['k2']
-        k3 = self['k3_koef'] * O2_p
+        k3 = self['k3_coef'] * O2_p
         k4 = self['k4']
 
-        theta_CO = self.theta_CO
-        theta_O = self.theta_O
+        thetaCO = self.thetaCO
+        thetaO = self.thetaO
 
-        S_multiplier_CO = 1 - theta_CO / self['thetaCO_max'] - self['CTs'] * theta_O / self['thetaO_max']
-        S_multiplier_O2 = 1 - theta_CO / self['thetaCO_max'] - theta_O / self['thetaO_max']
+        S_multiplier_CO = 1 - thetaCO / self['thetaCO_max'] - self['CTs'] * thetaO / self['thetaO_max']
+        S_multiplier_O2 = 1 - thetaCO / self['thetaCO_max'] - thetaO / self['thetaO_max']
         S_CO = self['S0_CO'] * S_multiplier_CO
 
         if S_multiplier_O2 > 0:
@@ -259,20 +266,20 @@ class LibudaModelReturnK3K1(LibudaModel):
         else:
             S_O2 = 0
 
-        self.theta_CO += (k1 * S_CO - k2 * theta_CO - k4 * theta_CO * theta_O) * delta_t
-        self.theta_O += (2 * k3 * S_O2 - k4 * theta_CO * theta_O) * delta_t
+        self.thetaCO += (k1 * S_CO - k2 * thetaCO - k4 * thetaCO * thetaO) * delta_t
+        self.thetaO += (2 * k3 * S_O2 - k4 * thetaCO * thetaO) * delta_t
 
         # this code makes me doubt...
-        self.theta_CO = min(max(0, self.theta_CO), self['thetaCO_max'])
-        self.theta_O = min(max(0, self.theta_O), self['thetaO_max'])
+        self.thetaCO = min(max(0, self.thetaCO), self['thetaCO_max'])
+        self.thetaO = min(max(0, self.thetaO), self['thetaO_max'])
         # but it didn't influence much on results
 
         if save_for_plot:
-            self.plot['theta_CO'] = self.theta_CO
-            self.plot['theta_O'] = self.theta_O
+            self.plot['thetaCO'] = self.thetaCO
+            self.plot['thetaO'] = self.thetaO
 
         # CHANGES COMES HERE
-        CO2_flow = k4 * self.theta_O * self.theta_CO
+        CO2_flow = k4 * self.thetaO * self.thetaCO
         self.model_output = np.array([CO2_flow, k3, k1])
 
         self.t += delta_t
@@ -377,8 +384,8 @@ class LibudaModelWithDegradation(LibudaModel):
 
 class LibudaModel_Parametrize(LibudaModel):
     # parameteres:
-    # p1 -> k1_koef, p2(T) -> k2,
-    # p3 -> k3_koef, p4(T)-> k4
+    # p1 -> k1_coef, p2(T) -> k2,
+    # p3 -> k3_coef, p4(T)-> k4
 
     # TODO very big crutch with this limits!
     limits = dict()
@@ -399,9 +406,9 @@ class LibudaModel_Parametrize(LibudaModel):
     def set_params(self, params):
         BaseModel.set_params(self, params)
         if params is not None:
-            self['k1_koef'] = params['p1']
+            self['k1_coef'] = params['p1']
             self['k2'] = params['p2'] * self['Ts'] / self.T_reference
-            self['k3_koef'] = params['p3']
+            self['k3_coef'] = params['p3']
             self['k4'] = params['p4'] * self['Ts'] / self.T_reference
 
     def new_values(self):
@@ -414,8 +421,8 @@ class LibudaModel_Parametrize(LibudaModel):
 
 class LibudaDegrad_Parametrize(LibudaModelWithDegradation):
     # parameteres:
-    # p1 -> k1_koef, p2(T) -> k2,
-    # p3 -> k3_koef, p4(T)-> k4
+    # p1 -> k1_coef, p2(T) -> k2,
+    # p3 -> k3_coef, p4(T)-> k4
 
     # TODO very big crutch with this limits!
     limits = dict()
@@ -436,9 +443,9 @@ class LibudaDegrad_Parametrize(LibudaModelWithDegradation):
     def set_params(self, params):
         BaseModel.set_params(self, params)
         if params is not None:
-            self['k1_koef'] = params['p1']
+            self['k1_coef'] = params['p1']
             self['k2'] = params['p2'] * self['Ts'] / self.T_reference
-            self['k3_koef'] = params['p3']
+            self['k3_coef'] = params['p3']
             self['k4'] = params['p4'] * self['Ts'] / self.T_reference
 
             self.v_recov = params['v_recov']
