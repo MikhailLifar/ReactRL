@@ -362,8 +362,14 @@ def optimize_list_cluster(params_variants: list,
             # PC_obj.set_plot_params(input_lims=None)
             raise NotImplementedError
 
+        for d in [variable_dict, const_params]:
+            for attr_name in ['target_func', 'long_term_target']:
+                if attr_name in d:
+                    setattr(PC_obj, attr_name, d[attr_name])
+                    PC_obj.target_func_name = d['target_func_name']
+
         to_func_to_optimize = dict()
-        for name in ('episode_len', 'time_step', 'to_plot'):
+        for name in ('episode_len', 'time_step', 'to_plot', 'expand_description'):
             if name in variable_dict:
                 to_func_to_optimize[name] = variable_dict[name]
             elif name in const_params:
@@ -376,3 +382,43 @@ def optimize_list_cluster(params_variants: list,
                       **(variable_dict['iter_optimize']), **(const_params['iter_optimize']),
                       out_folder=make_subdir_return_path(out_path, name=f'_{iter_arg}', with_date=False, unique=False),
                       unique_folder=False)
+
+
+def optimize_grid_cluster(*value_sets,
+                        names: tuple,
+                        **opt_list_args):
+
+    assert len(names) == len(value_sets), 'Error: lengths mismatch'
+    params_variants = list(itertools.product(*value_sets))
+    contains_tuple = False
+    # if tuple names contains subtuple of names
+    for it in names:
+        if isinstance(it, tuple):
+            contains_tuple = True
+            break
+    if contains_tuple:
+        # realisation of grid not for the single parameter,
+        # but for the sets of parameters,
+        # i. e. creation grid of the form
+        # [
+        #  [a11, a12, a13..., b11, b12..., ...], [a11, a12, a13..., b21, b22..., ...], [a11, a12, a13..., b31, b32.., ...],
+        #  [a21, a22, a23..., b11, b12..., ...], [a21, a22, a23..., b21, b22..., ...], [a21, a22, a23..., b31, b32.., ...],
+        #  ]
+        for i, _ in enumerate(params_variants):
+            new_params_set = []
+            for j, it in enumerate(names):
+                if isinstance(it, tuple):
+                    for k, _ in enumerate(it):
+                        new_params_set.append(params_variants[i][j][k])
+                else:
+                    new_params_set.append(params_variants[i][j])
+            params_variants[i] = new_params_set
+        new_names = []
+        for it in names:
+            if isinstance(it, tuple):
+                for name in it:
+                    new_names.append(name)
+            else:
+                new_names.append(it)
+        names = tuple(new_names)
+    optimize_list_cluster(params_variants, names, **opt_list_args)

@@ -225,17 +225,19 @@ class LibudaModel(BaseModel):
         return self[f'nPd'] * rate
 
 
-class LibudaModelReturnK3K1(LibudaModel):
-    model_name = 'LibudaReturnK3K1'
+class LibudaModelReturnK3K1AndPressures(LibudaModel):
+    model_name = 'LibudaReturnK3K1AndPressures'
 
     def __init__(self, **kwargs):
         LibudaModel.__init__(self, **kwargs)
-        self.names['output'] = ['CO2', 'O2(k3)', 'CO(k1)']
+        self.names['output'] = ['CO2', 'O2(k3)', 'CO(k1)', 'O2(Pa)', 'CO(Pa)']
         for name in self.names['output']:
             self.bottom['output'][name] = 0.
         self.top['output']['CO2'] = self['k4'] * self['thetaO_max'] * self['thetaCO_max']
         self.top['output']['O2(k3)'] = self['k3_coef'] * self.top['input']['O2']
         self.top['output']['CO(k1)'] = self['k1_coef'] * self.top['input']['CO']
+        self.top['output']['O2(Pa)'] = self.top['input']['O2']
+        self.top['output']['CO(Pa)'] = self.top['input']['CO']
         self.fill_limits()
 
     def new_values(self):
@@ -243,6 +245,8 @@ class LibudaModelReturnK3K1(LibudaModel):
         self.top['output']['CO2'] = self['k4'] * self['thetaO_max'] * self['thetaCO_max']
         self.top['output']['O2(k3)'] = self['k3_coef'] * self.top['input']['O2']
         self.top['output']['CO(k1)'] = self['k1_coef'] * self.top['input']['CO']
+        self.top['output']['O2(Pa)'] = self.top['input']['O2']
+        self.top['output']['CO(Pa)'] = self.top['input']['CO']
         self.fill_limits()
 
     def update(self, data_slice, delta_t, save_for_plot=False):
@@ -280,7 +284,7 @@ class LibudaModelReturnK3K1(LibudaModel):
 
         # CHANGES COMES HERE
         CO2_flow = k4 * self.thetaO * self.thetaCO
-        self.model_output = np.array([CO2_flow, k3, k1])
+        self.model_output = np.array([CO2_flow, k3, k1, O2_p, CO_p])
 
         self.t += delta_t
         return self.model_output

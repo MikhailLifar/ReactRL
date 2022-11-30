@@ -68,7 +68,8 @@ time_step = 10
 # Pt2210_PC.set_plot_params(input_ax_name='Pressure', input_lims=None,
 #                             output_ax_name='CO2 form. rate', output_lims=None)
 
-PC_LReturnK3K1 = ProcessController(LibudaModelReturnK3K1(init_cond={'thetaO': 0., 'thetaCO': 0.}, Ts=273+160),
+PC_LReturnK3K1 = ProcessController(LibudaModelReturnK3K1AndPressures(init_cond={'thetaO': 0., 'thetaCO': 0.}, Ts=273 + 160),
+                                   RESOLUTION=10,
                                    # target_func_to_maximize=CO2xConversion,
                                    long_term_target_to_maximize=get_target_func('CO2xConversion_I', eps=1.),
                                    supposed_step_count=2 * episode_time // time_step,  # memory controlling parameters
@@ -84,22 +85,28 @@ PC_LReturnK3K1 = ProcessController(LibudaModelReturnK3K1(init_cond={'thetaO': 0.
 PC_obj = PC_LReturnK3K1
 # PC_obj = PC_PtReturnK3K1
 
-PC_obj.set_plot_params(input_ax_name='Pressure', input_lims=[0., None],
-                       output_ax_name='CO2 form. rate', output_lims=None)
+PC_obj.set_plot_params(input_ax_name='Pressure',
+                       output_ax_name='?', output_lims=[0., None])
 PC_obj.set_metrics(('CO2', CO2_integral),
                    ('O2 conversion', overall_O2_conversion),
                    ('CO conversion', overall_CO_conversion))
 
-train_grid_parallel([(10.e-5, 10.e-5), (2.e-5, 10.e-5), (10.e-5, 2.e-5)],
-                     ['full_ep_mean', 'full_ep_base'],
-                     [(1, False), (3, False)],
-                     names=(('model:O2_top', 'model:CO_top'), 'env:reward_spec', 'env:state_spec'),
-                     const_params={
+Gauss_x_Conv_x_Conv = get_target_func('(Gauss)x(Conv)x(Conv)_I', default=1e-4, sigma=1e-5 * episode_time, eps=1e-4)
+name1 = '(Gauss)x(Conv)x(Conv)'
+Gauss_x__Conv_Plus_Conv_ = get_target_func('(Gauss)x(Conv+Conv)_I', default=1e-4, sigma=1e-5 * episode_time, eps=1e-4)
+name2 = '(Gauss)x(Conv+Conv)'
+
+train_grid_parallel([(Gauss_x_Conv_x_Conv, name1), (Gauss_x__Conv_Plus_Conv_, name2)],
+                    [(1.e-5, 1.e-4), (1.e-4, 1.e-4), (1.e-3, 1.e-3), (1.e-2, 1.e-2), ],
+                    ['full_ep_mean', 'full_ep_base'],
+                    [(1, False), (3, False)],
+                    names=(('long_term_target', 'target_func_name'), ('model:O2_top', 'model:CO_top'), 'env:reward_spec', 'env:state_spec'),
+                    const_params={
                          'env': {'model_type': 'continuous',
+                                 'names_to_state': ['CO2', 'O2(Pa)', 'CO(Pa)'],
                                  'episode_time': episode_time,
                                  'time_step': time_step,
                                  'log_scaling_dict': None,
-                                 'PC_resolution': 10,
                                  'names_to_plot': ['CO2', 'long_term_target'],
                                  'target_type': 'episode',
                                  },
@@ -107,15 +114,70 @@ train_grid_parallel([(10.e-5, 10.e-5), (2.e-5, 10.e-5), (10.e-5, 2.e-5)],
                          'model': {
                              }
                      },
-                     repeat=3,
-                     out_path='run_RL_out/221102_test_2',
-                     file_to_execute_path='repos/parallel_trainRL.py',
-                     python_interpreter='../RL_10_21/venv/bin/python',
-                     on_cluster=False,
-                     controller=PC_obj,
-                     n_episodes=30_000,
-                     unique_folder=False,
-                     at_same_time=60)
+                    out_path='run_RL_out/221130_variate_new_targets',
+                    file_to_execute_path='repos/parallel_trainRL.py',
+                    python_interpreter='../RL_10_21/venv/bin/python',
+                    on_cluster=False,
+                    controller=PC_obj,
+                    n_episodes=30_000,
+                    unique_folder=False,
+                    at_same_time=45)
+
+# MAIN TEST FOR LIBUDA
+# train_grid_parallel(['full_ep_mean', 'full_ep_base', 'each_step_base'],
+#                      [(1, False), (2, False), (3, False),
+#                       (4, False), (5, False)],
+#                      [0.01, 0.01, 0.01],
+#                      names=('env:reward_spec', 'env:state_spec', 'model:v_d'),
+#                      const_params={
+#                          'env': {'model_type': 'continuous',
+#                                  'episode_time': episode_time,
+#                                  'time_step': time_step,
+#                                  },
+#                          'agent_name': 'vpg',
+#                          'model': {
+#                              'v_r': 0.1,
+#                              'border': 4.
+#                              }
+#                      },
+#                      out_path='run_RL_out/current_training/???',
+#                      file_to_execute_path='code/parallel_trainRL.py',
+#                      python_interpreter='../RL_21/venv/bin/python',
+#                      on_cluster=True,
+#                      controller=ProcessController(LibudaModelWithDegradation(init_cond={'thetaCO': 0., 'thetaO': 0.},
+#                                                        Ts=273+160), target_func_to_maximize=target,
+#                                                   supposed_step_count=2 * episode_time // time_step,  # memory controlling parameters
+#                                                   supposed_exp_time=2 * episode_time),
+#                      n_episodes=30_000,
+#                      unique_folder=False,
+#                      at_same_time=45)
+
+# train_grid_parallel([(10.e-5, 10.e-5), (2.e-5, 10.e-5), (10.e-5, 2.e-5)],
+#                      ['full_ep_mean', 'full_ep_base'],
+#                      [(1, False), (3, False)],
+#                      names=(('model:O2_top', 'model:CO_top'), 'env:reward_spec', 'env:state_spec'),
+#                      const_params={
+#                          'env': {'model_type': 'continuous',
+#                                  'episode_time': episode_time,
+#                                  'time_step': time_step,
+#                                  'log_scaling_dict': None,
+#                                  'PC_resolution': 10,
+#                                  'names_to_plot': ['CO2', 'long_term_target'],
+#                                  'target_type': 'episode',
+#                                  },
+#                          'agent_name': 'vpg',
+#                          'model': {
+#                              }
+#                      },
+#                      repeat=3,
+#                      out_path='run_RL_out/221102_test_2',
+#                      file_to_execute_path='repos/parallel_trainRL.py',
+#                      python_interpreter='../RL_10_21/venv/bin/python',
+#                      on_cluster=False,
+#                      controller=PC_obj,
+#                      n_episodes=30_000,
+#                      unique_folder=False,
+#                      at_same_time=60)
 
 # agent, actor, critic, critic_opt, baseline, baseline_opt
 # train_grid_parallel([('ac', 'auto', 'auto', '#exclude', '#exclude', '#exclude',),

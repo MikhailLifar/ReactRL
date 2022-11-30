@@ -102,10 +102,28 @@ def train_list_parallel(
                 if variable_params[name][sub_name] == '#exclude':
                     del variable_params[name][sub_name]
         # print(set_values)
+
         model_obj.reset()
         if (len(variable_params['model'])) or (len(const_params['model'])):
             model_obj.assign_and_eval_values(**(variable_params['model']),
                                              **(const_params['model']))
+
+        for d in [variable_params, const_params]:
+            for attr_name in ['target_func', 'long_term_target']:
+                if attr_name in d:
+                    setattr(controller, attr_name, d[attr_name])
+                    controller.target_func_name = d['target_func_name']
+
+        limit_names = [name for name in variable_params['model'] if '_top' in name]
+        max_top = max([variable_params['model'][name] for name in limit_names])
+        limit_names = [name for name in const_params['model'] if '_top' in name]
+        max_top = max([const_params['model'][name] for name in limit_names] + [max_top])
+        if max_top > 0:
+            controller.set_plot_params(input_lims=[-1.e-1 * max_top, 1.1 * max_top])
+        else:
+            # PC_obj.set_plot_params(input_lims=None)
+            raise NotImplementedError
+
         env_obj = Environment.create(
             environment=RL2207_Environment(controller,
                                            **(const_params['env']), **(variable_params['env'])),
@@ -127,6 +145,7 @@ def train_list_parallel(
         run(env_obj, agent_rl,
             out_folder=the_folder,
             n_episodes=n_episodes, create_unique_folder=False)
+
         # individual iteration file
         x_vector = np.arange(env_obj.stored_integral_data['integral'][:env_obj.count_episodes].size)[::20]
         this_train_ress = env_obj.stored_integral_data['smooth_1000_step']

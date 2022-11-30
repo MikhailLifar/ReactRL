@@ -1,4 +1,5 @@
 import copy
+import os
 
 import scipy.interpolate
 import numpy as np
@@ -20,13 +21,13 @@ class ProcessController:
     Additional public methods: process, const_preprocess, get_current_time
     """
 
-    def __init__(self, process_to_control_obj: BaseModel,
+    def __init__(self,
+                 process_to_control_obj: BaseModel,
+                 RESOLUTION: int = 10,
                  controlled_names: list = None, output_names: list = None,
-                 target_func_to_maximize=None,
-                 long_term_target_to_maximize=None,
+                 target_func_to_maximize=None, long_term_target_to_maximize=None, target_func_name='target',
                  real_exp=False,
-                 supposed_step_count: int = None,
-                 supposed_exp_time: float = None):
+                 supposed_step_count: int = None, supposed_exp_time: float = None):
         self.rng = np.random.default_rng(seed=0)
 
         self.analyser_dt = 1.  # analyser period, seconds
@@ -40,6 +41,8 @@ class ProcessController:
             self.max_exp_time = 1000000  # sec
         else:
             self.max_exp_time = supposed_exp_time  # sec
+
+        self.RESOLUTION = RESOLUTION
 
         if controlled_names is None:
             self.controlled_names = process_to_control_obj.names['input']
@@ -83,7 +86,8 @@ class ProcessController:
         self.controlling_signals_history[0] = self.controlled
 
         self.process_to_control = process_to_control_obj
-        self.additional_graph = {name: np.zeros_like(self.output_history) for name in self.process_to_control.plot}
+        self.additional_graph = {name: np.zeros(self.output_history.shape[0])
+                                 for name in self.process_to_control.plot}
 
         # for execution time measurement
         # self.times = [0, 0, 0]
@@ -93,7 +97,7 @@ class ProcessController:
 
         self.plot_lims = dict()
         self.plot_axes_names = dict()
-        self.target_func_name = 'target'
+        self.target_func_name = target_func_name
         self._initialize_plot_params()
 
         self.metrics_put_on_plot = None
@@ -172,7 +176,7 @@ class ProcessController:
     def get_current_time(self):
         return np.sum(self.controlling_signals_history_dt[:self.step_count])
 
-    def get_process_output(self, RESOLUTION=2):
+    def get_process_output(self):
         """
         Calculates new and returns list of ALL output values from analyzer!
         """
@@ -202,6 +206,8 @@ class ProcessController:
                 interp_funcs.append(create_f(name))
 
         # t1 = time.time()
+        RESOLUTION = self.RESOLUTION
+
         if not self.real_exp:
             for i in range(last_ind, measurements_count):
                 for j in range(RESOLUTION):
@@ -245,10 +251,8 @@ class ProcessController:
         return self.target_history[np.isfinite(self.target_history)]
 
     def integrate_along_history(self, time_segment=None, out_name=None,
-                                target_mode=False, **kwargs):
-        if 'RESOLUTION' not in kwargs:
-            kwargs['RESOLUTION'] = 2
-        output_time_stamp, output = self.get_process_output(kwargs['RESOLUTION'])
+                                target_mode=False):
+        output_time_stamp, output = self.get_process_output()
         if target_mode:
             output = np.apply_along_axis(self.target_func, 1, output)
             assert output.shape[0] == output_time_stamp.shape[0]
@@ -270,8 +274,8 @@ class ProcessController:
         inds = (time_segment[0] <= output_time_stamp) & (output_time_stamp <= time_segment[1])
         return lib.integral(output_time_stamp[inds], output[inds])
 
-    def get_long_term_target(self, **kwargs):
-        output_dt, output = self.get_process_output(**kwargs)
+    def get_long_term_target(self):
+        output_dt, output = self.get_process_output()
         return self.long_term_target(output_dt, output)
 
     def _initialize_plot_lims(self):
@@ -309,9 +313,32 @@ class ProcessController:
         for p in args:
             self.metrics_put_on_plot[p[0]] = p[1]
 
+    def get_info(self):
+        s = ''
+        for name in ('RESOLUTION', 'target_func_name'):
+            s += f'{name}: {getattr(self, name)}\n'
+        s += 'controlled names: '
+        for name in self.controlled_names:
+            s += f'{name} '
+        s += '\noutput names: '
+        for name in self.output_names:
+            s += f'{name} '
+        s += '\n'
+        return s
+
     def plot(self, file_name, time_segment=None, plot_more_function=None, additional_plot: [str, list] = None, plot_mode='together',
              out_names=None, with_metrics: bool = True):
 
+        # save the information about model and PC object
+        d, _ = os.path.split(file_name)
+        if not os.path.exists(f'{d}/_info.txt'):
+            with open(f'{d}/info.txt', 'w') as f:
+                f.write('-----Model-----\n')
+                f.write(self.process_to_control.add_info)
+                f.write('\n-----ProcessController-----\n')
+                f.write(self.get_info())
+
+        # output, out_names assignment
         inds = self.output_history_dt > -1
         output_time_stamp, no_change_output = self.output_history_dt[inds], self.output_history[inds]
         output = no_change_output
@@ -338,6 +365,7 @@ class ProcessController:
         if output is None:
             raise ValueError('Cannot assign output names!')
 
+        # interp controlled
         time_history = np.cumsum(self.controlling_signals_history_dt[:self.step_count])
         interp_funcs = []
         if time_history.shape[0] > 1:
@@ -388,7 +416,7 @@ class ProcessController:
             out_names.remove('long_term_target')
         if with_metrics and self.metrics_put_on_plot is not None:
             for name in self.metrics_put_on_plot:
-                common_title += f'{name}: {self.metrics_put_on_plot[name](no_change_output):.3g}, '
+                common_title += f'{name}: {self.metrics_put_on_plot[name](output_time_stamp, no_change_output):.3g}, '
 
         if plot_mode == 'together':
             common_plot_list = []
@@ -457,12 +485,11 @@ class ProcessController:
 
     def get_and_plot(self,
                      file_name,
-                     plot_params=None,
-                     get_params=None):
-        if isinstance(get_params, dict):
-            self.get_process_output(**get_params)
-        else:
-            self.get_process_output()
+                     plot_params=None):
+        # if isinstance(get_params, dict):
+        #     self.get_process_output()
+        # else:
+        self.get_process_output()
         if isinstance(plot_params, dict):
             self.plot(file_name, **plot_params)
         else:
@@ -514,7 +541,7 @@ def create_func_to_approximate(exp_df: pd.DataFrame, model_obj,
         PC_obj.reset()
         PC_obj.process_to_control.set_params(alphas)
         PC_obj.process(time_step_seq, df_to_process)
-        x_conv, conv = PC_obj.get_process_output(**conv_params)
+        x_conv, conv = PC_obj.get_process_output()
         model_res = np.interp(labels_x, x_conv, conv)
         # model_res *= np.mean(labels) / np.mean(model_res)  # bad way to make values comparable
         if isinstance(set_k, list):
@@ -588,11 +615,34 @@ def create_to_approximate_many_frames(dfs: list, model_obj, label_name, in_cols,
 
 
 def func_to_optimize_policy(PC_obj: ProcessController, policy_obj: AbstractPolicy, episode_len, time_step,
+                            expand_description: callable,
                             **kwargs):
+    """
+    Function-shell for the policy object using in optimization methods.
+
+    :param PC_obj:
+    :param policy_obj:
+    :param episode_len:
+    :param time_step:
+    :param expand_description: Function that receives and transform dict.
+        The parameter allows to tide parameters between each other and, so,
+        to reduce dimensionality.
+    :param kwargs:
+    :return:
+    """
+
     import os.path
     time_step, episode_len = float(time_step), float(episode_len)
 
     def f_to_optimize(func_description: dict, DEBUG=False, folder=None, ind_picture=None):
+
+        if expand_description is not None:
+            expand_description(func_description)
+
+        # # DEBUG. TO DELETE
+        # if abs(func_description['O2_1'] - 3.828125e-4) < 1.e-5:
+        #     func_description = func_description
+        #     ind_picture = ind_picture
 
         def create_f_per_name(controlled_name, name_ind_in_model):
             controlled_name_dict = dict()
@@ -627,9 +677,9 @@ def func_to_optimize_policy(PC_obj: ProcessController, policy_obj: AbstractPolic
             R = PC_obj.get_long_term_target()
 
         if DEBUG:
-            if not os.path.exists(f'{folder}/model_info.txt'):
-                with open(f'{folder}/model_info.txt', 'w') as f:
-                    f.write(PC_obj.process_to_control.add_info)
+            # if not os.path.exists(f'{folder}/model_info.txt'):
+            #     with open(f'{folder}/model_info.txt', 'w') as f:
+            #         f.write(PC_obj.process_to_control.add_info)
 
             def ax_func(ax):
                 # ax.set_title(f'integral: {R:.4g}')
@@ -639,6 +689,7 @@ def func_to_optimize_policy(PC_obj: ProcessController, policy_obj: AbstractPolic
                         plot_more_function=ax_func, plot_mode='separately',
                         time_segment=[0., episode_len],
                         **kwargs['to_plot'])  # SMALL CRUTCH HERE!
+
         return -R
 
     return f_to_optimize

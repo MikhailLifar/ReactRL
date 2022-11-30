@@ -39,6 +39,14 @@ def get_target_func(func_name, **kwargs):
         return CO2_sub_outs
 
     # LONG TERM (EPISODE) TARGETS
+    elif func_name == 'CO2_value_I':
+
+        def CO2_value_I(output_history_dt, output_history):
+            I_CO2 = integral(output_history_dt, output_history[:, 0])
+            return I_CO2
+
+        return CO2_value_I
+
     elif func_name == 'CO2_sub_outs_I':
         alpha = kwargs['alpha']  # 0.1 empirically
 
@@ -57,7 +65,8 @@ def get_target_func(func_name, **kwargs):
             I_CO2 = integral(output_history_dt, output_history[:, 0])
             I_O2 = integral(output_history_dt, output_history[:, 1])
             I_CO = integral(output_history_dt, output_history[:, 2])
-            return I_CO2 * I_CO2 / (I_CO + I_O2 + eps)
+            # was not 2 * I_O2, but O2
+            return I_CO2 * I_CO2 / (I_CO + 2 * I_O2 + eps)
 
         return CO2xConversion_I
 
@@ -72,19 +81,79 @@ def get_target_func(func_name, **kwargs):
 
         return CO2xExpOuts_I
 
+    elif func_name == 'CO2xCOConversion_I':
+        eps = kwargs['eps']  # try 1.e-2
 
-# metrics
-def CO2_integral(output_history):
-    return np.sum(output_history[:, 0])
+        def CO2xCOConversion_I(output_history_dt, output_history):
+            I_CO2 = integral(output_history_dt, output_history[:, 0])
+            I_CO = integral(output_history_dt, output_history[:, 2])
+            return I_CO2 * I_CO2 / (I_CO + eps)
+
+        return CO2xCOConversion_I
+
+    # LONG-TERM, WITH GAUSS
+    elif func_name == '(Gauss)x(Conv)x(Conv)_I':
+        CO_0 = kwargs['default']
+        sigma = kwargs['sigma']  # try 0.1 * CO_0
+        eps = kwargs['eps']  # try 1.e-4
+
+        def Gauss_CO_sub_default_x_Conv_I(output_history_dt, output_history):
+            I_CO = integral(output_history_dt, output_history[:, 2])
+            I_CO_press = integral(output_history_dt, output_history[:, 4])
+            I_O2 = integral(output_history_dt, output_history[:, 1])
+            I_CO2 = integral(output_history_dt, output_history[:, 0])
+            diff = (I_CO_press - CO_0 * output_history_dt[output_history_dt > 0.][-1])
+            return np.exp((-diff) * diff / sigma) * (I_CO2 / (I_CO + eps)) * (I_CO2 / 2 / (I_O2 + eps))
+
+        return Gauss_CO_sub_default_x_Conv_I
+
+    elif func_name == '(Gauss)x(Conv+Conv)_I':
+        CO_0 = kwargs['default']
+        sigma = kwargs['sigma']  # try 0.1 * CO_0
+        eps = kwargs['eps']  # try 1.e-4
+
+        def Gauss_CO_sub_default_x_ConvSum_I(output_history_dt, output_history):
+            I_CO = integral(output_history_dt, output_history[:, 2])
+            I_CO_press = integral(output_history_dt, output_history[:, 4])
+            I_O2 = integral(output_history_dt, output_history[:, 1])
+            I_CO2 = integral(output_history_dt, output_history[:, 0])
+            diff = (I_CO_press - CO_0 * output_history_dt[output_history_dt > 0.][-1])
+            return np.exp((-diff) * diff / sigma) * ((I_CO2 / (I_CO + eps)) + (I_CO2 / 2 / (I_O2 + eps)))
+
+        return Gauss_CO_sub_default_x_ConvSum_I
+
+    elif func_name == '(Gauss)x(Conv+alpha)x(Conv+alpha)_I':
+        CO_0 = kwargs['default']
+        sigma = kwargs['sigma']  # try 0.1 * CO_0
+        alpha = kwargs['alpha']  # try 0.2, 0.5
+        eps = kwargs['eps']  # try 1.e-4
+
+        def Gauss_CO_sub_default_x_ConvPlusAlpha_I(output_history_dt, output_history):
+            I_CO = integral(output_history_dt, output_history[:, 2])
+            I_CO_press = integral(output_history_dt, output_history[:, 4])
+            I_O2 = integral(output_history_dt, output_history[:, 1])
+            I_CO2 = integral(output_history_dt, output_history[:, 0])
+            diff = (I_CO_press - CO_0 * output_history_dt[output_history_dt > 0.][-1])
+            return np.exp((-diff) * diff / sigma) * (I_CO2 / (I_CO + eps) + alpha) * (I_CO2 / 2 / (I_O2 + eps) + alpha)
+
+        return Gauss_CO_sub_default_x_ConvPlusAlpha_I
+
+    else:
+        raise ValueError
 
 
-def overall_O2_conversion(output_history):
-    total_CO2 = np.sum(output_history[:, 0])
-    total_O2 = np.sum(output_history[:, 1])
-    return total_CO2 / (2 * total_O2)
+# metrics, catalytic CO oxidation
+def CO2_integral(output_history_dt, output_history):
+    return integral(output_history_dt, output_history[:, 0])
 
 
-def overall_CO_conversion(output_history):
-    total_CO2 = np.sum(output_history[:, 0])
-    total_CO = np.sum(output_history[:, 2])
-    return total_CO2 / total_CO
+def overall_O2_conversion(output_history_dt, output_history):
+    I_CO2 = integral(output_history_dt, output_history[:, 0])
+    I_O2 = integral(output_history_dt, output_history[:, 1])
+    return I_CO2 / (2 * I_O2)
+
+
+def overall_CO_conversion(output_history_dt, output_history):
+    I_CO2 = integral(output_history_dt, output_history[:, 0])
+    I_CO = integral(output_history_dt, output_history[:, 2])
+    return I_CO2 / I_CO

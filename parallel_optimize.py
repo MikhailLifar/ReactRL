@@ -56,6 +56,8 @@ def main_cluster_function():
     #                                                 out_folder='parse_and_run_out/optimize',
     #                                                 debug_params={'DEBUG': True, 'folder': 'auto', 'ind_picture': None},
     #                                                 cut_left=False, cut_right=False,)
+
+    episode_time = 500
     
     #PC_L2001_low_T = ProcessController(test_models.LibudaModel(init_cond={'thetaCO': 0., 'thetaO': 0., }, Ts=273+25),
                                              #target_func_to_maximize=target)
@@ -79,16 +81,18 @@ def main_cluster_function():
                                   #supposed_step_count=2 * round(episode_time / time_step),  # memory controlling parameters
                                   #supposed_exp_time=2 * episode_time)
     
-    PC_LReturnK3K1 = ProcessController(LibudaModelReturnK3K1(init_cond={'thetaO': 0., 'thetaCO': 0.}, Ts=273+160),
-                                       long_term_target_to_maximize=get_target_func('CO2xConversion_I', eps=1.),
+    # get_target_func('CO2xConversion_I', eps=1.)
+    PC_LExtendedReturn = ProcessController(LibudaModelReturnK3K1AndPressures(init_cond={'thetaO': 0., 'thetaCO': 0.}, Ts=273 + 160),
+                                       long_term_target_to_maximize=get_target_func('Gauss(CO_sub_default)xConvSum_I', default=1e-4,
+                                                                                    sigma=1e-5 * episode_time, eps=1.),
                                        #target_func_to_maximize=CO2_sub_outs,
-                                   )
+                                       )
     #PC_PtReturnK3K1 = ProcessController(PtReturnK1K3Model(init_cond={'thetaO': 0., 'thetaCO': 0.}, Ts=440),
                                    #target_func_to_maximize=target_1,  # CO2_value, CO2xConversion, CO2_sub_outs
                                    #supposed_step_count=2 * episode_time // time_step,  # memory controlling parameters
                                    #supposed_exp_time=2 * episode_time)
 
-    PC_obj = PC_LReturnK3K1
+    PC_obj = PC_LExtendedReturn
     # O2_top = 10.e-4
     # CO_top = 10.e-4
     # max_top = max(O2_top, CO_top)
@@ -100,31 +104,49 @@ def main_cluster_function():
     PC_obj.set_plot_params(output_lims=None, output_ax_name='?',
                            input_ax_name='Pressure, Pa')
 
-    optimize_list_cluster([(10.e-5, 10.e-5, 'Nelder-Mead'),
-                           (10.e-4, 10.e-5, 'Powell'),
-                           (10.e-5, 10.e-4, 'Nelder-Mead'),
-                           (10.e-4, 10.e-4, 'Powell')],
-                          ('model:O2_top', 'model:CO_top', 'iter_optimize:method'),
-                          TwoStepPolicy,
-                          {
+    gauss_target_1 = get_target_func('Gauss(CO_sub_default)xConv_I', default=1e-4, sigma=1e-5 * episode_time, eps=1e-4)
+    gauss_target_2 = get_target_func('Gauss(CO_sub_default)xConvSum_I', default=1e-4, sigma=1e-5 * episode_time, eps=1e-4)
+    gauss_target_3 = get_target_func('Gauss(CO_sub_default)x(Conv+alpha)_I', default=1e-4, sigma=1e-5 * episode_time,
+                                     alpha=0.2, eps=1e-4)
+    # gauss_target_4 = get_target_func('Gauss(CO_sub_default)xConv_I', default=1e-3, sigma=1e-4 * 500, eps=1e-4)
+    # gauss_target_5 = get_target_func('Gauss(CO_sub_default)xConvSum_I', default=1e-3, sigma=1e-4 * 500, eps=1e-4)
+    # gauss_target_6 = get_target_func('Gauss(CO_sub_default)x(Conv+alpha)_I', default=1e-3, sigma=1e-4 * 500,
+    #                                  alpha=0.2, eps=1e-4)
+    name1 = '(Gauss)x(Conv)x(Conv)'
+    name2 = '(Gauss)x(Conv + Conv)'
+    name3 = '(Gauss)x(Conv + alpha)x(Conv + alpha)'
+
+    def same_period_ext(d):
+        for name in ('t1', 't2'):
+            d[f'O2_{name}'] = d[f'CO_{name}'] = d[name]
+            del d[name]
+
+    optimize_grid_cluster([(gauss_target_1, name1), (gauss_target_2, name2), (gauss_target_3, name3)],
+                          [(1.e-5, 1.e-4), (1.e-4, 1.e-4), (1.e-3, 1.e-3), (1.e-2, 1.e-2)],
+                          names=(('long_term_target', 'target_func_name'), ('model:O2_top', 'model:CO_top')),
+                          policy_type=TwoStepPolicy,
+                          optimize_bounds={
                               'O2_1': 'model_lims', 'O2_2': 'model_lims',
-                              'O2_t1': [5., 100.], 'O2_t2': [5., 100.],
+                              # 'O2_t1': [5., 100.], 'O2_t2': [5., 100.],
                               'CO_1': 'model_lims', 'CO_2': 'model_lims',
-                              'CO_t1': [5., 100.], 'CO_t2': [5., 100.],
+                              # 'CO_t1': [5., 100.], 'CO_t2': [5., 100.],
+                              't1': [5., 100.], 't2': [5., 100.],
                           },
-                          './optimize_out/221109_opt_list_1st_try',
-                          PC_obj,
+                          out_path='./optimize_out/221124_many_targets_same_time',
+                          PC_obj=PC_obj,
                           const_params={
                               'model': {
 
                               },
                               'iter_optimize': {
+                                  'method': 'Nelder-Mead',
                                   'try_num': 30,
                                   'debug_params': {'folder': 'auto', 'DEBUG': True, 'ind_picture': True},
                                   'cut_left': False,
                                   'cut_right': False,
                               },
-                              'episode_len': 500.,
+                              'expand_description': same_period_ext,
+                              'episode_time': 500.,
                               'time_step': 1.,
                               'to_plot': {'out_names': ['CO2', 'long_term_target'],
                                           'additional_plot': ['thetaCO', 'thetaO']}
@@ -132,6 +154,99 @@ def main_cluster_function():
                           python_interpreter='../RL_21/venv/bin/python',
                           file_to_execute_path='repos/parallel_optimize.py',
                           on_cluster=False)
+
+    # optimize_list_cluster([(1.e-5, 1.e-4, same_period_ext, gauss_target_1, name1),  # target 1
+    #                        (1.e-4, 1.e-4, same_period_ext, gauss_target_1, name1),
+    #                        (1.e-3, 1.e-3, same_period_ext, gauss_target_1, name1),
+    #                        (1.e-2, 1.e-2, same_period_ext, gauss_target_1, name1),
+    #                        (1.e-5, 1.e-4, same_period_ext, gauss_target_2, name2),  # target 2
+    #                        (1.e-4, 1.e-4, same_period_ext, gauss_target_2, name2),
+    #                        (1.e-3, 1.e-3, same_period_ext, gauss_target_2, name2),
+    #                        (1.e-2, 1.e-2, same_period_ext, gauss_target_2, name2),
+    #                        (1.e-5, 1.e-4, same_period_ext, gauss_target_3, name3),  # target 3
+    #                        (1.e-4, 1.e-4, same_period_ext, gauss_target_3, name3),
+    #                        (1.e-3, 1.e-3, same_period_ext, gauss_target_3, name3),
+    #                        (1.e-2, 1.e-2, same_period_ext, gauss_target_3, name3),
+    #                        ],
+    #                       ('model:O2_top', 'model:CO_top', 'expand_description', 'long_term_target', 'target_func_name'),
+    #                       TwoStepPolicy,
+    #                       {
+    #                           'O2_1': 'model_lims', 'O2_2': 'model_lims',
+    #                           # 'O2_t1': [5., 100.], 'O2_t2': [5., 100.],
+    #                           'CO_1': 'model_lims', 'CO_2': 'model_lims',
+    #                           # 'CO_t1': [5., 100.], 'CO_t2': [5., 100.],
+    #                           't1': [5., 100.], 't2': [5., 100.],
+    #                       },
+    #                       out_path='./optimize_out/221124_many_targets_same_time',
+    #                       PC_obj=PC_obj,
+    #                       const_params={
+    #                           'model': {
+    #
+    #                           },
+    #                           'iter_optimize': {
+    #                               'method': 'Nelder-Mead',
+    #                               'try_num': 30,
+    #                               'debug_params': {'folder': 'auto', 'DEBUG': True, 'ind_picture': True},
+    #                               'cut_left': False,
+    #                               'cut_right': False,
+    #                           },
+    #                           'episode_time': 500.,
+    #                           'time_step': 1.,
+    #                           'to_plot': {'out_names': ['CO2', 'long_term_target'],
+    #                                       'additional_plot': ['thetaCO', 'thetaO']}
+    #                       },
+    #                       python_interpreter='../RL_21/venv/bin/python',
+    #                       file_to_execute_path='repos/parallel_optimize.py',
+    #                       on_cluster=False)
+
+    # def get_CO_fixed_ext(CO_value):
+    #
+    #     def CO_fixed_ext(d):
+    #         d['CO_2'] = d['CO_1'] = CO_value
+    #         d['CO_t2'] = d['CO_t1'] = 10.
+    #
+    #     return CO_fixed_ext
+
+    # CO2_fixed_00001 = get_CO_fixed_ext(1.e-4)
+    # CO2_fixed_0001 = get_CO_fixed_ext(1.e-3)
+    # optimize_list_cluster([(10.e-5, 1.e-3, CO2_fixed_00001),
+    #                        (10.e-4, 1.e-3, CO2_fixed_00001),
+    #                        (10.e-3, 1.e-3, CO2_fixed_00001),
+    #                        (10.e-2, 1.e-3, CO2_fixed_00001),
+    #                        (10.e-4, 1.e-2, CO2_fixed_0001),
+    #                        (10.e-3, 1.e-2, CO2_fixed_0001),
+    #                        (10.e-2, 1.e-2, CO2_fixed_0001),
+    #                        (10.e-1, 1.e-2, CO2_fixed_0001),
+    #                        ],
+    #                       ('model:O2_top', 'model:CO_top', 'expand_description'),
+    #                       TwoStepPolicy,
+    #                       {
+    #                           'O2_1': 'model_lims', 'O2_2': 'model_lims',
+    #                           'O2_t1': [5., 100.], 'O2_t2': [5., 100.],
+    #                           #'CO_1': 'model_lims', 'CO_2': 'model_lims',
+    #                           #'CO_t1': [5., 100.], 'CO_t2': [5., 100.],
+    #                       },
+    #                       out_path='./optimize_out/221110_opt_list_CO2xConv',
+    #                       PC_obj=PC_obj,
+    #                       const_params={
+    #                           'model': {
+    #
+    #                           },
+    #                           'iter_optimize': {
+    #                               'method': 'Nelder-Mead',
+    #                               'try_num': 30,
+    #                               'debug_params': {'folder': 'auto', 'DEBUG': True, 'ind_picture': True},
+    #                               'cut_left': False,
+    #                               'cut_right': False,
+    #                           },
+    #                           'episode_time': 500.,
+    #                           'time_step': 1.,
+    #                           'to_plot': {'out_names': ['CO2', 'long_term_target'],
+    #                                       'additional_plot': ['thetaCO', 'thetaO']}
+    #                       },
+    #                       python_interpreter='../RL_21/venv/bin/python',
+    #                       file_to_execute_path='repos/parallel_optimize.py',
+    #                       on_cluster=False)
     
     # iter_optimize_cluster(
     #                       # func_to_optimize_two_step_sol(PC_obj, 500, 1.,
@@ -289,7 +404,7 @@ def main_cluster_function():
                           #debug_params={'DEBUG': True, 'folder': 'auto'},
                           #)
 
-    #iter_optimize_cluster(func_to_optimize_stationary_sol(PC_LDegrad, episode_len=500),
+    #iter_optimize_cluster(func_to_optimize_stationary_sol(PC_LDegrad, episode_time=500),
                           #optimize_bounds={'O2': [0., 10e-5], 'CO': [0., 10e-5]}, cut_left=False, cut_right=False,
                           #method='Nelder-Mead',
                           #try_num=20,

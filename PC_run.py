@@ -103,7 +103,7 @@ def test_new_k1k3_model_new_targets():
     episode_time = 500.
     resolution = 1.
 
-    PC_obj = ProcessController(LibudaModelReturnK3K1(init_cond={'thetaCO': 0., 'thetaO': 0., }, Ts=440),
+    PC_obj = ProcessController(LibudaModelReturnK3K1AndPressures(init_cond={'thetaCO': 0., 'thetaO': 0., }, Ts=440),
                                supposed_step_count=2 * round(episode_time / resolution),  # memory controlling parameters
                                supposed_exp_time=2 * episode_time,
                                # target_func_to_maximize=get_target_func('CO2_sub_outs', alpha=0.1),
@@ -118,7 +118,7 @@ def test_new_k1k3_model_new_targets():
     PC_obj.process_by_policy_objs(policies, episode_time, resolution)
     # R = PC_obj.integrate_along_history(target_mode=True,
     #                                    time_segment=[0., episode_time])
-    R = PC_obj.get_long_term_target(RESOLUTION=10)
+    R = PC_obj.get_long_term_target()
     print(R)
 
     # save to csv
@@ -207,19 +207,41 @@ def test_PC_with_Libuda():
     # # PC.plot(f'PC_plots/example_RL_21_10_task.png', out_name='CO2_value', plot_mode='separately')
 
     # TEST if more CO is better under the old conditions of the tests for the russian article
-    PC_L2001_old = ProcessController(LibudaModelWithDegradation(init_cond={'thetaO': 0.25, 'thetaCO': 0.5}, Ts=440,
-                                                                v_d=0.01, v_r=1.5, border=4.),
-                                     target_func_to_maximize=CO2_value)
+    # PC_L2001_old = ProcessController(LibudaModelWithDegradation(init_cond={'thetaO': 0.25, 'thetaCO': 0.5}, Ts=440,
+    #                                                             v_d=0.01, v_r=1.5, border=4.),
+    #                                  target_func_to_maximize=CO2_value)
 
-    episode_len = 500
-    for i in range(2, 11, 2):
-        PC_L2001_old.reset()
-        O2 = i * 1e-5 / 4
-        CO = i * 1e-5
-        PC_L2001_old.set_controlled({'O2': O2, 'CO': i * 1e-5})
-        PC_L2001_old.time_forward(episode_len)
-        R = PC_L2001_old.integrate_along_history(time_segment=[0., episode_len])
-        print(f'CO: {CO}, O2: {O2}, R: {R}')
+    # episode_len = 500
+    # for i in range(2, 11, 2):
+    #     PC_L2001_old.reset()
+    #     O2 = i * 1e-5 / 4
+    #     CO = i * 1e-5
+    #     PC_L2001_old.set_controlled({'O2': O2, 'CO': i * 1e-5})
+    #     PC_L2001_old.time_forward(episode_len)
+    #     R = PC_L2001_old.integrate_along_history(time_segment=[0., episode_len])
+    #     print(f'CO: {CO}, O2: {O2}, R: {R}')
+
+    PC = ProcessController(LibudaModelReturnK3K1AndPressures(init_cond={'thetaO': 0., 'thetaCO': 0.}, Ts=273 + 160),
+                           long_term_target_to_maximize=get_target_func('CO2xConversion_I', eps=1.),
+                           )
+    PC.set_plot_params(output_lims=None, output_ax_name='?',
+                       input_lims=[-1.e-3, 1.e-2], input_ax_name='Pressure, Pa')
+    # TwoStepPolicy({'1': 3.7e-3, '2': 1.e-3, 't1': 60., 't2': 100., })
+    PC.process_by_policy_objs([TwoStepPolicy({'1': 3.828125e-4, '2': 3.828125e-4, 't1': 5.09375, 't2': 5., }),
+                               ConstantPolicy({'value': 1e-3})],
+                              500.,
+                              10.)
+    # PC.get_and_plot('PC_plots/debug/debug1.png',
+    #                 plot_params={
+    #                  'plot_mode': 'separately',
+    #                  'out_names': ['CO2', 'long_term_target'],
+    #                  'additional_plot': ['thetaCO', 'thetaO']
+    #                  },
+    #                 get_params={'RESOLUTION': 10})
+    PC.get_process_output(RESOLUTION=2)
+    PC.plot('PC_plots/debug/debug2.png', plot_mode='separately',
+            out_names=['CO2', 'long_term_target'],
+            additional_plot=['thetaCO', 'thetaO'])
 
     # # find optimal log_scale
     # average_rate = PC.integrate_along_history(target_mode=True) / PC.get_current_time()
@@ -293,30 +315,32 @@ def Libuda2001_original_simulation():
     #     x_co += 0.05
 
 
-
 def Pt_exp(path: str):
 
-    PC_Pt2210 = ProcessController(PtModel(init_cond={'thetaO': 0., 'thetaCO': 0.}),
-                                  target_func_to_maximize=CO2_value)
-    PC_Pt2210.set_plot_params(input_ax_name='Pressure', input_lims=None,
-                              output_ax_name='CO2 form. rate', output_lims=None)
+    # PC_Pt2210 = ProcessController(PtModel(init_cond={'thetaO': 0., 'thetaCO': 0.}),
+    #                               target_func_to_maximize=get_target_func('CO2_value'))
+    PC_Salomons = ProcessController(PtSalomons(init_cond={'thetaO': 0., 'thetaCO': 0., 'thetaOO': 0., }),
+                                  target_func_to_maximize=get_target_func('CO2_value'))
+
+    PC_obj = PC_Salomons
+    PC_obj.set_plot_params(input_ax_name='Pressure', input_lims=None,
+                           output_ax_name='CO2 form. rate', output_lims=None)
 
     # first experiment
-    low_value = 4
-    high_value = 10
+    low_value = 10  # 4
+    high_value = 50  # 10
     reps = 10
     for i in range(reps):
-        PC_Pt2210.set_controlled({'O2': low_value, 'CO': high_value})
-        PC_Pt2210.time_forward(20)
-        PC_Pt2210.set_controlled({'O2': high_value, 'CO': low_value})
-        PC_Pt2210.time_forward(30)
-    R = PC_Pt2210.integrate_along_history(target_mode=True, time_segment=[0., 50 * reps],
-                                          RESOLUTION=10)
+        PC_obj.set_controlled({'O2': low_value, 'CO': high_value})
+        PC_obj.time_forward(20)
+        PC_obj.set_controlled({'O2': high_value, 'CO': low_value})
+        PC_obj.time_forward(30)
+    R = PC_obj.integrate_along_history(target_mode=True, time_segment=[0., 50 * reps])
 
     def ax_func(ax):
         ax.set_title(f'integral: {R:.4g}')
 
-    PC_Pt2210.plot(path,
+    PC_obj.plot(path,
                 plot_more_function=ax_func, plot_mode='separately',
                 time_segment=[0., 50 * reps], additional_plot=['thetaCO', 'thetaO'])
 
@@ -337,10 +361,12 @@ if __name__ == '__main__':
     # plot_conv('run_RL_out/conversion/220928_8_conv.csv')
     # plot_conv('run_RL_out/conversion/220830_4_conv.csv')
 
-    # Pt_exp('PC_plots/Pt/1_.png')
+    Pt_exp('PC_plots/PtSalomons/1_.png')
 
     # test_new_k1k3_model_new_targets()
 
-    Libuda2001_original_simulation()
+    # Libuda2001_original_simulation()
+
+    # test_PC_with_Libuda()
 
     pass

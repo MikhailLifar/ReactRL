@@ -1,5 +1,7 @@
 # import copy
 # import warnings
+import \
+    copy
 from types import MethodType
 
 import matplotlib
@@ -22,6 +24,7 @@ from test_models import *
 
 class RL2207_Environment(Environment):
     def __init__(self, PC: ProcessController,
+                 names_to_state: list = None,
                  model_type: str = None,
                  reward_spec: [str, callable] = None,
                  episode_time=500, time_step=10,
@@ -29,7 +32,6 @@ class RL2207_Environment(Environment):
                  initial_values: dict = None,
                  preprocess_time=0,
                  log_scaling_dict=None,
-                 PC_resolution=2,
                  **kwargs):
 
         """
@@ -87,7 +89,15 @@ class RL2207_Environment(Environment):
         self.stored_integral_data['smooth_50_step'] = None
         self.stored_integral_data['smooth_1000_step'] = None
 
-        one_state_row_len = len(self.model.limits['input']) + len(self.model.limits['output'])
+        if names_to_state is None:
+            names_to_state = self.model.names['output']
+        assert names_to_state
+        for name in names_to_state:
+            assert name in self.model.names['output'], f'The model does not return the name: {name}'
+        self.inds_to_state = [i for i, name in enumerate(self.model.names['output']) if name in names_to_state]
+        self.names_to_state = copy.deepcopy(names_to_state)
+        one_state_row_len = len(names_to_state)
+        # one_state_row_len = len(self.model.limits['input']) + len(self.model.limits['output'])
         if state_spec is None:
             state_spec = dict()
             state_spec['rows'] = 2
@@ -133,18 +143,17 @@ class RL2207_Environment(Environment):
                                            self.model.get_bounds('min', 'output'))[self.to_log_inds],
                                           self.model.get_bounds('min', 'output')[self.to_log_inds]))
 
-        self.PC_resolution = PC_resolution
-
         # self.save_policy = False
         # self.policy_df = pd.DataFrame(columns=[*self.in_gas_names, 'time_steps'])
 
-        # add info
-        self.additional_info = f'model_type: {self.model_type}\n' \
-                               f'reward: {self.reward_name}\n' \
-                               f'state_spec: shape {self.state_spec["shape"]}, ' \
-                               f'use_differences {self.state_spec["use_differences"]}\n' \
-                               f'length of episode: {self.episode_time}\n' \
-                               f'step length: {self.time_step}\n'
+        # info
+        self.env_info = f'model_type: {self.model_type}\n' \
+                        f'names to state: {self.names_to_state}\n' \
+                        f'reward: {self.reward_name}\n' \
+                        f'state_spec: shape {self.state_spec["shape"]}, ' \
+                        f'use_differences {self.state_spec["use_differences"]}\n' \
+                        f'length of episode: {self.episode_time}\n' \
+                        f'step length: {self.time_step}\n'
 
         self.names_to_plot = None
         if 'names_to_plot' in kwargs:
@@ -194,15 +203,11 @@ class RL2207_Environment(Environment):
         measurement[self.to_log_inds] = np.log(1 + self.to_log_scales * part_to_preprocess)
 
     def states(self):
-        out_lower = self.model.get_bounds('min', 'output')
-        out_upper = self.model.get_bounds('max', 'output')
+        lower = self.model.get_bounds('min', 'output')[self.inds_to_state]
+        upper = self.model.get_bounds('max', 'output')[self.inds_to_state]
         if self.if_use_log_scale:
-            out_lower[self.to_log_inds] = 0.
-            out_upper[self.to_log_inds] = np.log(1. + self.to_log_scales) + 1e-5
-        lower = np.hstack((self.model.get_bounds('min', 'input'),
-                           out_lower))
-        upper = np.hstack((self.model.get_bounds('max', 'input'),
-                           out_upper))
+            lower[self.to_log_inds] = 0.
+            upper[self.to_log_inds] = np.log(1. + self.to_log_scales) + 1e-5
         # print(self.model.get_bounds('min', 'input'))
         # print(self.model.get_bounds('min', 'output'))
         states_shape = self.state_spec['shape']
@@ -267,7 +272,7 @@ class RL2207_Environment(Environment):
 
         self.controller.set_controlled(model_inputs)
         self.controller.time_forward(dt=self.time_step)
-        current_measurement = self.controller.get_process_output(RESOLUTION=self.PC_resolution)[1][-1]
+        current_measurement = self.controller.get_process_output()[1][-1][self.inds_to_state]
         if self.if_use_log_scale:
             current_measurement = copy.deepcopy(current_measurement)
             self.log_preprocess(current_measurement)
@@ -280,7 +285,7 @@ class RL2207_Environment(Environment):
         #     self.policy_df.loc[ind, 'time_steps'] = self.delta_t
 
         self.state_memory[1:] = self.state_memory[:-1]
-        self.state_memory[0] = np.array([*model_inputs, *current_measurement])
+        self.state_memory[0] = np.array([*current_measurement])
         rows_num = self.state_spec['rows']
         if self.state_spec['use_differences']:
             out = np.zeros(self.state_spec['shape'])
@@ -318,9 +323,9 @@ class RL2207_Environment(Environment):
 
         self.controller.set_controlled(in_values)
         self.controller.time_forward(dt=self.time_step)
-        current_measurement = self.controller.get_process_output()[1][-1]
+        current_measurement = self.controller.get_process_output()[1][-1][self.inds_to_state]
 
-        self.state_memory[0] = np.array([*in_values, *current_measurement])
+        self.state_memory[0] = np.array([*current_measurement])
         self.state_memory[1:] = self.state_memory[0]
         rows_num = self.state_spec['rows']
         if self.state_spec['use_differences']:
@@ -345,9 +350,11 @@ class RL2207_Environment(Environment):
 
     def describe_to_file(self, filename):
         with open(filename, 'a') as fout:
-            fout.write('\n--Environment information--\n')
-            fout.write(self.additional_info + '\n')
-            fout.write('--Model information--\n')
+            fout.write('\n-----Environment-----\n')
+            fout.write(self.env_info + '\n')
+            fout.write('-----ProcessController-----\n')
+            fout.write(self.controller.get_info() + '\n')
+            fout.write('-----Model-----\n')
             fout.write(self.model.add_info + '\n')
 
     def summary_graphs(self, folder=''):
