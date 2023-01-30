@@ -114,10 +114,15 @@ def train_list_parallel(
                     setattr(controller, attr_name, d[attr_name])
                     controller.target_func_name = d['target_func_name']
 
+        max_top = None
         limit_names = [name for name in variable_params['model'] if '_top' in name]
-        max_top = max([variable_params['model'][name] for name in limit_names])
+        if limit_names:
+            max_top = max([variable_params['model'][name] for name in limit_names])
         limit_names = [name for name in const_params['model'] if '_top' in name]
-        max_top = max([const_params['model'][name] for name in limit_names] + [max_top])
+        if limit_names and (max_top is not None):
+            max_top = max([const_params['model'][name] for name in limit_names] + [max_top])
+        elif limit_names:
+            max_top = max([const_params['model'][name] for name in limit_names])
         if max_top > 0:
             controller.set_plot_params(input_lims=[-1.e-1 * max_top, 1.1 * max_top])
         else:

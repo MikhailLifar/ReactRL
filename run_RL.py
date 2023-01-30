@@ -2,13 +2,11 @@ import os
 # import datetime
 # import gc
 
-import \
-    itertools
+import itertools
 
 # import tensorflow as tflow
-import numpy as np
-# import \
-#     tensorforce
+# import numpy as np
+# import tensorforce
 from tensorforce.agents import Agent
 
 # from test_models import BaseModel

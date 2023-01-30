@@ -1,11 +1,10 @@
-# import copy
+import copy
 # import warnings
-import \
-    copy
 from types import MethodType
 
 import matplotlib
-# import numpy as np
+import numpy as np
+from typing import List, Dict
 
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -25,7 +24,8 @@ from test_models import *
 class RL2207_Environment(Environment):
     def __init__(self, PC: ProcessController,
                  names_to_state: list = None,
-                 model_type: str = None,
+                 discrete_actions: [Dict[str, List[float]], bool] = None,
+                 continuous_actions: [Dict[str, List[float]], bool] = None,
                  reward_spec: [str, callable] = None,
                  episode_time=500, time_step=10,
                  state_spec: dict = None,
@@ -46,17 +46,16 @@ class RL2207_Environment(Environment):
         Environment.__init__(self)
         self.controller = PC
         self.model = self.controller.process_to_control
+        self.model_type = 'continuous'
+        if (hasattr(self.model, 'model_type')) and (self.model.model_type == 'discrete'):
+            raise NotImplementedError('Models with discrete inputs are not supported for now')
 
-        if model_type is None:
-            self.model_type = 'continuous'
+        if discrete_actions is not None:
+            self.actions_type = 'discrete'
         else:
-            self.model_type = model_type
-        try:
-            if self.model.model_type != self.model_type:
-                raise ValueError(f'Error: mismatch of model type: only {self.model.model_type} is allowed,\n'
-                                 f'but {self.model_type} has been received')
-        except AttributeError:
-            pass
+            self.actions_type = 'continuous'
+            if (hasattr(self.model, 'model_type')) and (self.model.model_type == 'discrete'):
+                raise ValueError(f'Error: discrete model cannot hold continuous actions')
 
         self.time_step = time_step
         # TODO I don't like this statement
@@ -96,6 +95,7 @@ class RL2207_Environment(Environment):
             assert name in self.model.names['output'], f'The model does not return the name: {name}'
         self.inds_to_state = [i for i, name in enumerate(self.model.names['output']) if name in names_to_state]
         self.names_to_state = copy.deepcopy(names_to_state)
+
         one_state_row_len = len(names_to_state)
         # one_state_row_len = len(self.model.limits['input']) + len(self.model.limits['output'])
         if state_spec is None:
@@ -108,7 +108,13 @@ class RL2207_Environment(Environment):
 
         self.state_memory = np.zeros((10, one_state_row_len))
 
-        self.reset_mode = 'normal'  # crutch
+        self.discrete_actions = copy.deepcopy(discrete_actions)
+        self.continuous_actions = copy.deepcopy(continuous_actions)
+        self.action_vector = None
+        self.names_of_action = None
+        self.idxs_of_action = None
+
+        self.reset_mode = 'normal'
 
         # self.reward_type = 'each_step'
         self.reward_name = ''
@@ -127,8 +133,7 @@ class RL2207_Environment(Environment):
         # Log preprocessing may be used when output values of the process
         # are distributed not uniformly between min and max bounds,
         # exactly when these values are mostly much closer to the min bound.
-        # I've tried log scaling with L2001 model, but results were the same as earlier,
-        # without scaling
+        # I've tried log scaling with L2001 model, but results were the same as without scaling
         self.if_use_log_scale = log_scaling_dict is not None
         self.to_log_inds = None
         self.to_log_scales = None
@@ -148,6 +153,7 @@ class RL2207_Environment(Environment):
 
         # info
         self.env_info = f'model_type: {self.model_type}\n' \
+                        f'actions_type: {self.actions_type}\n' \
                         f'names to state: {self.names_to_state}\n' \
                         f'reward: {self.reward_name}\n' \
                         f'state_spec: shape {self.state_spec["shape"]}, ' \
@@ -221,16 +227,60 @@ class RL2207_Environment(Environment):
                     min_value=min_values, max_value=max_values)
 
     def actions(self):
-        lower = self.model.get_bounds('min', 'input')
-        upper = self.model.get_bounds('max', 'input')
-        if self.model_type == 'continuous':
-            actions_shape = lower.shape
-            return dict(type='float',
-                        shape=actions_shape,
-                        min_value=lower,
-                        max_value=upper)
-        elif self.model_type == 'discrete':
-            return dict(type='int', shape=lower.shape, num_values=21)
+        # WARNING: only the models with continuous inputs are supported for now
+        min_bounds = self.model.get_bounds('min', 'input')
+        max_bounds = self.model.get_bounds('max', 'input')
+        inputs_shape = min_bounds.shape
+        action_vector = np.empty(inputs_shape)
+        idxs = []
+        if self.actions_type == 'continuous':
+            if isinstance(self.continuous_actions, bool):
+                return dict(type='float', shape=inputs_shape, min_value=min_bounds, max_value=max_bounds)
+            lower = np.empty(inputs_shape)
+            upper = np.empty(inputs_shape)
+            for i, name in enumerate(self.model.names['input']):
+                if name in self.continuous_actions:
+                    if isinstance(self.continuous_actions[name], (int, float)):
+                        action_vector[i] = self.continuous_actions[name]
+                    elif isinstance(self.continuous_actions[name], (list, tuple)):
+                        lower[i] = self.continuous_actions[name][0]
+                        upper[i] = self.continuous_actions[name][1]
+                        for v in (lower[i], upper[i]):
+                            assert (min_bounds[i] <= v) and (v <= max_bounds[i])
+                        assert lower[i] < upper[i]
+                        idxs.append(i)
+                    elif self.continuous_actions[name] == 'enable':
+                        lower[i] = min_bounds[i]
+                        upper[i] = max_bounds[i]
+                        idxs.append(i)
+                    else:
+                        raise ValueError(f'Error: failed to determine what should being done with input name: {name}')
+                else:
+                    raise ValueError(f'Error: All input names should be specified, but at least one was not: {name}')
+            self.action_vector = action_vector
+            self.idxs_of_action = np.array(idxs)
+            return dict(type='float', shape=(len(idxs)), min_value=lower[idxs], max_value=upper[idxs])
+
+        elif self.actions_type == 'discrete':
+            if isinstance(self.discrete_actions, bool):
+                # return dict(type='int', shape=inputs_shape, num_values=21)
+                raise NotImplementedError
+            names_of_action = []
+            number_of_actions = []
+            for i, name in enumerate(self.model.names['input']):
+                if isinstance(self.discrete_actions[name], (int, float)):
+                    action_vector[i] = self.discrete_actions[name]
+                elif isinstance(self.discrete_actions[name], (list, tuple)):
+                    l = len(self.discrete_actions[name])
+                    assert l > 1
+                    number_of_actions.append(l)
+                    idxs.append(i)
+                    names_of_action.append(name)
+            self.names_of_action = np.array(names_of_action)
+            self.action_vector = action_vector
+            self.idxs_of_action = np.array(idxs)
+            return dict(type='int', shape=(len(self.idxs_of_action)), num_values=max(number_of_actions))
+
         raise ValueError('Unexpected actions type error')
 
     def max_episode_timesteps(self):
@@ -264,11 +314,20 @@ class RL2207_Environment(Environment):
         return self.end_episode
 
     def update_env(self, act):
-        if self.model_type == 'continuous':
-            model_inputs = act
+        if self.actions_type == 'continuous':
+            if self.idxs_of_action.size < self.action_vector.size:
+                model_inputs = self.action_vector
+                model_inputs[self.idxs_of_action] = act
+            else:
+                model_inputs = act
         else:
             # model_inputs = act / 20.
-            raise NotImplementedError
+            # if isinstance(self.discrete_actions, bool):
+            #     raise NotImplementedError
+            # else:
+            model_inputs = self.action_vector
+            for i, idx in enumerate(self.idxs_of_action):
+                model_inputs[idx] = self.discrete_actions[self.names_of_action[i]][act[i]]
 
         self.controller.set_controlled(model_inputs)
         self.controller.time_forward(dt=self.time_step)
@@ -317,7 +376,7 @@ class RL2207_Environment(Environment):
                         (self.model.get_bounds('max', 'input') - self.model.get_bounds('min', 'input')) + \
                         self.model.get_bounds('min', 'input')  # unnorm
             to_process_flows = {self.input_names[i]: in_values[i] for i in range(len(self.input_names))}
-            self.controller.const_preprocess(to_process_flows, process_time=10)
+            self.controller.const_preprocess(to_process_flows, process_time=np.random.randint(1, 11)*self.episode_time)
         else:
             raise ValueError
 

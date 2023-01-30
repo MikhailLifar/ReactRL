@@ -7,6 +7,17 @@ from lib import integral
 
 
 def get_target_func(func_name, **kwargs):
+    """
+
+    :param func_name:
+    Valid names:
+         'CO2_value', 'CO2xConversion', 'CO2_sub_outs',
+         'CO2_value_I', 'CO2_sub_outs_I', 'CO2xConversion_I',
+         'CO2xExpOuts_I', 'CO2xCOConversion_I',
+    :param kwargs:
+    :return:
+    """
+
     # SHORT TERM (ONE-ROW) TARGETS
     if func_name == 'CO2_value':
 
@@ -137,6 +148,18 @@ def get_target_func(func_name, **kwargs):
             return np.exp((-diff) * diff / sigma) * (I_CO2 / (I_CO + eps) + alpha) * (I_CO2 / 2 / (I_O2 + eps) + alpha)
 
         return Gauss_CO_sub_default_x_ConvPlusAlpha_I
+
+    elif func_name == '(Gauss)xCO2_I':
+        CO_0 = kwargs['default']
+        sigma = kwargs['sigma']  # try 0.1 * CO_0
+
+        def Gauss_CO_sub_default_x_CO2_I(output_history_dt, output_history):
+            I_CO_press = integral(output_history_dt, output_history[:, 4])
+            I_CO2 = integral(output_history_dt, output_history[:, 0])
+            diff = (I_CO_press - CO_0 * output_history_dt[output_history_dt > 0.][-1])
+            return np.exp((-diff) * diff / sigma) * I_CO2
+
+        return Gauss_CO_sub_default_x_CO2_I
 
     else:
         raise ValueError
