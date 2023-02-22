@@ -29,6 +29,7 @@ class RL2207_Environment(Environment):
                  reward_spec: [str, callable] = None,
                  episode_time=500, time_step=10,
                  state_spec: dict = None,
+                 reset_mode='bottom_state',
                  initial_values: dict = None,
                  preprocess_time=0,
                  log_scaling_dict=None,
@@ -65,7 +66,7 @@ class RL2207_Environment(Environment):
 
         self.input_names = self.controller.controlled_names
         if initial_values is None:
-            self.initial_values = {name: 0. for name in self.input_names}
+            self.initial_values = {name: self.model.bottom['input'][name] for name in self.input_names}
         else:
             assert isinstance(initial_values, dict)
             self.initial_values = copy.deepcopy(initial_values)
@@ -114,7 +115,7 @@ class RL2207_Environment(Environment):
         self.names_of_action = None
         self.idxs_of_action = None
 
-        self.reset_mode = 'normal'
+        self.reset_mode = reset_mode
 
         # self.reward_type = 'each_step'
         self.reward_name = ''
@@ -126,7 +127,10 @@ class RL2207_Environment(Environment):
             self.target_type = 'episode'
 
         # TODO try to generalize normalize_coef evaluation
-        self.normalize_coef = normalize_coef(self)
+        if 'normalize_coef' in kwargs:
+            self.normalize_coef = kwargs['normalize_coef']
+        else:
+            self.normalize_coef = normalize_coef(self)
         assert self.normalize_coef >= 0
 
         # Log preprocessing parameters.
@@ -205,7 +209,7 @@ class RL2207_Environment(Environment):
 
     def log_preprocess(self, measurement: np.ndarray):
         part_to_preprocess = (measurement[self.to_log_inds] -
-                                         self.norm_to_log[1]) / self.norm_to_log[0]
+                                          self.norm_to_log[1]) / self.norm_to_log[0]
         measurement[self.to_log_inds] = np.log(1 + self.to_log_scales * part_to_preprocess)
 
     def states(self):
@@ -231,10 +235,11 @@ class RL2207_Environment(Environment):
         min_bounds = self.model.get_bounds('min', 'input')
         max_bounds = self.model.get_bounds('max', 'input')
         inputs_shape = min_bounds.shape
-        action_vector = np.empty(inputs_shape)
+        action_vector = np.full(inputs_shape, -1)
         idxs = []
         if self.actions_type == 'continuous':
             if isinstance(self.continuous_actions, bool):
+                self.idxs_of_action = self.action_vector = action_vector
                 return dict(type='float', shape=inputs_shape, min_value=min_bounds, max_value=max_bounds)
             lower = np.empty(inputs_shape)
             upper = np.empty(inputs_shape)
@@ -367,6 +372,9 @@ class RL2207_Environment(Environment):
 
         self.controller.reset()
 
+        in_values = None
+        current_measurement = None
+
         if self.reset_mode == 'normal':
             in_values = np.array([self.initial_values[name] for name in self.input_names])
             if self.PC_preprocess is not None:
@@ -377,12 +385,20 @@ class RL2207_Environment(Environment):
                         self.model.get_bounds('min', 'input')  # unnorm
             to_process_flows = {self.input_names[i]: in_values[i] for i in range(len(self.input_names))}
             self.controller.const_preprocess(to_process_flows, process_time=np.random.randint(1, 11)*self.episode_time)
+        elif self.reset_mode == 'bottom_state':
+            current_measurement = np.zeros(len(self.names_to_state))
+            i0 = 0
+            for i, name in enumerate(self.model.names['output']):
+                if name in self.names_to_state:
+                    current_measurement[i0] = self.model.limits['output'][i][0]
+                    i0 += 1
         else:
             raise ValueError
 
-        self.controller.set_controlled(in_values)
-        self.controller.time_forward(dt=self.time_step)
-        current_measurement = self.controller.get_process_output()[1][-1][self.inds_to_state]
+        if self.reset_mode != 'bottom_state':
+            self.controller.set_controlled(in_values)
+            self.controller.time_forward(dt=self.time_step)
+            current_measurement = self.controller.get_process_output()[1][-1][self.inds_to_state]
 
         self.state_memory[0] = np.array([*current_measurement])
         self.state_memory[1:] = self.state_memory[0]

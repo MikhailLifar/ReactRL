@@ -85,10 +85,12 @@ def run(environment: RL2207_Environment, agent, out_folder='run_RL_out', n_episo
         dir_path = make_subdir_return_path(out_folder)
     else:
         dir_path = out_folder
-    freq = n_episodes // 30  # previously 200
+    # plot_period = 2  # temporary! For debug purposes
+    plot_period = n_episodes // 30  # previously 200
+    if plot_period < 3:  # TODO: crutch here
+        plot_period = 3
     # Loop over episodes
     environment.describe_to_file(f'{dir_path}/_info.txt')
-    environment.reset_mode = 'normal'
 
     prev_graph_ind = 0
     prev_max_integral = 1e-9
@@ -98,7 +100,7 @@ def run(environment: RL2207_Environment, agent, out_folder='run_RL_out', n_episo
     for i in range(n_episodes):
         # Initialize episode
         run_episode(environment, agent)
-        if not (i % freq) or (i > n_episodes - 5):
+        if not (i % plot_period) or (i > n_episodes - 5):
             # env.create_graphs(i, 'run_RL_out/')
             # --DEBUG--
             # conversion = environment.hc.get_conversion()[1]
@@ -123,12 +125,16 @@ def run(environment: RL2207_Environment, agent, out_folder='run_RL_out', n_episo
 
             prev_max_integral = environment.cumm_episode_target
             agent.save(directory=dir_path + '/agent', format='numpy')
+
     # # folder renaming
     # new_path = make_subdir_return_path(out_folder, prefix=f'{environment.best_integral / environment.episode_time * 100:.2}_')
     # os.rename(dir_path, new_path)
     # dir_path = new_path
+
     # testing
-    environment.episode_time = 500
+    # NOTE: The value 500 seconds for episode time was used for Libuda like tests.
+    # It is not suitable for KMC model
+    # environment.episode_time = 500
     test_agent = Agent.load(directory=f'{dir_path}/agent', format='numpy', environment=environment)
     os.makedirs(f'{dir_path}/testing', exist_ok=False)
     os.makedirs(f'{dir_path}/testing_deterministic', exist_ok=False)
@@ -137,10 +143,9 @@ def run(environment: RL2207_Environment, agent, out_folder='run_RL_out', n_episo
 
 
 def test_run(environment: RL2207_Environment, agent, out_folder, n_episodes=None, deterministic=False,
-             reset_mode='normal'):
+             reset_mode='bottom_state'):
     environment.describe_to_file(f'{out_folder}/_info.txt')
     environment.reset_mode = reset_mode
-    # environment.reset_mode = 'normal'
     if n_episodes is None:
         n_episodes = 10
     names_to_plot = environment.names_to_plot

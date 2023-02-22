@@ -65,6 +65,9 @@ class BaseModel:
     def __getitem__(self, item):
         return self.params[item]
 
+    # def __setitem__(self, item, value):
+    #     self.params[item] = value
+
     def get_bounds(self, min_or_max: str, kind: str, out: str = 'array'):
         if min_or_max == 'min':
             in_pair = 0

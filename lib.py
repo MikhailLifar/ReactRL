@@ -5,6 +5,10 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
+matplotlib.rcParams.update(
+    {'mathtext.default': 'regular'}
+)
+
 
 def isJupyterNotebook():
     try:
@@ -181,7 +185,8 @@ def plot_to_file(*p, fileName=None, save_csv=True, title='', xlabel='', ylabel='
         ax.set_title(title)
     if xlim is not None:
         ax.set_xlim(xlim[0], xlim[1])
-        updateYLim(ax)
+        if ylim is None:
+            updateYLim(ax)
         # if ylim is None:
         #     # pyplot doesn't change ylim after xlim change
         #     ybounds = np.array([getPlotLim(p[i * 3 + 1][(xlim[0]<=p[i * 3]) & (p[i * 3]<=xlim[1])]) for i in range(n)])

@@ -49,6 +49,14 @@ def get_target_func(func_name, **kwargs):
 
         return CO2_sub_outs
 
+    elif func_name == 'CO2_count':
+
+        def CO2_count(x):
+            # x = ['CO2_rate', 'O2_Pa', 'CO_Pa', 'CO2_count']
+            return x[3]
+
+        return CO2_count
+
     # LONG TERM (EPISODE) TARGETS
     elif func_name == 'CO2_value_I':
 
@@ -168,6 +176,10 @@ def get_target_func(func_name, **kwargs):
 # metrics, catalytic CO oxidation
 def CO2_integral(output_history_dt, output_history):
     return integral(output_history_dt, output_history[:, 0])
+
+
+def CO2_count(output_history_dt, output_history):
+    return np.sum(output_history[:, 3])
 
 
 def overall_O2_conversion(output_history_dt, output_history):

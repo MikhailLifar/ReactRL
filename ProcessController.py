@@ -23,6 +23,7 @@ class ProcessController:
 
     def __init__(self,
                  process_to_control_obj: BaseModel,
+                 analyser_dt: float = 1.,
                  RESOLUTION: int = 10,
                  controlled_names: list = None, output_names: list = None,
                  target_func_to_maximize=None, long_term_target_to_maximize=None, target_func_name='target',
@@ -30,17 +31,18 @@ class ProcessController:
                  supposed_step_count: int = None, supposed_exp_time: float = None):
         self.rng = np.random.default_rng(seed=0)
 
-        self.analyser_dt = 1.  # analyser period, seconds
-        self.analyser_delay = 0
+        # self.analyser_dt = min(analyzer_dt, 0.25 * supposed_exp_time)  # analyser period, seconds
+        self.analyser_dt = analyser_dt
+        self.analyser_delay = 0.
 
-        if supposed_step_count is None:
-            self.max_step_count = 1000000  # depends on available RAM
-        else:
-            self.max_step_count = supposed_step_count  # depends on available RAM
         if supposed_exp_time is None:
             self.max_exp_time = 1000000  # sec
         else:
             self.max_exp_time = supposed_exp_time  # sec
+        if supposed_step_count is None:
+            self.max_step_count = 1000000  # depends on available RAM
+        else:
+            self.max_step_count = supposed_step_count  # depends on available RAM
 
         self.RESOLUTION = RESOLUTION
 
@@ -248,7 +250,8 @@ class ProcessController:
         if any(inds_to_compute):
             self.target_history[inds_to_compute] = \
                 np.apply_along_axis(self.target_func, 1, self.output_history[inds_to_compute])
-        return self.target_history[np.isfinite(self.target_history)]
+        idxs = np.isfinite(self.target_history)
+        return self.output_history_dt[idxs], self.target_history[idxs]
 
     def integrate_along_history(self, time_segment=None, out_name=None,
                                 target_mode=False):
@@ -270,7 +273,7 @@ class ProcessController:
                 output = output[:, 0]
         if time_segment is None:
             return lib.integral(output_time_stamp, output)
-        assert len(time_segment) == 2, 'Time segment should has the form: [brg, end], no another options'
+        assert len(time_segment) == 2, 'Time segment should has the form: [beg, end], no another options'
         inds = (time_segment[0] <= output_time_stamp) & (output_time_stamp <= time_segment[1])
         return lib.integral(output_time_stamp[inds], output[inds])
 
@@ -408,7 +411,7 @@ class ProcessController:
 
         common_title = ''
         if 'target' in out_names:
-            integral = lib.integral(output_time_stamp, self.get_target_for_passed())
+            integral = lib.integral(*self.get_target_for_passed())
             common_title = f'Integral {self.target_func_name}: {integral:.3g}\n'
         if 'long_term_target' in out_names:
             integral = self.long_term_target(output_time_stamp, no_change_output)

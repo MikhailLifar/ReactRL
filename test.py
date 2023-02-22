@@ -179,8 +179,77 @@ def show_droplet_color(filepath, box):
     cv2.waitKey(0)
 
 
+def benchmark_RL_agents():
+    import tensorforce
+    import tensorforce.environments
+    # import tensorforce.agents
+    import run_RL
+    # import tensorforce.execution as tf_exec
+
+    agent_name = 'vpg'
+    env_name = 'CartPole'
+
+    # env = tensorforce.environments.Environment.create(
+    #     environment='gym', level=env_name, max_episode_timesteps=500,
+    # )
+    env = tensorforce.environments.OpenAIGym(f'{env_name}-v0', visualize=False)
+    agent = run_RL.create_tforce_agent(env, agent_name)
+
+    # runner = tf_exec.Runner(agent=agent, environment=env, max_episode_timesteps=500)
+    #
+    # runner.run(num_episodes=300)
+    # runner.run(num_episodes=20, evaluation=True)
+    # runner.close()
+
+    folder = f'./benchmark_RL/{agent_name}_{env_name}'
+    os.makedirs(folder, exist_ok=False)
+
+    num_episodes = 2000
+    cum_rewards = np.zeros(num_episodes)
+    for i in range(num_episodes):
+        states = env.reset()
+        terminal = False
+        sum_reward = 0.
+        while not terminal:
+            actions = agent.act(states=states)
+            states, terminal, reward = env.execute(actions=actions)
+            agent.observe(terminal=terminal, reward=reward)
+            sum_reward += reward
+            if terminal:
+                cum_rewards[i] = sum_reward
+
+    def plot_rews(fname: str):
+        fig, ax = plt.subplots()
+        ax.plot(np.arange(num_episodes) + 1, cum_rewards, 'b-d')
+        ax.set_xlabel('Episode number')
+        ax.set_ylabel('Cumulative reward')
+        fig.savefig(f'{folder}/{fname}')
+        plt.close(fig)
+
+    plot_rews('training_rews.png')
+
+    env = tensorforce.environments.OpenAIGym(f'{env_name}-v0', visualize=True)
+    num_episodes = 30
+    cum_rewards = np.zeros(num_episodes)
+    for i in range(num_episodes):
+        states = env.reset()
+        terminal = False
+        sum_reward = 0.
+        while not terminal:
+            actions = agent.act(states=states, independent=True, deterministic=True)
+            states, terminal, reward = env.execute(actions=actions)
+            # agent.observe(terminal=terminal, reward=reward)
+            sum_reward += reward
+            if terminal:
+                cum_rewards[i] = sum_reward
+
+    plot_rews('eval_rews.png')
+
+
 if __name__ == '__main__':
-    show_droplet_color('data/imgs/220909_from_vertical/right_side/0.png', [498, 464, 520, 485])
+    benchmark_RL_agents()
+
+    # show_droplet_color('data/imgs/220909_from_vertical/right_side/0.png', [498, 464, 520, 485])
 
     # model testing
     # run_test_model()

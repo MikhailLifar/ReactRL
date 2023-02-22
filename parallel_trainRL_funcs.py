@@ -1,12 +1,8 @@
-# import \
-#     os
-# import \
-#     pandas as pd
+# import os
 
 from time import sleep
 
-import \
-    pandas as pd
+import pandas as pd
 
 from lib import plot_to_file
 from run_RL import *

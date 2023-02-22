@@ -1,13 +1,15 @@
 import os
 
 # import numpy as np
-import \
-    pandas as pd
+import pandas as pd
 
 from ProcessController import *
 from predefined_policies import *
 from test_models import *
 from targets_metrics import *
+
+from usable_functions import make_subdir_return_path
+from lib import plot_to_file
 
 
 def check_func_to_optimize():
@@ -223,6 +225,7 @@ def test_PC_with_Libuda():
 
     PC = ProcessController(LibudaModelReturnK3K1AndPressures(init_cond={'thetaO': 0., 'thetaCO': 0.}, Ts=273 + 160),
                            long_term_target_to_maximize=get_target_func('CO2xConversion_I', eps=1.),
+                           RESOLUTION=2
                            )
     PC.set_plot_params(output_lims=None, output_ax_name='?',
                        input_lims=[-1.e-3, 1.e-2], input_ax_name='Pressure, Pa')
@@ -238,7 +241,7 @@ def test_PC_with_Libuda():
     #                  'additional_plot': ['thetaCO', 'thetaO']
     #                  },
     #                 get_params={'RESOLUTION': 10})
-    PC.get_process_output(RESOLUTION=2)
+    PC.get_process_output()
     PC.plot('PC_plots/debug/debug2.png', plot_mode='separately',
             out_names=['CO2', 'long_term_target'],
             additional_plot=['thetaCO', 'thetaO'])
@@ -284,35 +287,63 @@ def plot_conv(csv_path):
                      ylim=None, save_csv=False, fileName=plot_file_path)
 
 
-def Libuda2001_original_simulation():
-    PC_obj = ProcessController(LibudaModel(init_cond={'thetaCO': 0., 'thetaO': 0.25}, Ts=440.),
-                               target_func_to_maximize=get_target_func('CO2_value'))
-    PC_obj.set_plot_params(output_lims=[-1.e-3, 0.05], output_ax_name='CO2 formation rate')
+def Libuda2001_CO_cutoff_policy(PC_obj: ProcessController, dest_dir='./PC_plots/Libuda_orginal',
+                                *program):
     p_total = 1e-4
 
-    def one_co_on(x_co):
+    def p_co(x_co):
+        return p_total * x_co * 7 / np.sqrt(8) / (np.sqrt(7) + 7 * x_co / np.sqrt(8) - np.sqrt(7) * x_co)
 
+    def _one_co_on(x_co):
         # CO_p = p_total * x_co  # simple formula
-        CO_p = p_total * x_co * 7 / np.sqrt(8) / (np.sqrt(7) + 7 * x_co / np.sqrt(8) - np.sqrt(7) * x_co)
+        CO_p = p_co(x_co)
         O2_p = p_total - CO_p
-        PC_obj.reset()
         PC_obj.set_controlled({'O2': O2_p, 'CO': CO_p})
         PC_obj.time_forward(150)
         PC_obj.set_controlled({'O2': O2_p, 'CO': 0.})
         PC_obj.time_forward(50)
-        PC_obj.get_and_plot(f'./PC_plots/Libuda_orginal/x_co_{x_co:.2f}.png',
-                        plot_params={'time_segment': [0, 200], 'additional_plot': ['thetaCO', 'thetaO'],
-                                     'plot_mode': 'separately', 'out_names': ['CO2']},
-                        get_params={'RESOLUTION': 100})
 
-    one_co_on(0.5)
-    one_co_on(0.2)
+    def plot_one_co_on(x_co):
+        PC_obj.reset()
+        _one_co_on(x_co)
+        PC_obj.get_and_plot(f'{dest_dir}/x_co_{x_co:.2f}.png',
+                            plot_params={'time_segment': [0, 200], 'additional_plot': ['thetaCO', 'thetaO'],
+                                         'plot_mode': 'separately', 'out_names': ['CO2']})
 
-    # x_co = 0.05
-    # while x_co < 0.96:
-    #     CO_p = p_total * x_co
-    #     O2_p = p_total - CO_p
-    #     x_co += 0.05
+    def run_full_cutoff_series():
+        PC_obj.reset()
+        x_co = 0.05
+        while x_co < 0.96:
+            _one_co_on(x_co)
+            x_co += 0.05
+        PC_obj.get_and_plot(f'{dest_dir}/full_series.png',
+                            plot_params={'time_segment': [0, None], 'additional_plot': ['thetaCO', 'thetaO'],
+                                         'plot_mode': 'separately', 'out_names': ['CO2']})
+
+    for arg in program:
+        if isinstance(arg, tuple):
+            PC_obj.reset()
+            for v in arg:
+                _one_co_on(v)
+            PC_obj.get_and_plot(f'{dest_dir}/series.png',
+                            plot_params={'time_segment': [0, None], 'additional_plot': ['thetaCO', 'thetaO'],
+                                         'plot_mode': 'separately', 'out_names': ['CO2']})
+        elif isinstance(arg, float):
+            plot_one_co_on(arg)
+        elif isinstance(arg, str) and (arg == 'full'):
+            run_full_cutoff_series()
+
+    # plot_one_co_on(0.75)
+    # plot_one_co_on(0.5)
+    # plot_one_co_on(0.25)
+    # run_full_cutoff_series()
+
+
+def Libuda2001_original_simulation():
+    PC_obj = ProcessController(LibudaModel(init_cond={'thetaCO': 0., 'thetaO': 0.25}, Ts=440.),
+                               target_func_to_maximize=get_target_func('CO2_value'))
+    PC_obj.set_plot_params(output_lims=[-1.e-3, 0.05], output_ax_name='CO2 formation rate')
+    Libuda2001_CO_cutoff_policy(PC_obj)
 
 
 def Pt_exp(path: str):
@@ -345,8 +376,98 @@ def Pt_exp(path: str):
                 time_segment=[0., 50 * reps], additional_plot=['thetaCO', 'thetaO'])
 
 
-if __name__ == '__main__':
+def benchmark_runs(PC_obj: ProcessController, out_path: str, rate_or_count: str):
+    temperatures = (300, 373, 500)
+    pressures = ((50e3, 50e3), (10e3, 90e3), (90e3, 10e3), (99e3, 1e3), )  # (O2, CO)
 
+    run_time = 1.e-5
+
+    folder = make_subdir_return_path(out_path, prefix='benchmark_', with_date=True, unique=True)
+
+    for T in temperatures:
+        PC_obj.process_to_control.assign_and_eval_values(T=T)
+        for p_pair in pressures:
+            PC_obj.reset()
+            PC_obj.set_controlled(p_pair)
+            PC_obj.time_forward(run_time)
+            PC_obj.get_and_plot(f'{folder}/T{T}_CO({int(p_pair[0] // 1000)})_O2({int(p_pair[1] // 1000)}).png',
+                                plot_params={'time_segment': [0, None], 'additional_plot': ['thetaCO', 'thetaO'],
+                                            'plot_mode': 'separately', 'out_names': [f'CO2_{rate_or_count}']})
+
+            # plot CO2 integral as A. Guda suggested
+            idxs = PC_obj.output_history_dt > -1
+
+            if rate_or_count == 'rate':
+                # rate mode
+                CO2_int = np.cumsum(PC_obj.output_history[:, 0][idxs]) * PC_obj.analyser_dt
+            elif rate_or_count == 'count':
+                # count mode
+                CO2_int = np.cumsum(PC_obj.output_history[:, 3][idxs])
+
+            plot_to_file(PC_obj.output_history_dt[idxs], CO2_int, 'CO2 integral',
+                         fileName=f'{folder}/T{T}_O2({int(p_pair[0] // 1000)})_CO({int(p_pair[1] // 1000)})_intCO2.png',
+                         title='CO2 integral over time',
+                         xlabel='Time', ylabel='Integral',
+                         xlim=[0., None], ylim=[-0.1, None], )
+
+
+def KMC_simple_tests():
+    # size = [20, 20]
+    # PC_obj = ProcessController(KMC_CO_O2_Pt_Model((*size, 1), log_on=True, O2_top=1.1e-4, CO_top=1.1e-4,),
+    #                            target_func_to_maximize=get_target_func('CO2_value'),
+    #                            RESOLUTION=1)
+    # PC_obj.set_metrics(('CO2', CO2_integral),)
+    # PC_obj.analyser_dt = 1
+    # PC_obj.set_plot_params(input_lims=[-1e-5, 1.1e-4], input_ax_name='Pressure, Pa',
+    #                        output_lims=[-1e-2, 0.06], output_ax_name='CO2 formation rate, $(Pt atom * sec)^{-1}$')
+    # postfix = f'{size[0]}x{size[1]}'
+    # for T in (300., 400., 440., 500., 600.):
+    #     run_dir = f'PC_plots/KMC/Basic/{int(T)}K_{postfix}'
+    #     os.mkdir(run_dir)
+    #     PC_obj.process_to_control.cls_parameters['T'] = T
+    #     Libuda2001_CO_cutoff_policy(PC_obj, run_dir, 0.25, 0.5, 0.75)
+
+    # TEST IF COMPARABLE WITH ORIGINAL
+    size = [5, 5]
+    PC_obj = ProcessController(KMC_CO_O2_Pt_Model((*size, 1), log_on=True,
+                                                  O2_top=1.1e5, CO_top=1.1e5,
+                                                  CO2_rate_top=1.4e6, CO2_count_top=3.e2,
+                                                  T=800.),
+                               analyser_dt=1.e-6,
+                               target_func_to_maximize=get_target_func('CO2_count'),
+                               RESOLUTION=1,  # always should be 1 if we use KMC, otherwise we will get wrong results!
+                               supposed_step_count=100,  # memory controlling parameters
+                               supposed_exp_time=1.e-3)
+    PC_obj.set_plot_params(input_lims=[-1e-5, None], input_ax_name='Pressure, Pa',
+                           output_lims=[-1e-2, None],
+                           # output_ax_name='CO2 formation rate, $(Pt atom * sec)^{-1}$',
+                           output_ax_name='CO x O events count')
+    PC_obj.set_metrics(
+                       # ('CO2', CO2_integral),
+                       ('CO2 count', CO2_count),
+                       # ('O2 conversion', overall_O2_conversion),
+                       # ('CO conversion', overall_CO_conversion)
+                       )
+    # PC_obj.analyser_dt = 1.e-7
+    # PC_obj.reset()
+    # for i in range(4):
+    #     PC_obj.set_controlled((1E3, 2E3))
+    #     PC_obj.time_forward(10.e-5)
+    #     PC_obj.set_controlled((10E3, 1E3))
+    #     PC_obj.time_forward(10.e-5)
+    # PC_obj.get_and_plot(f'PC_plots/KMC/Basic/debug_dynamic.png',
+    #                     plot_params={'time_segment': [0., None], 'additional_plot': ['thetaCO', 'thetaO'],
+    #                                  'plot_mode': 'separately', 'out_names': ['CO2']})
+
+    # RUN UNDER CONDITIONS FOR RL
+    # PC_obj.reset()
+    # PC_obj.set_controlled((5E3, 5E3))
+
+    # BENCHMARK
+    benchmark_runs(PC_obj, './PC_plots/model_benchmarks', 'count')
+
+
+def main():
     # custom_experiment()
 
     # test_PC_with_Libuda()
@@ -361,12 +482,19 @@ if __name__ == '__main__':
     # plot_conv('run_RL_out/conversion/220928_8_conv.csv')
     # plot_conv('run_RL_out/conversion/220830_4_conv.csv')
 
-    Pt_exp('PC_plots/PtSalomons/1_.png')
+    # Pt_exp('PC_plots/PtSalomons/1_.png')
 
     # test_new_k1k3_model_new_targets()
 
     # Libuda2001_original_simulation()
 
+    KMC_simple_tests()
+
     # test_PC_with_Libuda()
 
     pass
+
+
+if __name__ == '__main__':
+    main()
+
