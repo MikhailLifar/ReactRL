@@ -79,26 +79,6 @@ class System(SystemBase):
         #         if dcur < Ncutoff and j != i:
         #             s.neighbors.append(j)
 
-        # 2x faster
-        # for i, s in enumerate(self.sites[:-1]):
-        #     for j, s_other in enumerate(self.sites[i+1:]):
-        #         # Length of distance vector:
-        #         d_cur = self.atoms.get_distance(s.ind, s_other.ind, mic=pbc)
-        #         # If the site is a neighbor:
-        #         if d_cur < Ncutoff:
-        #             s.neighbors.append(j + i + 1)
-        #             s_other.neighbors.append(i)
-
-        # powered 1, does not work
-        # posns = self.atoms.get_positions()
-        # mask = cdist(posns, posns) < Ncutoff
-        # idxs = np.arange(0, len(self.sites))
-        # for i in idxs:
-        #     mask[i, i] = False
-        #     neighbors_idxs = idxs[mask[i, :]]
-        #     for j in neighbors_idxs:
-        #         self.sites[i].neighbors.append(j)
-
         # powered 2, this works! acceleration is high enough, 40x40x4 for about 10 seconds!
         idxs = np.array([s.ind for s in self.sites])
         for i, s in enumerate(self.sites):

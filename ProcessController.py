@@ -287,6 +287,7 @@ class ProcessController:
                                     np.max(self.process_to_control.get_bounds('max', kind))]
             self.plot_lims[kind][0] = self.plot_lims[kind][0] * (1. - np.sign(self.plot_lims[kind][0]) * 0.03)
             self.plot_lims[kind][1] = self.plot_lims[kind][1] * (1. + np.sign(self.plot_lims[kind][1]) * 0.03)
+        self.plot_lims['additional'] = None
 
     def _initialize_plot_params(self):
         self._initialize_plot_lims()
@@ -294,7 +295,7 @@ class ProcessController:
             self.plot_axes_names[kind] = '?'
 
     def set_plot_params(self, **kwargs):
-        for kind in ('input', 'output'):
+        for kind in ('input', 'output', 'additional'):
             if f'{kind}_lims' in kwargs:
                 self.plot_lims[kind] = kwargs[f'{kind}_lims']
                 del kwargs[f'{kind}_lims']
@@ -480,7 +481,7 @@ class ProcessController:
                                  ylabel=self.plot_axes_names['additional'],
                                  save_csv=False,
                                  fileName=file_name[:file_name.rfind('.')] + '_add.png',
-                                 xlim=time_segment,
+                                 xlim=time_segment, ylim=self.plot_lims['additional'],
                                  plotMoreFunction=plot_more_function2)
         # if time_segment is not None:
         #     i = (time_segment[0] <= output_time_stamp) & (output_time_stamp <= time_segment[1])

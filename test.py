@@ -1,9 +1,7 @@
 # import matplotlib
 # matplotlib.use('Agg')
-# import \
-#     itertools
-import \
-    os
+# import itertools
+import os
 
 import matplotlib.pyplot as plt
 
@@ -246,8 +244,29 @@ def benchmark_RL_agents():
     plot_rews('eval_rews.png')
 
 
+def working_with_csv_test():
+    import lib
+
+    csv_path = './PC_plots/Ziff/Ziff_2023_3_10__2/Ziff_summarize_CO2.csv'
+    ops, df = lib.read_plottof_csv(csv_path, ret_ops=True)
+    lib.plot_from_file({'label': 'Average CO2 prod. rate', 'linestyle': 'solid',
+                        'marker': 'h', 'c': 'purple',
+                        'twin': True, },
+                       {'label': 'Average O2 coverage', 'linestyle': (0, (1, 1)),
+                        'marker': 'x', 'c': 'blue'},
+                       {'label': 'Average CO coverage', 'linestyle': (0, (5, 5)),
+                        'marker': '+', 'c': 'red'},
+                       csvFileName=csv_path,
+                       fileName='./test.png',
+                       xlabel=f'O2, {1.e4:.4g} Pa', ylabel='coverages', title='Summarize across benchmark',
+                       twin_params={'ylabel': 'CO2 prod. rate'},
+                       )
+
+
 if __name__ == '__main__':
-    benchmark_RL_agents()
+    working_with_csv_test()
+
+    # benchmark_RL_agents()
 
     # show_droplet_color('data/imgs/220909_from_vertical/right_side/0.png', [498, 464, 520, 485])
 

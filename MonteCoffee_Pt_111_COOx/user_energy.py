@@ -25,7 +25,10 @@ EdiffO = 0.58
 
 # Adsorption energies as functions of CN
 EadsCO = 1.36 
-EadsO = 1.36  # arbitrarily: 1.36; initially: 0.97 M. L. commented
+EadsCO *= 10.  # M. Lifar: to make desorption very slow
+
+EadsO = 1.36  # M. Lifar: arbitrarily: 1.36; initially: 0.97
+EadsO *= 10.  # M. Lifar: to make desorption very slow. Upd: multiple 10 is too large
 
 
 def get_Ea(ECO, EO):
@@ -47,10 +50,10 @@ def get_Ea(ECO, EO):
         Reaction energy barrier of CO*+O*->CO2(g) in eV.
 
     """
-    ETS = 0.824 * (-EO -ECO)+0.168+0.47238  # M. L. commented  # How much larger is the energy of CO and O wrt Pt(111)
-    Ea = ETS+ECO+EO  # M. L. commented  # Translate the barriers relative to Pt(111)
-    # Ea = 0
-    Ea *= 0.6
+    ETS = 0.824 * (-EO -ECO)+0.168+0.47238  # M. Lifar commented  # How much larger is the energy of CO and O wrt Pt(111)
+    Ea = ETS+ECO+EO  # M. Lifar commented  # Translate the barriers relative to Pt(111)
+    Ea = 0
+    # Ea *= 0.6  # 0.6
     return Ea
 
 
@@ -79,7 +82,7 @@ def get_repulsion(cov_self, cov_NN, stype):
     """
 
     repulsion = 0.
-    # ECOCO = 0.19  # M. L. commented  # 0.38 # How CO affects CO
+    # ECOCO = 0.19  # M. Lifar commented  # 0.38 # How CO affects CO
     ECOCO = 0.32  # 0.38 # How CO affects CO
     EOO = 0.32  # How O affects O - double since it is called from get barrier of O2
 

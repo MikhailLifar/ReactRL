@@ -141,9 +141,14 @@ def save_to_file(*p,  fileName=None,):
             save(f, p[i * 3 + 1])
 
 
-def plot_to_file(*p, fileName=None, save_csv=True, title='', xlabel='', ylabel='', xlim=None, ylim=None, plotMoreFunction=None, yscale=None, tight_layout=True, grid=False):
+def plot_to_file(*p, fileName=None, save_csv=True,
+                 title='', xlabel='', ylabel='',
+                 xlim=None, ylim=None,
+                 twin_params: dict = None,
+                 plotMoreFunction=None, yscale=None, tight_layout=True, grid=False):
     """
     Simple plot multiple graphs to file
+    :param twin_params:
     :param grid:
     :param yscale:
     :param tight_layout:
@@ -160,6 +165,15 @@ def plot_to_file(*p, fileName=None, save_csv=True, title='', xlabel='', ylabel='
     """
     assert len(p) % 3 == 0, f'Number of parameters {len(p)} is not multiple of 3'
     fig, ax = createfig()
+
+    right_ax = None
+    if twin_params is not None:
+        right_ax = ax.twinx()
+        if 'ylabel' in twin_params:
+            right_ax.set_ylabel(twin_params['ylabel'])
+        if 'ylim' in twin_params:
+            right_ax.set_ylim(*twin_params['ylim'])
+
     n = len(p)//3
     labels = {}
     if yscale is not None:
@@ -171,12 +185,16 @@ def plot_to_file(*p, fileName=None, save_csv=True, title='', xlabel='', ylabel='
         else:
             params = p[i*3+2]
             assert isinstance(params, dict)
+            ax_to_plot = ax
+            if 'twin' in params:
+                del params['twin']
+                ax_to_plot = right_ax
             if 'format' in params:
                 fmt = params['format']
                 del params['format']
-                ax.plot(p[i * 3], p[i * 3 + 1], fmt, **params)
+                ax_to_plot.plot(p[i * 3], p[i * 3 + 1], fmt, **params)
             else:
-                ax.plot(p[i * 3], p[i * 3 + 1], **params)
+                ax_to_plot.plot(p[i * 3], p[i * 3 + 1], **params)
             if 'label' in params:
                 labels[i] = params['label']
     if title != '':
@@ -202,7 +220,11 @@ def plot_to_file(*p, fileName=None, save_csv=True, title='', xlabel='', ylabel='
         ax.set_ylabel(ylabel)
     if plotMoreFunction is not None:
         plotMoreFunction(ax)
-    ax.legend()
+
+    ax.legend(loc=2)
+    if right_ax is not None:
+        right_ax.legend(loc=1)
+
     if fileName is None:
         fileName = 'graph.png'
     folder = os.path.split(os.path.expanduser(fileName))[0]
@@ -232,7 +254,8 @@ def plot_to_file(*p, fileName=None, save_csv=True, title='', xlabel='', ylabel='
                 save(f, p[i * 3 + 1])
 
 
-def read_flot_to_file_csv(datapath, create_normal: bool = False) -> pd.DataFrame:
+def read_plottof_csv(datapath, ret_ops=False, ret_df=False, create_standard: bool = False):
+    plot_ops = []
     df = pd.read_csv(datapath, header=None)
     df = df.T
     cols = []
@@ -241,16 +264,37 @@ def read_flot_to_file_csv(datapath, create_normal: bool = False) -> pd.DataFrame
         df.loc[0, i] = elem[elem.rfind(' ') + 1:]
     df.columns = cols
     df = df.astype('float64')
+
+    if ret_ops:
+        for i, _ in enumerate(cols[::2]):
+            plot_ops += [df[cols[2 * i]].to_numpy(), df[cols[2 * i+1]].to_numpy(), cols[2 * i][:-2]]
+
     # print(df.shape)
     # print(df.dtypes)
     # print(df.columns)
     # print(df)
-    if create_normal:
+    if create_standard:
         dir_part, file_part = os.path.split(datapath)
         f_name, ext = os.path.splitext(file_part)
         df.to_csv(f'{dir_part}/{f_name}_new{ext}',
                   sep=';', index=False)
-    return df
+
+    if not ret_df:
+        df = None
+
+    return plot_ops, df
+
+
+def plot_from_file(*lbls_fmts, csvFileName: str, **plottof_ops):
+    ops, _ = read_plottof_csv(csvFileName, True, False, False)
+    for i, l in enumerate(ops[2::3]):
+        if l not in lbls_fmts:
+            for lf in lbls_fmts:
+                if isinstance(lf, dict) and (l == lf['label']):
+                    ops[3 * i + 2] = lf
+    if 'fileName' not in plottof_ops:
+        plottof_ops['fileName'] = os.path.splitext(csvFileName)[0] + '.png'
+    plot_to_file(*ops, **plottof_ops)
 
 
 def integral(x, y):

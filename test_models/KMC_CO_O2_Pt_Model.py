@@ -96,7 +96,7 @@ class KMC_CO_O2_Pt_Model(BaseModel, NeighborKMCBase):
         self.top['output']['CO2_count'] = params['CO2_count_top']  # empirically chosen
         self.fill_limits()
 
-        covCO, covO, _ = self.system.get_coverages(self.Nspecies)
+        _, covCO, covO = self.system.get_coverages(self.Nspecies)
         self.plot = {'thetaCO': covCO, 'thetaO': covO}
 
         self.add_info = self.get_add_info()
@@ -143,7 +143,7 @@ class KMC_CO_O2_Pt_Model(BaseModel, NeighborKMCBase):
         t0 = self.t
         while self.t - t0 < delta_t:
 
-            self.frm_step()
+            self.frm_step(throw_exception=False, tstep_up_bound=2*delta_t)
 
             if self.log_on:
 
@@ -194,7 +194,7 @@ class KMC_CO_O2_Pt_Model(BaseModel, NeighborKMCBase):
         # get CO2 formation rate (number of reactions / atom / delta_t)
 
         if save_for_plot:
-            self.plot['thetaCO'], self.plot['thetaO'], _ = self.system.get_coverages(self.Nspecies)
+            _, self.plot['thetaCO'], self.plot['thetaO'] = self.system.get_coverages(self.Nspecies)
 
         count = self.evs_exec[-1] - self.COxO_prev_count
         self.COxO_prev_count += count
@@ -263,6 +263,9 @@ class KMC_CO_O2_Pt_Model(BaseModel, NeighborKMCBase):
 
         else:
             warnings.warn('Logging is turned off')
+
+        for s in self.system.sites:
+            s.covered = 0  # turn all sites empty
 
         self.COxO_prev_count = 0
 

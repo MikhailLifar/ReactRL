@@ -1,5 +1,7 @@
 import os
 
+import \
+    numpy as np
 # import numpy as np
 import pandas as pd
 
@@ -255,7 +257,7 @@ def test_PC_with_Libuda():
 
 
 def count_conversion_given_exp(csv_path, L_model: LibudaModel):
-    df = lib.read_flot_to_file_csv(csv_path, False)
+    df = lib.read_plottof_csv(csv_path, False)
     new_df = pd.DataFrame(columns=['CO_conversion', 'O2_conversion'])
 
     CO2_name = 'CO2' if 'CO2 x' in df.columns else 'target'
@@ -376,7 +378,8 @@ def Pt_exp(path: str):
                 time_segment=[0., 50 * reps], additional_plot=['thetaCO', 'thetaO'])
 
 
-def benchmark_runs(PC_obj: ProcessController, out_path: str, rate_or_count: str):
+def benchmark_runs(PC_obj: ProcessController, out_path: str, rate_or_count: str,
+                   ):
     temperatures = (300, 373, 500)
     pressures = ((50e3, 50e3), (10e3, 90e3), (90e3, 10e3), (99e3, 1e3), )  # (O2, CO)
 
@@ -388,11 +391,20 @@ def benchmark_runs(PC_obj: ProcessController, out_path: str, rate_or_count: str)
         PC_obj.process_to_control.assign_and_eval_values(T=T)
         for p_pair in pressures:
             PC_obj.reset()
+
+            # # stationary
+            # PC_obj.set_controlled(p_pair)
+            # PC_obj.time_forward(run_time)
+
+            # one turn
             PC_obj.set_controlled(p_pair)
-            PC_obj.time_forward(run_time)
+            PC_obj.time_forward(run_time / 2)
+            PC_obj.set_controlled(p_pair[::-1])
+            PC_obj.time_forward(run_time / 2)
+
             PC_obj.get_and_plot(f'{folder}/T{T}_CO({int(p_pair[0] // 1000)})_O2({int(p_pair[1] // 1000)}).png',
                                 plot_params={'time_segment': [0, None], 'additional_plot': ['thetaCO', 'thetaO'],
-                                            'plot_mode': 'separately', 'out_names': [f'CO2_{rate_or_count}']})
+                                             'plot_mode': 'separately', 'out_names': [f'CO2_{rate_or_count}']})
 
             # plot CO2 integral as A. Guda suggested
             idxs = PC_obj.output_history_dt > -1
@@ -404,11 +416,61 @@ def benchmark_runs(PC_obj: ProcessController, out_path: str, rate_or_count: str)
                 # count mode
                 CO2_int = np.cumsum(PC_obj.output_history[:, 3][idxs])
 
+            # CO2 integral over time, ever increasing
             plot_to_file(PC_obj.output_history_dt[idxs], CO2_int, 'CO2 integral',
                          fileName=f'{folder}/T{T}_O2({int(p_pair[0] // 1000)})_CO({int(p_pair[1] // 1000)})_intCO2.png',
                          title='CO2 integral over time',
                          xlabel='Time', ylabel='Integral',
                          xlim=[0., None], ylim=[-0.1, None], )
+
+
+def Ziff_article_runs(PC_obj: ProcessController,
+                      pressure_unit: float,
+                      episode_time,
+                      folder_path: str,
+                      pairs_number=9,
+                      ):
+    pairs = np.zeros((pairs_number, 2), dtype=np.float64)
+    pairs[:, 0] = np.linspace(1, 9, pairs_number)
+    pairs[:, 1] = (pairs[:, 0] - 10) * (-1)
+    pairs = pairs * pressure_unit
+
+    # # DEBUG
+    # pairs = pairs[::2]
+
+    folder_path = make_subdir_return_path(folder_path, prefix='Ziff_', with_date=True, unique=True)
+
+    CO2_and_covs = [0] * 3
+    avgs = np.zeros((pairs.shape[0], 3))
+    for i, p in enumerate(pairs):
+        PC_obj.reset()
+        PC_obj.set_controlled(p)
+        PC_obj.time_forward(episode_time)
+        PC_obj.get_and_plot(f'{folder_path}/Ziff_O2({p[0]})_CO({p[1]}).png',
+                            plot_params={'time_segment': [0, None], 'additional_plot': ['thetaCO', 'thetaO'],
+                                             'plot_mode': 'separately', 'out_names': ['CO2_count']})
+        CO2_and_covs[0] = PC_obj.get_process_output()[1][:, 3]  # should be CO2 output column
+        CO2_and_covs[1] = PC_obj.additional_graph['thetaO'][:CO2_and_covs[0].size]
+        CO2_and_covs[2] = PC_obj.additional_graph['thetaCO'][:CO2_and_covs[0].size]
+
+        for j, v in enumerate(CO2_and_covs):
+            CO2_and_covs[j] = np.mean(v[v.size // 2:])
+
+        avgs[i, :] = np.array(CO2_and_covs)
+
+    x_arr = pairs[:, 0] / pressure_unit
+    lib.plot_to_file(
+                     x_arr, avgs[:, 0], {'label': 'Average CO2 prod. rate', 'linestyle': 'solid',
+                                         'marker': 'h', 'c': 'purple',
+                                         'twin': True,
+                                         },
+                     x_arr, avgs[:, 1], {'label': 'Average O2 coverage', 'linestyle': (0, (1, 1)),
+                                         'marker': 'x', 'c': 'blue'},
+                     x_arr, avgs[:, 2], {'label': 'Average CO coverage', 'linestyle': (0, (5, 5)),
+                                         'marker': '+', 'c': 'red'},
+                     fileName=f'{folder_path}/Ziff_summarize_CO2.png',
+                     xlabel=f'O2, {pressure_unit:.4g} Pa', ylabel='coverages', title='Summarize across benchmark',
+                     twin_params={'ylabel': 'CO2 prod. rate'}, )
 
 
 def KMC_simple_tests():
@@ -428,11 +490,11 @@ def KMC_simple_tests():
     #     Libuda2001_CO_cutoff_policy(PC_obj, run_dir, 0.25, 0.5, 0.75)
 
     # TEST IF COMPARABLE WITH ORIGINAL
-    size = [5, 5]
+    size = [10, 10]
     PC_obj = ProcessController(KMC_CO_O2_Pt_Model((*size, 1), log_on=True,
                                                   O2_top=1.1e5, CO_top=1.1e5,
-                                                  CO2_rate_top=1.4e6, CO2_count_top=3.e2,
-                                                  T=800.),
+                                                  CO2_rate_top=1.4e6, CO2_count_top=1.e4,
+                                                  T=373.),
                                analyser_dt=1.e-6,
                                target_func_to_maximize=get_target_func('CO2_count'),
                                RESOLUTION=1,  # always should be 1 if we use KMC, otherwise we will get wrong results!
@@ -440,6 +502,7 @@ def KMC_simple_tests():
                                supposed_exp_time=1.e-3)
     PC_obj.set_plot_params(input_lims=[-1e-5, None], input_ax_name='Pressure, Pa',
                            output_lims=[-1e-2, None],
+                           additional_lims=[-1e-2, 1. + 1.e-2],
                            # output_ax_name='CO2 formation rate, $(Pt atom * sec)^{-1}$',
                            output_ax_name='CO x O events count')
     PC_obj.set_metrics(
@@ -464,7 +527,8 @@ def KMC_simple_tests():
     # PC_obj.set_controlled((5E3, 5E3))
 
     # BENCHMARK
-    benchmark_runs(PC_obj, './PC_plots/model_benchmarks', 'count')
+    # benchmark_runs(PC_obj, './PC_plots/model_benchmarks', 'count')
+    Ziff_article_runs(PC_obj, 1.e+4, 2.e-5, './PC_plots/Ziff', 21)
 
 
 def main():
