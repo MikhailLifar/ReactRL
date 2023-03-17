@@ -50,10 +50,34 @@ class TwoStepPolicy(AbstractPolicy):
 
     def _call(self, t):
         if isinstance(t, np.ndarray):
-            rems = np.floor(t / (self['t1'] + self['t2']) + 1e-5)
+            rems = np.floor(t / (self['t1'] + self['t2']) + 1e-5)  # TODO bug with 1e-5
             rems = t - rems * (self['t1'] + self['t2'])
             res = np.full_like(t, self['2'])
             res[rems < self['t1']] = self['1']
+            return res
+        raise ValueError
+
+
+class AnyStepPolicy(AbstractPolicy):
+    # TODO try to finish this class
+    names = ()
+
+    def __init__(self, nsteps, params_dict):
+        self.nsteps = nsteps
+        self.names = tuple([str(i) for i in range(1, nsteps + 1)] + [f't{i}' for i in range(1, nsteps + 1)])
+        AbstractPolicy.__init__(self, params_dict)
+        # if len(params_dict):
+        #     self.t_sum = np.sum([self[f't{i}'] for i in range(1, nsteps + 1)])
+
+    def _call(self, t):
+        if isinstance(t, np.ndarray):
+            ts = np.array([0] + [self[f't{i}'] for i in range(1, self.nsteps + 1)])
+            cum_ts = np.cumsum(ts)
+            rems = np.floor(t / cum_ts[-1] + 1e-5)  # TODO bug with 1e-5
+            rems = t - rems * cum_ts[-1]
+            res = np.empty_like(t)
+            for i, t in enumerate(cum_ts[1:]):
+                res[(rems >= cum_ts[i]) & (rems < t)] = self[f'{i + 1}']
             return res
         raise ValueError
 

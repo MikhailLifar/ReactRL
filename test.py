@@ -263,8 +263,22 @@ def working_with_csv_test():
                        )
 
 
+def test_policy():
+    import predefined_policies as pp
+
+    nsteps = 5
+    policy = pp.AnyStepPolicy(nsteps, dict())
+
+    params = {str(i): 10 + i for i in range(1, nsteps + 1)}
+    tparams = {f't{i}': i for i in range(1, nsteps + 1)}
+    policy.set_policy({**params, **tparams})
+    policy(np.linspace(0, 50, 51))
+
+
 if __name__ == '__main__':
-    working_with_csv_test()
+    # working_with_csv_test()
+
+    test_policy()
 
     # benchmark_RL_agents()
 

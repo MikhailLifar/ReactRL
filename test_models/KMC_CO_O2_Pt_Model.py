@@ -8,6 +8,7 @@ import h5py
 
 from ase.build import fcc111
 
+# TODO: This 'append' statements don't look well
 sys.path.append('/home/mikhail/RL_22_07_MicroFluidDroplets')
 OPTIONS_PATH = '/home/mikhail/RL_22_07_MicroFluidDroplets/repos/MonteCoffee_Pt_111_COOx'
 sys.path.append(OPTIONS_PATH)
@@ -44,6 +45,8 @@ class KMC_CO_O2_Pt_Model(BaseModel, NeighborKMCBase):
                            'Events': events_clss}
 
     model_name = 'KMC_CO_O2_Pt'
+
+    LOGS_FOLD_PATH = '/home/mikhail/RL_22_07_MicroFluidDroplets/kMClogs_clean_regulary'
 
     def __init__(self, surf_shape, log_on: bool = False, **params):
         """
@@ -229,22 +232,23 @@ class KMC_CO_O2_Pt_Model(BaseModel, NeighborKMCBase):
                               "Number of site-types (stypes)": len(list(set([m.stype for m in self.system.sites])))
                               })
             accelparams = {"on": self.use_scaling_algorithm, "Ns": self.Ns, "Nf": self.Nf, "ne": self.ne}
-            self.log = Log(logparams, accelparams)
+            self.log = Log(logparams, accelparams, logs_fold_path=self.LOGS_FOLD_PATH)
 
             # Save txt files with site information:
-            np.savetxt("time.txt", [])
-            np.savetxt("coverages.txt", [])
-            np.savetxt("evs_exec.txt", [])
-            np.savetxt("mcstep.txt", [])
+            foldpath = self.LOGS_FOLD_PATH
+            np.savetxt(f'{foldpath}/time.txt', [])
+            np.savetxt(f'{foldpath}/coverages.txt', [])
+            np.savetxt(f'{foldpath}/evs_exec.txt', [])
+            np.savetxt(f'{foldpath}/mcstep.txt', [])
 
-            with open("siteids.txt", "wb") as f2:
+            with open(f'{foldpath}/siteids.txt', 'wb') as f2:
                 np.savetxt(f2, [m.ind for m in self.system.sites])
 
-            with open("stypes.txt", "wb") as f2:
+            with open(f'{foldpath}/stypes.txt', 'wb') as f2:
                 np.savetxt(f2, [m.stype for m in self.system.sites])
 
             if self.save_coverages:
-                f = h5py.File('detail_site_event_evol.hdf5', 'w')
+                f = h5py.File(f'{foldpath}/detail_site_event_evol.hdf5', 'w')
                 d = f.create_dataset("time", (1,), maxshape=(None,), chunks=True, dtype='float')
                 d = f.create_dataset("site", (1,), maxshape=(None,), chunks=True, dtype='int')
                 d = f.create_dataset("othersite", (1,), maxshape=(None,), chunks=True, dtype='int')
@@ -305,4 +309,4 @@ class KMC_CO_O2_Pt_Model(BaseModel, NeighborKMCBase):
 
         """
 
-        Log.save_txt(self)
+        Log.save_txt(self, foldpath=self.LOGS_FOLD_PATH)

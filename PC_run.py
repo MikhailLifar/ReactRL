@@ -490,7 +490,7 @@ def KMC_simple_tests():
     #     Libuda2001_CO_cutoff_policy(PC_obj, run_dir, 0.25, 0.5, 0.75)
 
     # TEST IF COMPARABLE WITH ORIGINAL
-    size = [10, 10]
+    size = [20, 20]
     PC_obj = ProcessController(KMC_CO_O2_Pt_Model((*size, 1), log_on=True,
                                                   O2_top=1.1e5, CO_top=1.1e5,
                                                   CO2_rate_top=1.4e6, CO2_count_top=1.e4,
