@@ -217,83 +217,25 @@ def main_cluster_function():
                           debug_params={'DEBUG': True, 'folder': 'auto'},
                           )
 
-    # optimize_grid_cluster([(gauss_target_1, name1), (gauss_target_2, name2), (gauss_target_3, name3)],
-    #                       [(1.e-5, 1.e-4), (1.e-4, 1.e-4), (1.e-3, 1.e-3), (1.e-2, 1.e-2)],
-    #                       names=(('long_term_target', 'target_func_name'), ('model:O2_top', 'model:CO_top')),
-    #                       policy_type=TwoStepPolicy,
+    # iter_optimize_cluster(func_to_optimize_policy(
+    #                             PC_obj, AnyStepPolicy(cyclesteps, dict()), episode_time, episode_time / 50,
+    #                             expand_description=ext,
+    #                             to_plot={'out_names': ['CO2_count'], 'additional_plot': ['thetaCO', 'thetaO']}),
     #                       optimize_bounds={
-    #                           'O2_1': 'model_lims', 'O2_2': 'model_lims',
-    #                           # 'O2_t1': [5., 100.], 'O2_t2': [5., 100.],
-    #                           'CO_1': 'model_lims', 'CO_2': 'model_lims',
-    #                           # 'CO_t1': [5., 100.], 'CO_t2': [5., 100.],
-    #                           't1': [5., 100.], 't2': [5., 100.],
-    #                       },
-    #                       out_path='./optimize_out/221124_many_targets_same_time',
-    #                       PC_obj=PC_obj,
-    #                       const_params={
-    #                           'model': {
-    #
+    #                           # f'x{i}': (0., 1.) for i in range(1, cyclesteps + 1)
+    #                           'O2': (0., 1.e+5),
+    #                           **{f'alpha{i}': (0., 1.) for i in range(1, cyclesteps + 1)},
     #                           },
-    #                           'iter_optimize': {
-    #                               'method': 'Nelder-Mead',
-    #                               'try_num': 30,
-    #                               'debug_params': {'folder': 'auto', 'DEBUG': True, 'ind_picture': True},
-    #                               'cut_left': False,
-    #                               'cut_right': False,
-    #                           },
-    #                           'expand_description': same_period_ext,
-    #                           'episode_time': 500.,
-    #                           'time_step': 1.,
-    #                           'to_plot': {'out_names': ['CO2', 'long_term_target'],
-    #                                       'additional_plot': ['thetaCO', 'thetaO']}
-    #                       },
-    #                       python_interpreter='../RL_21/venv/bin/python',
+    #                       cut_left=False, cut_right=False,
+    #                       method='Nelder-Mead',
+    #                       try_num=30,
+    #                       on_cluster=False,
+    #                       python_interpreter='../RL_10_21/venv/bin/python',
     #                       file_to_execute_path='repos/parallel_optimize.py',
-    #                       on_cluster=False)
-
-    # optimize_list_cluster([(1.e-5, 1.e-4, same_period_ext, gauss_target_1, name1),  # target 1
-    #                        (1.e-4, 1.e-4, same_period_ext, gauss_target_1, name1),
-    #                        (1.e-3, 1.e-3, same_period_ext, gauss_target_1, name1),
-    #                        (1.e-2, 1.e-2, same_period_ext, gauss_target_1, name1),
-    #                        (1.e-5, 1.e-4, same_period_ext, gauss_target_2, name2),  # target 2
-    #                        (1.e-4, 1.e-4, same_period_ext, gauss_target_2, name2),
-    #                        (1.e-3, 1.e-3, same_period_ext, gauss_target_2, name2),
-    #                        (1.e-2, 1.e-2, same_period_ext, gauss_target_2, name2),
-    #                        (1.e-5, 1.e-4, same_period_ext, gauss_target_3, name3),  # target 3
-    #                        (1.e-4, 1.e-4, same_period_ext, gauss_target_3, name3),
-    #                        (1.e-3, 1.e-3, same_period_ext, gauss_target_3, name3),
-    #                        (1.e-2, 1.e-2, same_period_ext, gauss_target_3, name3),
-    #                        ],
-    #                       ('model:O2_top', 'model:CO_top', 'expand_description', 'long_term_target', 'target_func_name'),
-    #                       TwoStepPolicy,
-    #                       {
-    #                           'O2_1': 'model_lims', 'O2_2': 'model_lims',
-    #                           # 'O2_t1': [5., 100.], 'O2_t2': [5., 100.],
-    #                           'CO_1': 'model_lims', 'CO_2': 'model_lims',
-    #                           # 'CO_t1': [5., 100.], 'CO_t2': [5., 100.],
-    #                           't1': [5., 100.], 't2': [5., 100.],
-    #                       },
-    #                       out_path='./optimize_out/221124_many_targets_same_time',
-    #                       PC_obj=PC_obj,
-    #                       const_params={
-    #                           'model': {
-    #
-    #                           },
-    #                           'iter_optimize': {
-    #                               'method': 'Nelder-Mead',
-    #                               'try_num': 30,
-    #                               'debug_params': {'folder': 'auto', 'DEBUG': True, 'ind_picture': True},
-    #                               'cut_left': False,
-    #                               'cut_right': False,
-    #                           },
-    #                           'episode_time': 500.,
-    #                           'time_step': 1.,
-    #                           'to_plot': {'out_names': ['CO2', 'long_term_target'],
-    #                                       'additional_plot': ['thetaCO', 'thetaO']}
-    #                       },
-    #                       python_interpreter='../RL_21/venv/bin/python',
-    #                       file_to_execute_path='repos/parallel_optimize.py',
-    #                       on_cluster=False)
+    #                       unique_folder=False,
+    #                       out_path='optimize_out/220317_discrete_turns_debug',
+    #                       debug_params={'DEBUG': True, 'folder': 'auto'},
+    #                       )
 
     # CO2_fixed_00001 = get_CO_fixed_ext(1.e-4)
     # CO2_fixed_0001 = get_CO_fixed_ext(1.e-3)
@@ -359,21 +301,6 @@ def main_cluster_function():
     #                       debug_params={'DEBUG': True, 'folder': 'auto'},
     #                       )
     
-    #iter_optimize_cluster(func_to_optimize_policy(PC_obj, ConstantPolicy(dict()), 500, 1.),
-                          #optimize_bounds={
-                              #'O2_value': [0., 10e-5], 'CO_value': [0., 10e-5],
-                              #},
-                          #cut_left=False, cut_right=False,
-                          #method='Nelder-Mead',
-                          #try_num=30,
-                          #on_cluster=True,
-                          #python_interpreter='../RL_21/venv/bin/python',
-                          #file_to_execute_path='code/parallel_optimize.py',
-                          #unique_folder=False,
-                          #out_path='optimize_out/221028_Pd_fixed_CO2_subs_outs',
-                          #debug_params={'DEBUG': True, 'folder': 'auto'},
-                          #)
-    
     #iter_optimize_cluster(func_to_optimize_policy(PC_obj, TwoStepPolicy(dict()), 500, 1.),
                           #optimize_bounds={
                               #'O2_1': [0., 10e-5], 'CO_1': [0., 10e-5],
@@ -426,85 +353,6 @@ def main_cluster_function():
                           #out_path='optimize_out/221021_old_func_two_step',
                           #debug_params={'DEBUG': True, 'folder': 'auto'},
                           #)
-    
-    # new generic func to optimize any policy
-    #iter_optimize_cluster(func_to_optimize_policy(PC_LDegrad, SinPolicy(dict()), episode_time, time_step),
-                          #optimize_bounds={
-                              #'O2_A': [0., 10.e-5], 'O2_omega': [0., 0.1 * np.pi], 'O2_alpha': [0., 2 * np.pi], 'O2_bias': [0., 10.e-5],
-                              #'CO_A': [0., 10.e-5], 'CO_omega': [0., 0.1 * np.pi], 'CO_alpha': [0., 2 * np.pi], 'CO_bias': [0., 10.e-5],
-                              #},
-                          #cut_left=False, cut_right=False,
-                          #method='Nelder-Mead',
-                          #try_num=30,
-                          #on_cluster=True,
-                          #python_interpreter='../RL_21/venv/bin/python',
-                          #file_to_execute_path='code/parallel_optimize.py',
-                          #unique_folder=False,
-                          #out_path='optimize_out/221020_old_func_old_bounds_sin',
-                          #debug_params={'DEBUG': True, 'folder': 'auto'},
-                          #)
-    
-    #iter_optimize_cluster(func_to_optimize_stationary_sol(PC_L2001_low_T, 500),
-                          #optimize_bounds={
-                              #'O2': [0., 10e-5], 'CO': [0., 40e-5]
-                              #},
-                          #cut_left=False, cut_right=False,
-                          #method='Nelder-Mead',
-                          #try_num=20,
-                          #on_cluster=True,
-                          #python_interpreter='../RL_21/venv/bin/python',
-                          #file_to_execute_path='code/parallel_optimize.py',
-                          #unique_folder=False,
-                          #out_path='optimize_out/220929_L2001_T25_O210_CO40',
-                          #debug_params={'DEBUG': True, 'folder': 'auto'},
-                          #)
-    
-    #iter_optimize_cluster(func_to_optimize_sin_sol(PC_L2001, 500, 1.),
-                          #optimize_bounds={
-                              #'O2_A': [0., 10.e-5], 'O2_k': [0., 0.1 * np.pi], 'O2_bias_t': [0., 2 * np.pi], 'O2_bias_f': [0., 10.e-5],
-                              #'CO_A': [0., 10.e-5], 'CO_k': [0., 0.1 * np.pi], 'CO_bias_t': [0., 2 * np.pi], 'CO_bias_f': [0., 10.e-5],
-                              #},
-                          #cut_left=False, cut_right=False,
-                          #method='Nelder-Mead',
-                          #try_num=30,
-                          #on_cluster=True,
-                          #python_interpreter='../RL_21/venv/bin/python',
-                          #file_to_execute_path='code/parallel_optimize.py',
-                          #unique_folder=False,
-                          #out_path='optimize_out/220817_L2001_sin_sol_Nelder_Mead',
-                          #debug_params={'DEBUG': True, 'folder': 'auto'},
-                          #)
-    
-    #iter_optimize_cluster(func_to_optimize_two_step_sol(PC_L2001, 500, 10.),
-                          #optimize_bounds={
-                              #'O2_1': [0., 10e-5], 'CO_1': [0., 10e-5],
-                              #'O2_2': [0., 10e-5], 'CO_2': [0., 10e-5],
-                              #'time_1': [0., 500.], 'time_2': [0., 500.],
-                              #},
-                          #cut_left=False, cut_right=False,
-                          #method='Nelder-Mead',
-                          #try_num=30,
-                          #on_cluster=True,
-                          #python_interpreter='../RL_21/venv/bin/python',
-                          #file_to_execute_path='code/parallel_optimize.py',
-                          #unique_folder=False,
-                          #out_path='optimize_out/220817_L2001_2_step_Nelder_Mead',
-                          #debug_params={'DEBUG': True, 'folder': 'auto'},
-                          #)
-
-    #iter_optimize_cluster(func_to_optimize_stationary_sol(PC_LDegrad, episode_time=500),
-                          #optimize_bounds={'O2': [0., 10e-5], 'CO': [0., 10e-5]}, cut_left=False, cut_right=False,
-                          #method='Nelder-Mead',
-                          #try_num=20,
-                          #on_cluster=False,
-                          #python_interpreter='../RL_10_21/venv/bin/python',
-                          #file_to_execute_path='parallel_optimize.py',
-                          #unique_folder=False,
-                          #out_path='optimize_out/220815_stationary',
-                          #debug_params={'DEBUG': True, 'folder': 'auto'},
-                          #)
-
-    # run_df_and_plot_with_exp(exp_df, model_obj=model_obj, out_folder='parse_and_run_out')
 
     pass
 

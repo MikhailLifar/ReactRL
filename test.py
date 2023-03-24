@@ -5,10 +5,14 @@ import os
 
 import matplotlib.pyplot as plt
 
-import numpy as np
+# import numpy as np
 import cv2
 
 from test_models import TestModel, generate_max_rank_matr
+
+from ProcessController import ProcessController
+import test_models as models
+from targets_metrics import *
 
 
 def read_and_show():
@@ -275,10 +279,56 @@ def test_policy():
     policy(np.linspace(0, 50, 51))
 
 
+def test_jobs_functions():
+    import multiple_jobs_functions as jobfuncs
+
+    size = [10, 10]
+    PC_obj = ProcessController(models.KMC_CO_O2_Pt_Model((*size, 1), log_on=False,
+                                                          O2_top=1.1e5, CO_top=1.1e5,
+                                                          CO2_rate_top=1.4e6, CO2_count_top=1.e4,
+                                                          T=373.),
+                               analyser_dt=0.25e-7,
+                               target_func_to_maximize=get_target_func('CO2_count'),
+                               target_func_name='CO2_count',
+                               target_int_or_sum='sum',
+                               RESOLUTION=1,  # always should be 1 if we use KMC, otherwise we will get wrong results!
+                               supposed_step_count=100,  # memory controlling parameters
+                               supposed_exp_time=1.e-5)
+    PC_obj.set_plot_params(input_lims=[-1e-5, None], input_ax_name='Pressure, Pa',
+                           output_lims=[-1e-2, None],
+                           additional_lims=[-1e-2, 1. + 1.e-2],
+                           # output_ax_name='CO2 formation rate, $(Pt atom * sec)^{-1}$',
+                           output_ax_name='CO x O events count')
+    PC_obj.set_metrics(
+                       # ('CO2', CO2_integral),
+                       ('CO2 count', CO2_count),
+                       # ('O2 conversion', overall_O2_conversion),
+                       # ('CO conversion', overall_CO_conversion)
+                       )
+
+    jobfuncs.run_jobs_list(
+        jobfuncs.one_turn_search_iteration,
+        **(jobfuncs.jobs_list_from_grid(
+            (0.25, 0.2, 0.1),
+            (3.e-8, 5.e-8, 1.e-7, 2.e-7),
+            names=('x1', 't0')
+        )),
+        names_groups=(),
+        const_params={'x0': 0.3, 't1': 2.e-7},
+        sort_iterations_by='Total_CO2_Count',
+        PC=PC_obj,
+        python_interpreter='../RL_10_21/venv/bin/python',
+        out_fold_path='PC_plots/220324_one_turn_search',
+        separate_folds=False,
+    )
+
+
 if __name__ == '__main__':
     # working_with_csv_test()
 
-    test_policy()
+    # test_policy()
+
+    test_jobs_functions()
 
     # benchmark_RL_agents()
 
