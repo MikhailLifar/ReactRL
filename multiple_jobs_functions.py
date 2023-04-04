@@ -59,15 +59,24 @@ def run_jobs_list(
         repeat: int = 1,
         const_params: dict = None,
         sort_iterations_by: str = None,
+        summarize_function: callable = None,
         unique_folder=False,
         python_interpreter='venv/bin/python',
         on_cluster=False,
-        at_same_time: int = 100):
+        at_same_time: int = 30):
 
     import argparse
     # import pickle
     import json
     assert len(names) == len(params_variants[0]), 'Error: lengths mismatch'
+
+    # get arguments from the command line
+    parser = argparse.ArgumentParser()
+    parser.add_argument('iter', type=int, help='optimize conditions from conditions list')
+    # FAILED ATTEMPT TO BUILD QUEUE
+    # parser.add_argument('--start_pos', type=int, default=0, required=False,
+    #                     help='starting position in the list of parameters\nDo not touch it (only internal usage)!')
+    args = parser.parse_args()
 
     # expanding the list to repeat iterations
     if repeat > 1:
@@ -78,21 +87,21 @@ def run_jobs_list(
             new_list += [values_set] * repeat
         params_variants = new_list
 
-    if unique_folder:
+    if unique_folder and (args.start_pos == 0):
+        # TODO multiple folder creation may occur
         out_fold_path = make_subdir_return_path(out_fold_path, with_date=True, unique=True)
     elif not os.path.exists(out_fold_path):
         os.makedirs(out_fold_path)
 
-    # get arguments from the command line
-    parser = argparse.ArgumentParser()
-    parser.add_argument('iter', type=int, help='optimize conditions from conditions list')
-    args = parser.parse_args()
-
     iterations_number = len(params_variants)
     iter_arg = args.iter
+    # start_pos = args.start_pos
     if iter_arg == -1:
+        # -1 iteration launches all the iterations
+
+        # for i in range(start_pos, min(iterations_number, start_pos + at_same_time)):
+        assert iterations_number <= at_same_time, f'Maximum number of iterations is {at_same_time}, unable to do {iterations_number}'
         file_to_execute_path = sys.argv[0]
-        assert iterations_number <= at_same_time, f'{iterations_number} jobs were passed, but the maximum is {at_same_time}'  # TODO TODO TODO
         for i in range(iterations_number):
             if on_cluster:
                 os.system(f'run-cluster -m 3000 -n 1 "{python_interpreter} {file_to_execute_path} {i}"')
@@ -104,7 +113,10 @@ def run_jobs_list(
             os.system(f'{python_interpreter} {file_to_execute_path} -2')
 
     elif iter_arg == -2:
-        # Cycle which run as long as not all the iterations are completed
+        # -2 iteration waits for each iteration completion
+        # and then collects results of the iterations
+
+        # Cycle which run as long as not all the iterations in a chunk are completed
         # and not all the files are created. Cycle does nothing
         path_variants = [f'{out_fold_path}/result_#.json',
                          f'{out_fold_path}/result_#_error.json']
@@ -119,6 +131,23 @@ def run_jobs_list(
         # delay after cycle exit
         sleep(10)
 
+        # if start_pos + at_same_time < iterations_number:
+        #     # queue realization
+        #     # if not all the variants from params_set were tried
+        #     # launch another chunk
+        #
+        #     # QUESTION: what will happen if -1 iteration calls -2 and then -2 iteration calls -1?
+        #     # QUESTION: what will happen if -2 iteration was launched by run-cluster command?
+        #     os.system(f'{python_interpreter} {sys.argv[0]} -1 --start_pos {start_pos + at_same_time}')
+        # else:
+
+        if summarize_function is not None:
+            try:
+                summarize_function(out_fold_path)
+            except Exception:
+                with open(f'{out_fold_path}/summary_failed.txt', 'w') as _:
+                    pass
+
         # The results of different iterations should be collected
         df = pd.DataFrame(index=np.arange(iterations_number))
         for i in range(iterations_number):
@@ -128,11 +157,15 @@ def run_jobs_list(
                 for k, v in {**d['variables'], **d['return']}.items():
                     assert isinstance(v, (int, float, str, bool))
                     df.loc[i, k] = v
+            # os.remove(res_path)
         if (sort_iterations_by is not None) and (sort_iterations_by in df.columns):
             df.sort_values(by=sort_iterations_by, inplace=True, ascending=False)
         df.to_excel(f'{out_fold_path}/results.xlsx', index_label='iteration')
 
     elif iter_arg >= 0:
+        # nonegative iteration corresponds to one variant of the parameters
+        # in the list of parameters
+
         variable_dict = fill_dict(params_variants[iter_arg], names, names_groups)
         if const_params is None:
             const_params = dict()
@@ -154,7 +187,7 @@ def run_jobs_list(
             error_indicator = ''
         except Exception as e:
             ret['Error'] = str(type(e))
-            raise Exception
+            raise e
         finally:
             with open(f'{out_fold_path}/result_{iter_arg}{error_indicator}.json', 'w') as handle:
                 json.dump({'variables': variable_dict, 'return': ret}, handle)
@@ -247,10 +280,11 @@ def jobs_list_from_grid(*value_sets,
     return {'params_variants': params_variants, 'names': names}
 
 
-def one_turn_search_iteration(PC, params: dict, foldpath, it_arg):
+def O2_CO_from_CO_x(x):
+    return 1.e+5 * (1 - x), 1.e+5 * x
 
-    def O2_CO_from_CO_x(x):
-        return 1.e+5 * (1 - x), 1.e+5 * x
+
+def one_turn_search_iteration(PC, params: dict, foldpath, it_arg):
 
     x0, x1 = params['x0'], params['x1']
 
@@ -260,9 +294,86 @@ def one_turn_search_iteration(PC, params: dict, foldpath, it_arg):
     PC.set_controlled(O2_CO_from_CO_x(x1))
     PC.time_forward(params['t1'])
 
-    PC.get_and_plot(f'{foldpath}/OPS_{it_arg}_x0({x0:.4g})_x1({x1:.4g}).png',
+    PC.get_and_plot(f'{foldpath}/OTS_{it_arg}_x0({x0:.4g})_x1({x1:.4g}).png',
                     plot_params={'time_segment': [0, None], 'additional_plot': ['thetaCO', 'thetaO'],
                                  'plot_mode': 'separately', 'out_names': ['CO2_count']})
     R = PC.integrate_along_history(out_name='CO2_count')
 
     return {'Total_CO2_Count': R}
+
+
+def switch_between_pure_iteration(PC, params: dict, foldpath, it_arg):
+    tCO, tO2 = params['tCO'], params['tO2']
+
+    PC.reset()
+    PC.set_controlled(O2_CO_from_CO_x(0.))
+    PC.time_forward(tCO)
+    PC.set_controlled(O2_CO_from_CO_x(1.))
+    PC.time_forward(tO2)
+
+    _, output_history = PC.get_and_plot(f'{foldpath}/SBP_{it_arg}_tO2({tO2:.4g}_tCO({tCO:.4g})).png',
+                                        plot_params={'time_segment': [0, None], 'additional_plot': ['thetaCO', 'thetaO'],
+                                                     'plot_mode': 'separately', 'out_names': ['CO2_count']})
+    R = PC.integrate_along_history(out_name='CO2_count')
+
+    return {'CO2_output': R}
+
+
+def get_for_Ziff_iterations(pressure_unit: float, episode_time):
+    import lib
+    import json
+
+    def Ziff_iteration(PC, params: dict, foldpath, it_arg):
+        CO2_and_covs = [0] * 3
+        PC.reset()
+        PC.set_controlled(params)
+        PC.time_forward(episode_time)
+        PC.get_and_plot(f'{foldpath}/Ziff_O2({params["O2"] / pressure_unit})_CO({params["CO"] / pressure_unit})_{it_arg}.png',
+                        plot_params={'time_segment': [0, None], 'additional_plot': ['thetaCO', 'thetaO'],
+                                     'plot_mode': 'separately', 'out_names': ['CO2_count']})
+        CO2_and_covs[0] = PC.get_process_output()[1][:, 3]  # should be CO2 output column
+        CO2_and_covs[1] = PC.additional_graph['thetaO'][:CO2_and_covs[0].size]
+        CO2_and_covs[2] = PC.additional_graph['thetaCO'][:CO2_and_covs[0].size]
+
+        for j, v in enumerate(CO2_and_covs):
+            CO2_and_covs[j] = np.mean(v[v.size // 2:])
+
+        return {'CO2': CO2_and_covs[0],
+                'thetaO': CO2_and_covs[1],
+                'thetaCO': CO2_and_covs[2], }
+
+    def Ziff_summarize(foldapth):
+        x_arr, avgs = [], []
+        for fname in filter(lambda name: name.endswith('.json'), sorted(os.listdir(foldapth))):
+            with open(f'{foldapth}/{fname}', 'r') as fread:
+                d = json.load(fread)
+                ret_d = d['return']
+                # complicated lists expansion due to possible duplicates of x values
+                x_ax_value = d['variables']['CO'] / pressure_unit
+                idx = next(filter(lambda i: abs(x_ax_value - x_arr[i]) < 1.e-5, range(len(x_arr))), None)
+                if idx is None:
+                    avgs.append([[ret_d['CO2'], ret_d['thetaO'], ret_d['thetaCO']]])
+                    x_arr.append(x_ax_value)
+                else:
+                    avgs[idx].append([ret_d['CO2'], ret_d['thetaO'], ret_d['thetaCO']])
+
+        for i, matr in enumerate(avgs):
+            avgs[i] = np.mean(avgs[i], axis=0)
+        x_arr, avgs = np.array(x_arr), np.array(avgs)
+        idxs = np.argsort(x_arr)
+        x_arr, avgs = x_arr[idxs], avgs[idxs]
+        lib.plot_to_file(x_arr, avgs[:, 0], {'label': 'Average CO2 prod. rate', 'linestyle': 'solid',
+                                             'marker': 'h', 'c': 'purple',
+                                             'twin': True,
+                                             },
+                         x_arr, avgs[:, 1], {'label': 'Average O2 coverage', 'linestyle': (0, (1, 1)),
+                                             'marker': 'x', 'c': 'blue'},
+                         x_arr, avgs[:, 2], {'label': 'Average CO coverage', 'linestyle': (0, (5, 5)),
+                                             'marker': '+', 'c': 'red'},
+                         fileName=f'{foldapth}/Ziff_summarize_CO2.png',
+                         xlabel=f'CO, {pressure_unit:.4g} Pa', ylabel='coverages', title='Summarize across benchmark',
+                         twin_params={'ylabel': 'CO2 prod. rate'}, )
+
+    return {'iteration_function': Ziff_iteration, 'summarize_function': Ziff_summarize}
+
+

@@ -504,11 +504,12 @@ class ProcessController:
         # if isinstance(get_params, dict):
         #     self.get_process_output()
         # else:
-        self.get_process_output()
+        ret = self.get_process_output()
         if isinstance(plot_params, dict):
             self.plot(file_name, **plot_params)
         else:
             self.plot(file_name)
+        return ret
 
     def reset(self):
         self.rng = np.random.default_rng(seed=0)
