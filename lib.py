@@ -10,6 +10,11 @@ matplotlib.rcParams.update(
 )
 
 
+"""
+    ====== JUPYTER =====
+"""
+
+
 def isJupyterNotebook():
     try:
         shell = get_ipython().__class__.__name__
@@ -21,6 +26,11 @@ def isJupyterNotebook():
             return False  # Other type (?)
     except NameError:
         return False      # Probably standard Python interpreter
+
+
+"""
+    ====== Plotting =====
+"""
 
 
 def createfig(interactive=False, figsize=None, figdpi=None, **kwargs):
@@ -269,10 +279,6 @@ def read_plottof_csv(datapath, ret_ops=False, ret_df=False, create_standard: boo
         for i, _ in enumerate(cols[::2]):
             plot_ops += [df[cols[2 * i]].to_numpy(), df[cols[2 * i+1]].to_numpy(), cols[2 * i][:-2]]
 
-    # print(df.shape)
-    # print(df.dtypes)
-    # print(df.columns)
-    # print(df)
     if create_standard:
         dir_part, file_part = os.path.split(datapath)
         f_name, ext = os.path.splitext(file_part)
@@ -285,16 +291,44 @@ def read_plottof_csv(datapath, ret_ops=False, ret_df=False, create_standard: boo
     return plot_ops, df
 
 
-def plot_from_file(*lbls_fmts, csvFileName: str, **plottof_ops):
+def plot_from_file(*lbls_fmts, csvFileName: str, chose_labels=None, transforms=None, **plottof_ops):
     ops, _ = read_plottof_csv(csvFileName, True, False, False)
     for i, l in enumerate(ops[2::3]):
         if l not in lbls_fmts:
             for lf in lbls_fmts:
                 if isinstance(lf, dict) and (l == lf['label']):
                     ops[3 * i + 2] = lf
+
+    if chose_labels is not None:
+        new_ops = []
+        for i, l in enumerate(ops[2::3]):
+            if isinstance(l, str) and (l in chose_labels):
+                new_ops += ops[3*i:3*(i+1)]
+            elif isinstance(l, dict) and (l['label'] in chose_labels):
+                new_ops += ops[3*i:3*(i+1)]
+        ops = new_ops
+
+    for trans_dict in transforms:
+        label_idx = ops.index(trans_dict['old_label'])
+        ops[label_idx - 1] = trans_dict['transform'](ops[label_idx - 1])
+        ops[label_idx] = trans_dict['new_label']
+
     if 'fileName' not in plottof_ops:
         plottof_ops['fileName'] = os.path.splitext(csvFileName)[0] + '.png'
     plot_to_file(*ops, **plottof_ops)
+
+
+"""
+    ====== PYTHON ITERABLES =====
+"""
+
+
+
+
+
+"""
+    ====== ARRAYS AND SERIES =====
+"""
 
 
 def integral(x, y):
@@ -314,6 +348,11 @@ def integral(x, y):
         # one spectrum - one row
         my = (y[:, 1:] + y[:, :-1]) / 2
     return np.dot(my, dx)
+
+
+"""
+    ====== FROM PYFITIT =====
+"""
 
 
 def stableMean(ar, throwCount=1):

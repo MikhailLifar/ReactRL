@@ -85,6 +85,7 @@ class KMC_CO_O2_Pt_Model(BaseModel, NeighborKMCBase):
                                  options_dir=OPTIONS_PATH)
 
         self.size = np.prod(surf_shape)
+        self.params['surf_shape'] = 'x'.join(map(str, surf_shape))
 
         self.COxO_prev_count = 0
 

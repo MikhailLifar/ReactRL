@@ -48,6 +48,19 @@ def safe_merge_nested_dicts(dict1, dict2):
     return ret
 
 
+def flatten_dict_with_only_simple_types(d):
+    # given nested dict returns flatten dict with only simple types values
+    ret = dict()
+    for k0, v0 in d.items():
+        if isinstance(v0, dict):
+            sub_dict = flatten_dict_with_only_simple_types(v0)
+            for k1, v1 in sub_dict.items():
+                ret[f'{k0}::{k1}'] = v1
+        elif isinstance(v0, (int, float, bool, str)):
+            ret[k0] = v0
+    return ret
+
+
 def run_jobs_list(
         iteration_function,
         params_variants: list,
@@ -62,7 +75,7 @@ def run_jobs_list(
         summarize_function: callable = None,
         unique_folder=False,
         python_interpreter='venv/bin/python',
-        on_cluster=False,
+        cluster_command_ops=None,
         at_same_time: int = 30):
 
     import argparse
@@ -103,11 +116,17 @@ def run_jobs_list(
         assert iterations_number <= at_same_time, f'Maximum number of iterations is {at_same_time}, unable to do {iterations_number}'
         file_to_execute_path = sys.argv[0]
         for i in range(iterations_number):
-            if on_cluster:
-                os.system(f'run-cluster -m 3000 -n 1 "{python_interpreter} {file_to_execute_path} {i}"')
+            if cluster_command_ops and (cluster_command_ops is not None):
+                if isinstance(cluster_command_ops, dict):
+                    ops = cluster_command_ops
+                elif cluster_command_ops is True:
+                    ops = {'m': 3000, 'n': 1}
+                else:
+                    raise ValueError(f'Wrong argument value for cluster_command_ops: {cluster_command_ops}')
+                os.system(f'run-cluster -m {ops["m"]} -n {ops["n"]} "{python_interpreter} {file_to_execute_path} {i}"')
             else:
                 os.system(f'{python_interpreter} {file_to_execute_path} {i}')
-        if on_cluster:
+        if cluster_command_ops is not None:
             os.system(f'run-cluster -m 2000 -n 1 "{python_interpreter} {file_to_execute_path} -2"')
         else:
             os.system(f'{python_interpreter} {file_to_execute_path} -2')
@@ -154,6 +173,8 @@ def run_jobs_list(
             res_path = next(filter(os.path.exists, map(lambda p: p.replace('#', str(i)), path_variants)))
             with open(res_path, 'r') as jfile:
                 d = json.load(jfile)
+                for k, subd in d.items():
+                    d[k] = flatten_dict_with_only_simple_types(subd)
                 for k, v in {**d['variables'], **d['return']}.items():
                     assert isinstance(v, (int, float, str, bool))
                     df.loc[i, k] = v
@@ -191,55 +212,6 @@ def run_jobs_list(
         finally:
             with open(f'{out_fold_path}/result_{iter_arg}{error_indicator}.json', 'w') as handle:
                 json.dump({'variables': variable_dict, 'return': ret}, handle)
-
-        # for name in optimize_bounds:
-        #     if optimize_bounds[name] == 'model_lims':
-        #         warnings.warn('CRUTCH HERE!')
-        #         prefix = name[:name.find('_')]
-        #         dict_with_lims = None
-        #         if f'{prefix}_top' in variable_dict['model']:
-        #             dict_with_lims = variable_dict['model']
-        #         elif f'{prefix}_top' in const_params:
-        #             dict_with_lims = const_params['model']
-        #         if f'{prefix}_bottom' in dict_with_lims:
-        #             optimize_bounds[name] = [dict_with_lims[f'{prefix}_bottom'], dict_with_lims[f'{prefix}_top']]
-        #         else:
-        #             optimize_bounds[name] = [0., dict_with_lims[f'{prefix}_top']]
-
-        # model_obj = PC_obj.process_to_control
-        # model_obj.reset()
-        # model_obj.assign_and_eval_values(**(variable_dict['model']), **(const_params['model']))
-
-        # limit_names = [name for name in variable_dict['model'] if '_top' in name]
-        # max_top = max([variable_dict['model'][name] for name in limit_names])
-        # limit_names = [name for name in const_params['model'] if '_top' in name]
-        # max_top = max([const_params['model'][name] for name in limit_names] + [max_top])
-        # if max_top > 0:
-        #     PC_obj.set_plot_params(input_lims=[-1.e-1 * max_top, 1.1 * max_top])
-        # else:
-        #     # PC_obj.set_plot_params(input_lims=None)
-        #     raise NotImplementedError
-        #
-        # for d in [variable_dict, const_params]:
-        #     for attr_name in ['target_func', 'long_term_target']:
-        #         if attr_name in d:
-        #             setattr(PC_obj, attr_name, d[attr_name])
-        #             PC_obj.target_func_name = d['target_func_name']
-
-        # to_func_to_optimize = dict()
-        # for name in ('episode_len', 'time_step', 'to_plot', 'expand_description'):
-        #     if name in variable_dict:
-        #         to_func_to_optimize[name] = variable_dict[name]
-        #     elif name in const_params:
-        #         to_func_to_optimize[name] = const_params[name]
-        #     else:
-        #         raise RuntimeError
-
-        # iter_optimize(func_to_optimize_policy(PC_obj, policy_type(dict()), **to_func_to_optimize),
-        #               optimize_bounds=optimize_bounds,
-        #               **(variable_dict['iter_optimize']), **(const_params['iter_optimize']),
-        #               out_folder=make_subdir_return_path(out_path, name=f'_{iter_arg}', with_date=False, unique=False),
-        #               unique_folder=False)
 
 
 def jobs_list_from_grid(*value_sets,
@@ -302,21 +274,31 @@ def one_turn_search_iteration(PC, params: dict, foldpath, it_arg):
     return {'Total_CO2_Count': R}
 
 
-def switch_between_pure_iteration(PC, params: dict, foldpath, it_arg):
-    tCO, tO2 = params['tCO'], params['tO2']
+def get_for_SBP_iteration(episode_time, first_to_turn: str):
 
-    PC.reset()
-    PC.set_controlled(O2_CO_from_CO_x(0.))
-    PC.time_forward(tCO)
-    PC.set_controlled(O2_CO_from_CO_x(1.))
-    PC.time_forward(tO2)
+    def switch_between_pure_iteration(PC, params: dict, foldpath, it_arg):
+        O2_max, CO_max = params['O2_max'], params['CO_max']
+        t0, t1 = params['first_part'] * params['total'], (1 - params['first_part']) * params['total']
 
-    _, output_history = PC.get_and_plot(f'{foldpath}/SBP_{it_arg}_tO2({tO2:.4g}_tCO({tCO:.4g})).png',
-                                        plot_params={'time_segment': [0, None], 'additional_plot': ['thetaCO', 'thetaO'],
-                                                     'plot_mode': 'separately', 'out_names': ['CO2_count']})
-    R = PC.integrate_along_history(out_name='CO2_count')
+        pressures_to_set = [(O2_max, 0.), (0, CO_max)]
+        if first_to_turn == 'CO':
+            pressures_to_set = pressures_to_set[::-1]
 
-    return {'CO2_output': R}
+        PC.reset()
+        while PC.get_current_time() < episode_time:
+            PC.set_controlled(pressures_to_set[0])
+            PC.time_forward(t0)
+            PC.set_controlled(pressures_to_set[1])
+            PC.time_forward(t1)
+
+        _, output_history = PC.get_and_plot(f'{foldpath}/SBP_{it_arg}_t0({t0:.4g})_t1({t1:.4g}).png',
+                                            plot_params={'time_segment': [0, None], 'additional_plot': ['thetaCO', 'thetaO'],
+                                                         'plot_mode': 'separately', 'out_names': ['CO2_count']})
+        R = PC.integrate_along_history(out_name='CO2_count')
+
+        return {'CO2': R}
+
+    return {'iteration_function': switch_between_pure_iteration}
 
 
 def get_for_Ziff_iterations(pressure_unit: float, episode_time):

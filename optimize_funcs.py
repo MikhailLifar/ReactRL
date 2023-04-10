@@ -1,10 +1,7 @@
-import \
-    copy
+import copy
 import itertools
-import \
-    os
-import \
-    warnings
+import os
+import warnings
 from time import sleep
 
 import numpy as np
@@ -120,167 +117,6 @@ def optimize_different_methods(func_for_optimize, optimize_bounds,
         #     pass
 
 
-def iter_optimize_cluster(func_for_optimize, optimize_bounds, try_num=10,
-                          method=None, optimize_options=None, debug_params=None,
-                          python_interpreter='venv/bin/python',
-                          on_cluster=False,
-                          out_path='.', unique_folder=True,
-                          cut_left=True, cut_right=True,
-                          file_to_execute_path='not_exists.py',
-                          at_same_moment=50):
-    """
-    Запускает несколько раз scipy.minimize и сортирует результаты по убыванию качества
-
-    :param on_cluster:
-    :param python_interpreter:
-    :param file_to_execute_path:
-    :param at_same_moment:
-    :param cut_right:
-    :param cut_left:
-    :param unique_folder:
-    :param func_for_optimize: User defined function to optimize, receiving as an input dict{parameterName: value}
-    :param optimize_bounds: bounds for the parameters dict{parameterName: [min,max]}
-    :param try_num:
-    :param method: optimization method name, argument to scipy minimize function, default - None
-    :param optimize_options: argument to scipy minimize function
-    :param debug_params: if is not None, then after each optimization try will be called func_for_optimize(min, **debug_params)
-    :param out_path:
-    :return:
-    """
-
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument('iteration', type=int,
-                        help='iteration of the optimization process',)
-    args = parser.parse_args()
-
-    if not os.path.exists(out_path):
-        os.makedirs(out_path)
-    if unique_folder:
-        if args.iteration == -1:
-            with open(f'{out_path}/helper.txt', 'w') as f:
-                out_path = make_subdir_return_path(out_path)
-                f.write(f'{out_path}\n')
-        else:
-            with open(f'{out_path}/helper.txt', 'r') as f:
-                sleep(10)
-                out_path = f.readline()[:-1]
-    if debug_params is not None:
-        if 'folder' in debug_params:
-            if debug_params['folder'] == 'auto':
-                debug_params['folder'] = out_path
-
-    rng = np.random.default_rng(0)
-    dim = len(optimize_bounds)
-    param_names = sorted(list(optimize_bounds.keys()))
-    optimize_bounds = [optimize_bounds[pn] for pn in param_names]
-    max_arr = np.zeros(dim)
-    min_arr = np.zeros(dim)
-    for i in range(dim):
-        min_arr[i] = optimize_bounds[i][0]
-        max_arr[i] = optimize_bounds[i][1]
-    range_arr = max_arr - min_arr
-
-    def convert_to_dict(vector):
-        return {el: vector[i] for i, el in enumerate(param_names)}
-
-    def func_for_optimize1(vector):
-        return func_for_optimize(convert_to_dict(vector))
-
-    points = np.array(list(itertools.product(*([[0., 1.]] * dim))))
-    points[1], points[-1] = points[-1], points[1]
-    perm = rng.permutation(len(points)-2)
-    points[2:] = points[2 + perm, :]
-    eps = 0.01
-    if cut_left:
-        points[points == 0] += eps
-    if cut_right:
-        points[points == 1] -= eps
-
-    if args.iteration == -1:
-        try_ind = 0
-        # DELAY = 20
-        assert try_num <= at_same_moment, 'too many parallelization'
-        # TODO improve the code allowing try_num > at_same_moment
-        while try_ind < try_num:
-            if on_cluster:
-                os.system(f'run-cluster -n 1 -m 3000 "{python_interpreter} {file_to_execute_path} {try_ind}"')
-            else:
-                os.system(f'{python_interpreter} {file_to_execute_path} {try_ind}')
-            # sleep(DELAY)
-            try_ind += 1
-        if on_cluster:
-            os.system(f'run-cluster -n 1 -m 2000 "{python_interpreter} {file_to_execute_path} -2"')
-        else:
-            os.system(f'{python_interpreter} {file_to_execute_path} -2')
-    elif args.iteration == -2:
-        # Cycle which run so far so not all the iterations are completed
-        # and not all the files are created. Cycle does nothing
-        file_not_found = True
-        while file_not_found:
-            file_not_found = False
-            for i in range(try_num):
-                if not os.path.exists(f'{out_path}/result_{i}.txt'):
-                    file_not_found = True
-        # delay after cycle exit
-        sleep(10)
-        # summarize outputs of different iterations in one file
-        # and remove individual file for each iteration
-        with open(f'{out_path}/results.txt', 'w') as _:
-            pass
-        for i in range(try_num):
-            with open(f'{out_path}/result_{i}.txt', 'r') as f:
-                info = f.read()
-            with open(f'{out_path}/results.txt', 'a') as f:
-                f.write(info)
-            os.remove(f'{out_path}/result_{i}.txt')
-    else:
-        try_ind = args.iteration
-        # if try_ind == 2:  # DEBUG statement
-        #     pass
-        if (try_ind % 2 == 0) and (try_ind//2 < points.shape[0]):
-            init_point = points[try_ind // 2] * range_arr + min_arr
-        else:
-            init_point = rng.random(dim) * range_arr + min_arr
-        res = optimize.minimize(func_for_optimize1, init_point,
-                                method=method, options=optimize_options, bounds=optimize_bounds)
-        s = f'min={res.fun:.4f} params: {convert_to_dict(res.x)}' \
-            f'\nsuccess: {res.success}\nstatus: {res.status}\nmessage: {res.message}\n'
-        s = '--Optimize iteration results--\n' + s
-        with open(f'{out_path}/result_{try_ind}.txt', 'w') as fout:
-            fout.write(s)
-            fout.flush()
-        if debug_params is not None:
-            debug_params['ind_picture'] = str(try_ind)
-            func_for_optimize(convert_to_dict(res.x), **debug_params)
-
-        # with open(f'{out_folder}/check.txt', 'a') as f:
-        #     f.write(f'yes{try_ind}')
-
-
-def fill_dict(values: list, values_names: tuple):
-    variable_dict = dict()
-    variable_dict['model'] = dict()
-    variable_dict['iter_optimize'] = dict()
-    for i, name in enumerate(values_names):
-        find = False
-        for subset_name in variable_dict.keys():
-            if f'{subset_name}:' in name:
-                find = True
-                sub_name = name[name.find(':') + 1:]
-                # # special cases
-                # if False:
-                #     pass
-                # # general case
-                # else:
-                variable_dict[subset_name][sub_name] = values[i]
-        # assert find, f'Error! Invalid name: {name}'
-        if not find:
-            variable_dict[name] = values[i]
-
-    return variable_dict
-
-
 def optimize_list_cluster(params_variants: list,
                           names: tuple,
                           # repeat: int = 1,
@@ -384,41 +220,121 @@ def optimize_list_cluster(params_variants: list,
                       unique_folder=False)
 
 
-def optimize_grid_cluster(*value_sets,
-                        names: tuple,
-                        **opt_list_args):
+def get_for_repeated_opt_iterations(func_for_optimize, optimize_bounds, cut_left=True, cut_right=True,
+                                    method=None, try_num=30,
+                                    optimize_options=None, debug_params=None):
 
-    assert len(names) == len(value_sets), 'Error: lengths mismatch'
-    params_variants = list(itertools.product(*value_sets))
-    contains_tuple = False
-    # if tuple names contains subtuple of names
-    for it in names:
-        if isinstance(it, tuple):
-            contains_tuple = True
-            break
-    if contains_tuple:
-        # realisation of grid not for the single parameter,
-        # but for the sets of parameters,
-        # i. e. creation grid of the form
-        # [
-        #  [a11, a12, a13..., b11, b12..., ...], [a11, a12, a13..., b21, b22..., ...], [a11, a12, a13..., b31, b32.., ...],
-        #  [a21, a22, a23..., b11, b12..., ...], [a21, a22, a23..., b21, b22..., ...], [a21, a22, a23..., b31, b32.., ...],
-        #  ]
-        for i, _ in enumerate(params_variants):
-            new_params_set = []
-            for j, it in enumerate(names):
-                if isinstance(it, tuple):
-                    for k, _ in enumerate(it):
-                        new_params_set.append(params_variants[i][j][k])
+    rng = np.random.default_rng(0)
+    dim = len(optimize_bounds)
+    param_names = sorted(list(optimize_bounds.keys()))
+    optimize_bounds = [optimize_bounds[pn] for pn in param_names]
+    max_arr = np.zeros(dim)
+    min_arr = np.zeros(dim)
+    for i in range(dim):
+        min_arr[i] = optimize_bounds[i][0]
+        max_arr[i] = optimize_bounds[i][1]
+    range_arr = max_arr - min_arr
+
+    def convert_to_dict(vector):
+        return {el: vector[i] for i, el in enumerate(param_names)}
+
+    def func_for_optimize1(vector):
+        return func_for_optimize(convert_to_dict(vector))
+
+    points = np.array(list(itertools.product(*([[0., 1.]] * dim))))
+    points[1], points[-1] = points[-1], points[1]
+    perm = rng.permutation(len(points)-2)
+    points[2:] = points[2 + perm, :]
+    eps = 0.01
+    if cut_left:
+        points[points == 0] += eps
+    if cut_right:
+        points[points == 1] -= eps
+
+    def repeated_optimization_iteration(PC, params: dict, foldpath, it_arg):
+        try_ind = it_arg
+        if (try_ind % 2 == 0) and (try_ind//2 < points.shape[0]):
+            init_point = points[try_ind // 2] * range_arr + min_arr
+        else:
+            init_point = rng.random(dim) * range_arr + min_arr
+        res = optimize.minimize(func_for_optimize1, init_point,
+                                method=method, options=optimize_options, bounds=optimize_bounds)
+        s = f'iteration: {it_arg}\n' \
+            f'min={res.fun:.4f} params: {convert_to_dict(res.x)}' \
+            f'\nsuccess: {res.success}\nstatus: {res.status}\nmessage: {res.message}\n'
+
+        with open(f'{foldpath}/_optim_result_{try_ind}.txt', 'w') as fout:
+            fout.write(s)
+            fout.flush()
+        if debug_params is not None:
+            local_debug = dict()
+            local_debug['ind_picture'] = str(try_ind)
+            if ('folder' in debug_params) and (debug_params['folder'] == 'auto'):
+                local_debug['folder'] = foldpath
+            func_for_optimize(convert_to_dict(res.x), **{**debug_params, **local_debug})
+
+        return {'fvalue': res.fun, 'value_at': convert_to_dict(res.x)}
+
+    def repeated_optimize_summarize(foldpath):
+        with open(f'{foldpath}/optim_results.txt', 'w') as fout:
+            for fname in filter(lambda name: name.startswith('_optim') and name.endswith('.txt'), os.listdir(foldpath)):
+                with open(f'{foldpath}/{fname}', 'r') as f:
+                    info = f.read()
+                os.remove(f'{foldpath}/{fname}')
+                fout.write(info)
+                fout.write('\n')
+
+    return {'iteration_function': repeated_optimization_iteration,
+            'summarize_function': repeated_optimize_summarize,
+            'params_variants': [(0, )] * try_num, 'names': ('___', ),  'names_groups': (),  # TODO crutch here (many fictive parameters)
+            }
+
+
+def get_for_param_opt_iterations(policy_type, optimize_bounds):
+
+    def parametric_optimization_iteration(PC, params: dict, foldpath, it_arg):
+        for name in optimize_bounds:
+            if optimize_bounds[name] == 'model_lims':
+                warnings.warn('CRUTCH HERE!')
+                prefix = name[:name.find('_')]
+                dict_with_lims = None
+                if f'{prefix}_top' in params['model']:
+                    dict_with_lims = params['model']
+                if f'{prefix}_bottom' in dict_with_lims:
+                    optimize_bounds[name] = [dict_with_lims[f'{prefix}_bottom'], dict_with_lims[f'{prefix}_top']]
                 else:
-                    new_params_set.append(params_variants[i][j])
-            params_variants[i] = new_params_set
-        new_names = []
-        for it in names:
-            if isinstance(it, tuple):
-                for name in it:
-                    new_names.append(name)
+                    optimize_bounds[name] = [0., dict_with_lims[f'{prefix}_top']]
+
+        model_obj = PC.process_to_control
+        model_obj.reset()
+        model_obj.assign_and_eval_values(params['model'])
+
+        limit_names = [name for name in params['model'] if '_top' in name]
+        max_top = max([params['model'][name] for name in limit_names])
+        if max_top > 0:
+            PC.set_plot_params(input_lims=[-1.e-1 * max_top, 1.1 * max_top])
+        else:
+            # PC_obj.set_plot_params(input_lims=None)
+            raise NotImplementedError
+
+        for d in params:
+            for attr_name in ['target_func', 'long_term_target']:
+                if attr_name in d:
+                    setattr(PC, attr_name, d[attr_name])
+                    PC.target_func_name = d['target_func_name']
+
+        to_func_to_optimize = dict()
+        for name in ('episode_len', 'time_step', 'to_plot', 'expand_description'):
+            if name in params:
+                to_func_to_optimize[name] = params[name]
             else:
-                new_names.append(it)
-        names = tuple(new_names)
-    optimize_list_cluster(params_variants, names, **opt_list_args)
+                raise RuntimeError
+
+        iter_optimize(func_to_optimize_policy(PC, policy_type(dict()), **to_func_to_optimize),
+                      optimize_bounds=optimize_bounds,
+                      **(params['iter_optimize']),
+                      out_folder=make_subdir_return_path(foldpath, name=f'_{it_arg}', with_date=False, unique=False),
+                      unique_folder=False)
+        pass
+
+    return {'iteration_function': parametric_optimization_iteration}

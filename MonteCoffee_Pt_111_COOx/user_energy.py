@@ -50,8 +50,8 @@ def get_Ea(ECO, EO):
         Reaction energy barrier of CO*+O*->CO2(g) in eV.
 
     """
-    ETS = 0.824 * (-EO -ECO)+0.168+0.47238  # M. Lifar commented  # How much larger is the energy of CO and O wrt Pt(111)
-    Ea = ETS+ECO+EO  # M. Lifar commented  # Translate the barriers relative to Pt(111)
+    # ETS = 0.824 * (-EO -ECO)+0.168+0.47238  # M. Lifar commented  # How much larger is the energy of CO and O wrt Pt(111)
+    # Ea = ETS+ECO+EO  # M. Lifar commented  # Translate the barriers relative to Pt(111)
     Ea = 0
     # Ea *= 0.6  # 0.6
     return Ea

@@ -330,7 +330,7 @@ class ProcessController:
 
     def get_info(self):
         s = ''
-        for name in ('RESOLUTION', 'target_func_name'):
+        for name in ('analyser_dt', 'RESOLUTION', 'target_func_name'):
             s += f'{name}: {getattr(self, name)}\n'
         s += 'controlled names: '
         for name in self.controlled_names:

@@ -278,15 +278,15 @@ def count_conversion_given_exp(csv_path, L_model: LibudaModel):
     new_df.to_csv(new_path, index=False)
 
 
-def plot_conv(csv_path):
-    df = pd.read_csv(csv_path)
-
-    plot_file_path, _ = os.path.splitext(csv_path)
-    plot_file_path = f'{plot_file_path}.png'
-    lib.plot_to_file(df['Time'], df['CO_conversion'],  'CO conversion',
-                     df['Time'], df['O2_conversion'], 'O2 conversion',
-                     title='Conversion',
-                     ylim=None, save_csv=False, fileName=plot_file_path)
+# def plot_conv(csv_path):
+#     df = pd.read_csv(csv_path)
+#
+#     plot_file_path, _ = os.path.splitext(csv_path)
+#     plot_file_path = f'{plot_file_path}.png'
+#     lib.plot_to_file(df['Time'], df['CO_conversion'],  'CO conversion',
+#                      df['Time'], df['O2_conversion'], 'O2 conversion',
+#                      title='Conversion',
+#                      ylim=None, save_csv=False, fileName=plot_file_path)
 
 
 def Libuda2001_CO_cutoff_policy(PC_obj: ProcessController, dest_dir='./PC_plots/Libuda_orginal',
@@ -424,55 +424,6 @@ def benchmark_runs(PC_obj: ProcessController, out_path: str, rate_or_count: str,
                          xlim=[0., None], ylim=[-0.1, None], )
 
 
-def Ziff_article_runs(PC_obj: ProcessController,
-                      pressure_unit: float,
-                      episode_time,
-                      folder_path: str,
-                      pairs_number=9,
-                      ):
-    pairs = np.zeros((pairs_number, 2), dtype=np.float64)
-    pairs[:, 0] = np.linspace(1, 9, pairs_number)
-    pairs[:, 1] = (pairs[:, 0] - 10) * (-1)
-    pairs = pairs * pressure_unit
-
-    # # DEBUG
-    # pairs = pairs[::2]
-
-    folder_path = make_subdir_return_path(folder_path, prefix='Ziff_', with_date=True, unique=True)
-
-    CO2_and_covs = [0] * 3
-    avgs = np.zeros((pairs.shape[0], 3))
-    for i, p in enumerate(pairs):
-        PC_obj.reset()
-        PC_obj.set_controlled(p)
-        PC_obj.time_forward(episode_time)
-        PC_obj.get_and_plot(f'{folder_path}/Ziff_O2({p[0]})_CO({p[1]}).png',
-                            plot_params={'time_segment': [0, None], 'additional_plot': ['thetaCO', 'thetaO'],
-                                             'plot_mode': 'separately', 'out_names': ['CO2_count']})
-        CO2_and_covs[0] = PC_obj.get_process_output()[1][:, 3]  # should be CO2 output column
-        CO2_and_covs[1] = PC_obj.additional_graph['thetaO'][:CO2_and_covs[0].size]
-        CO2_and_covs[2] = PC_obj.additional_graph['thetaCO'][:CO2_and_covs[0].size]
-
-        for j, v in enumerate(CO2_and_covs):
-            CO2_and_covs[j] = np.mean(v[v.size // 2:])
-
-        avgs[i, :] = np.array(CO2_and_covs)
-
-    x_arr = pairs[:, 0] / pressure_unit
-    lib.plot_to_file(
-                     x_arr, avgs[:, 0], {'label': 'Average CO2 prod. rate', 'linestyle': 'solid',
-                                         'marker': 'h', 'c': 'purple',
-                                         'twin': True,
-                                         },
-                     x_arr, avgs[:, 1], {'label': 'Average O2 coverage', 'linestyle': (0, (1, 1)),
-                                         'marker': 'x', 'c': 'blue'},
-                     x_arr, avgs[:, 2], {'label': 'Average CO coverage', 'linestyle': (0, (5, 5)),
-                                         'marker': '+', 'c': 'red'},
-                     fileName=f'{folder_path}/Ziff_summarize_CO2.png',
-                     xlabel=f'O2, {pressure_unit:.4g} Pa', ylabel='coverages', title='Summarize across benchmark',
-                     twin_params={'ylabel': 'CO2 prod. rate'}, )
-
-
 def KMC_simple_tests():
     # size = [20, 20]
     # PC_obj = ProcessController(KMC_CO_O2_Pt_Model((*size, 1), log_on=True, O2_top=1.1e-4, CO_top=1.1e-4,),
@@ -528,7 +479,6 @@ def KMC_simple_tests():
 
     # BENCHMARK
     # benchmark_runs(PC_obj, './PC_plots/model_benchmarks', 'count')
-    Ziff_article_runs(PC_obj, 1.e+4, 2.e-5, './PC_plots/Ziff', 21)
 
 
 def main():

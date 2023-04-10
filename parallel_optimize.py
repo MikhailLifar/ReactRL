@@ -5,6 +5,8 @@ from ProcessController import *
 from predefined_policies import *
 from targets_metrics import *
 
+from multiple_jobs_functions import run_jobs_list
+
 
 def main_cluster_function():
     # # EXPERIMENTAL DATA READING
@@ -57,7 +59,12 @@ def main_cluster_function():
     #                                                 debug_params={'DEBUG': True, 'folder': 'auto', 'ind_picture': None},
     #                                                 cut_left=False, cut_right=False,)
 
-    episode_time = 500
+    # episode_time = 500
+
+    # DEBUG
+    # def test_func(func_description: dict, DEBUG=False, folder=None, ind_picture=None):
+    #     x = func_description['x']
+    #     return (x - 2) ** 4 + 1
     
     # PC_L2001_low_T = ProcessController(test_models.LibudaModel(init_cond={'thetaCO': 0., 'thetaO': 0., }, Ts=273+25),
     #                                          target_func_to_maximize=target)
@@ -92,19 +99,18 @@ def main_cluster_function():
     #                                supposed_step_count=2 * episode_time // time_step,  # memory controlling parameters
     #                                supposed_exp_time=2 * episode_time)
 
-    size = [10, 10]
+    size = [20, 20]
     PC_KMC = ProcessController(KMC_CO_O2_Pt_Model((*size, 1), log_on=True,
                                                   O2_top=1.1e5, CO_top=1.1e5,
-                                                  CO2_rate_top=2.e5, CO2_count_top=2.e3,
+                                                  CO2_rate_top=3.e5, CO2_count_top=1.e4,
                                                   T=373.),
-                               analyser_dt=1.e-7,
+                               analyser_dt=0.1e-7,
                                target_func_to_maximize=get_target_func('CO2_count'),
                                target_func_name='CO2_count',
                                target_int_or_sum='sum',
                                RESOLUTION=1,  # ATTENTION! Always should be 1 if we use KMC, otherwise we will get wrong results!
-                               supposed_step_count=100,  # memory controlling parameters
+                               supposed_step_count=1000,  # memory controlling parameters
                                supposed_exp_time=1.e-5)
-
     PC_obj = PC_KMC
     # O2_top = 10.e-4
     # CO_top = 10.e-4
@@ -116,6 +122,7 @@ def main_cluster_function():
                        # ('O2 conversion', overall_O2_conversion),
                        # ('CO conversion', overall_CO_conversion)
     )
+
     # PC_obj.process_to_control.assign_and_eval_values(O2_top=O2_top, CO_top=CO_top)
     # PC_obj.set_plot_params(output_lims=None, output_ax_name='?',
     #                        input_ax_name='Pressure, Pa')
@@ -155,10 +162,10 @@ def main_cluster_function():
     #     return fixed_sum_ext
 
     # def get_equal_periods_ext(n, t_value):
-    #     def fixed_sum_ext(d):
+    #     def equal_periods_ext(d):
     #         for i in range(n):
     #             d[f't{i}'] = t_value
-    #     return fixed_sum_ext
+    #     return equal_periods_ext
 
     # def get_complicated_ext(sum_press, ncycle, t_value):
     #     def complicated_ext(d):
@@ -169,53 +176,86 @@ def main_cluster_function():
     #             # del d[f'x{i}']
     #     return complicated_ext
 
-    def get_discrete_turns_ext(sum_press, ncycle, t_value, min_bound=0.):
-        def complicated_ext(d):
-            O2_level = d['O2']
-            CO_level = sum_press - d['O2']
-            for i in range(1, ncycle + 1):
-                d[f'O2_t{i}'] = d[f'CO_t{i}'] = t_value
+    # def get_discrete_turns_ext(sum_press, ncycle, t_value, min_bound=0.):
+    #     def complicated_ext(d):
+    #         O2_level = d['O2']
+    #         CO_level = sum_press - d['O2']
+    #         for i in range(1, ncycle + 1):
+    #             d[f'O2_t{i}'] = d[f'CO_t{i}'] = t_value
+    #
+    #             if d[f'alpha{i}'] < 1./3:
+    #                 d[f'O2_{i}'] = min_bound
+    #                 d[f'CO_{i}'] = CO_level
+    #             elif d[f'alpha{i}'] < 2./3:
+    #                 d[f'O2_{i}'] = O2_level
+    #                 d[f'CO_{i}'] = min_bound
+    #             else:
+    #                 d[f'O2_{i}'] = O2_level
+    #                 d[f'CO_{i}'] = CO_level
+    #
+    #     return complicated_ext
 
-                if d[f'alpha{i}'] < 1./3:
-                    d[f'O2_{i}'] = min_bound
-                    d[f'CO_{i}'] = CO_level
-                elif d[f'alpha{i}'] < 2./3:
-                    d[f'O2_{i}'] = O2_level
-                    d[f'CO_{i}'] = min_bound
-                else:
-                    d[f'O2_{i}'] = O2_level
-                    d[f'CO_{i}'] = CO_level
+    def get_switch_between_pure_ext(max_dict, first_turned):
+        second_turns = ('O2' if first_turned == 'CO' else 'CO')
 
-        return complicated_ext
+        def switch_between_pure(d):
+            d[f'{first_turned}_1'] = max_dict[first_turned]
+            d[f'{second_turns}_1'] = 0.
+
+            d[f'{second_turns}_2'] = max_dict[second_turns]
+            d[f'{first_turned}_2'] = 0.
+
+            d['O2_t1'] = d['CO_t1'] = d['t1']
+            d['O2_t2'] = d['CO_t2'] = d['t2']
+
+        return switch_between_pure
 
     # OPTIMIZER CALL
-    episode_time = 1.e-6
-    sum_of_pressures = 1.e+5
+    episode_time = 2.e-6
+    # sum_of_pressures = 1.e+5
     cyclesteps = 2
-    nsteps = 4
-    # ext = get_fixed_sum_ext(sum_of_pressures)
-    # ext = get_equal_periods_ext(4, 2.e-7)
-    # ext = get_complicated_ext(sum_of_pressures, cyclesteps, episode_time / nsteps)
-    ext = get_discrete_turns_ext(sum_of_pressures, cyclesteps, episode_time / nsteps)
-    iter_optimize_cluster(func_to_optimize_policy(
-                                PC_obj, AnyStepPolicy(cyclesteps, dict()), episode_time, episode_time / 50,
-                                expand_description=ext,
-                                to_plot={'out_names': ['CO2_count'], 'additional_plot': ['thetaCO', 'thetaO']}),
-                          optimize_bounds={
-                              # f'x{i}': (0., 1.) for i in range(1, cyclesteps + 1)
-                              'O2': (0., 1.e+5),
-                              **{f'alpha{i}': (0., 1.) for i in range(1, cyclesteps + 1)},
-                              },
-                          cut_left=False, cut_right=False,
-                          method='Nelder-Mead',
-                          try_num=30,
-                          on_cluster=False,
-                          python_interpreter='../RL_10_21/venv/bin/python',
-                          file_to_execute_path='repos/parallel_optimize.py',
-                          unique_folder=False,
-                          out_path='optimize_out/220317_discrete_turns_debug',
-                          debug_params={'DEBUG': True, 'folder': 'auto'},
-                          )
+    # nsteps = 4
+    # ext = get_discrete_turns_ext(sum_of_pressures, cyclesteps, episode_time / nsteps)
+    ext = get_switch_between_pure_ext({'O2': 1.e+5, 'CO': 1.e+5, }, first_turned='O2')
+    run_jobs_list(**get_for_repeated_opt_iterations(func_to_optimize_policy(
+                                                        PC_obj, AnyStepPolicy(cyclesteps, dict()), episode_time, episode_time / 1000,
+                                                        expand_description=ext,
+                                                        to_plot={'out_names': ['CO2_count'], 'additional_plot': ['thetaCO', 'thetaO']}),
+                                                    optimize_bounds={'t1': (1.e-8, 1.5e-8), 't2': (1.5e-7, 2.e-7)},
+                                                    cut_left=False, cut_right=False,
+                                                    method='Nelder-Mead', try_num=5,
+                                                    debug_params={'DEBUG': True, 'folder': 'auto'},
+                                                    optimize_options={'maxiter': 1}),
+                  PC=PC_obj,
+                  out_fold_path='./optimize_out/DEBUG/230407_SBP_light_mode',
+                  separate_folds=False,
+                  repeat=3,
+                  const_params={},
+                  sort_iterations_by='fvalue',
+                  python_interpreter='../RL_10_21/venv/bin/python',
+                  at_same_time=30,
+                  )
+
+    # iter_optimize_cluster(func_to_optimize_policy(
+    #                             PC_obj, AnyStepPolicy(cyclesteps, dict()), episode_time, episode_time / 1000,
+    #                             expand_description=ext,
+    #                             to_plot={'out_names': ['CO2_count'], 'additional_plot': ['thetaCO', 'thetaO']}),
+    #                       optimize_bounds={
+    #                           # f'x{i}': (0., 1.) for i in range(1, cyclesteps + 1)
+    #                           # 'O2': (0., 1.e+5),
+    #                           # **{f'alpha{i}': (0., 1.) for i in range(1, cyclesteps + 1)},
+    #                           't1': (1.e-8, 2.e-7), 't2': (1.e-8, 2.e-7),
+    #                           },
+    #                       cut_left=False, cut_right=False,
+    #                       method='Nelder-Mead',
+    #                       try_num=30,
+    #                       on_cluster=False,
+    #                       python_interpreter='../RL_10_21/venv/bin/python',
+    #                       file_to_execute_path='repos/parallel_optimize.py',
+    #                       unique_folder=False,
+    #                       out_path='optimize_out/230405_switch_between_pure',
+    #                       debug_params={'DEBUG': True, 'folder': 'auto'},
+    #                       )
 
     # iter_optimize_cluster(func_to_optimize_policy(
     #                             PC_obj, AnyStepPolicy(cyclesteps, dict()), episode_time, episode_time / 50,
