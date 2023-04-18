@@ -323,12 +323,20 @@ def test_jobs_functions():
     )
 
 
+def Libuda_coefs_estimation():
+    import test_models
+    model = test_models.LibudaModel()
+    model.update([1.e-4, 1.e-4], 1, True)
+
+
 if __name__ == '__main__':
     # working_with_csv_test()
 
     # test_policy()
 
-    test_jobs_functions()
+    # test_jobs_functions()
+
+    Libuda_coefs_estimation()
 
     # benchmark_RL_agents()
 

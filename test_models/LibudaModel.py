@@ -186,6 +186,9 @@ class LibudaModel(BaseModel):
         self.thetaCO += (k1 * S_CO - k2 * thetaCO - k4 * thetaCO * thetaO) * delta_t
         self.thetaO += (2 * k3 * S_O2 - k4 * thetaCO * thetaO) * delta_t
 
+        # # coefs estimation print
+        # print(f'k1: {k1 * self["S0_CO"]}; k2: {k2}; k3: {k3 * self["S0_O2"]}; k4: {k4}')
+
         # self.plot['k1*S_CO'] = k1 * S_CO
         # self.plot['k2*thetaCO'] = k2 * thetaCO
         # self.plot['k4*thetaCO*thetaO'] = k4 * thetaCO * thetaO

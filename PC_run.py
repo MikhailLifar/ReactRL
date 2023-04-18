@@ -1,8 +1,6 @@
 import os
 
-import \
-    numpy as np
-# import numpy as np
+import numpy as np
 import pandas as pd
 
 from ProcessController import *
@@ -12,6 +10,8 @@ from targets_metrics import *
 
 from usable_functions import make_subdir_return_path
 from lib import plot_to_file
+
+import PC_setup
 
 
 def check_func_to_optimize():
@@ -90,17 +90,29 @@ def check_func_to_optimize():
 #     return R
 
 
-def bunch_of_policies(PC: ProcessController):
-    lims = PC.process_to_control.limits['input']
-    if lims.shape[0] == 2:
-        # constant policy
-        first_policy = ConstantPolicy(dict())
-        second_policy = ConstantPolicy(dict())
-        coefs = np.array([[0.2, 1.], [0.4, 0.7], [0.5, 0.5], [0.7, 0.4], [1., 0.2], ])
-        for p in coefs:
-            first_policy.set_policy({'value': p[0] * lims[0][1]})
-            second_policy.set_policy({'value': p[1] * lims[1][1]})
-    raise NotImplementedError
+def run_constant_policies_bunch(PC: ProcessController,
+                                episode_time, resolution,
+                                out_foldpath: str,
+                                input_limits=None, variants=None,
+                                plot_params: dict = None):
+    if input_limits is None:
+        input_limits = PC.process_to_control.limits['input']
+    else:
+        assert len(input_limits) == len(PC.process_to_control.limits['input'])
+    policies = []
+    for _ in input_limits:
+        policies.append(ConstantPolicy(dict()))
+    if variants is None:
+        assert len(input_limits) == 2
+        variants = np.array([(i * 0.1, (10 - i) * 0.1) for i in range(1, 10)])
+    assert plot_params is not None
+    for v in variants:
+        PC.reset()
+        for i, p in enumerate(policies):
+            p.set_policy({'value': v[i] * input_limits[i][1]})
+        PC.process_by_policy_objs(policies, episode_time, resolution)
+        run_id = '_'.join(map(lambda pair: f'{pair[0]}:{pair[1]:.2f}', zip(PC.controlled_names, v)))
+        PC.get_and_plot(f'{out_foldpath}/{run_id}.png', plot_params)
 
 
 def test_new_k1k3_model_new_targets():
@@ -289,9 +301,10 @@ def count_conversion_given_exp(csv_path, L_model: LibudaModel):
 #                      ylim=None, save_csv=False, fileName=plot_file_path)
 
 
-def Libuda2001_CO_cutoff_policy(PC_obj: ProcessController, dest_dir='./PC_plots/Libuda_orginal',
-                                *program):
-    p_total = 1e-4
+def Libuda2001_CO_cutoff_policy(PC_obj: ProcessController, program, dest_dir='./PC_plots/Libuda_orginal',
+                                p_total=1e-4,
+                                input1_name='O2', input2_name='CO', output_name='CO2',
+                                add_names=('thetaO', 'thetaCO')):
 
     def p_co(x_co):
         return p_total * x_co * 7 / np.sqrt(8) / (np.sqrt(7) + 7 * x_co / np.sqrt(8) - np.sqrt(7) * x_co)
@@ -300,17 +313,17 @@ def Libuda2001_CO_cutoff_policy(PC_obj: ProcessController, dest_dir='./PC_plots/
         # CO_p = p_total * x_co  # simple formula
         CO_p = p_co(x_co)
         O2_p = p_total - CO_p
-        PC_obj.set_controlled({'O2': O2_p, 'CO': CO_p})
+        PC_obj.set_controlled({input1_name: O2_p, input2_name: CO_p})
         PC_obj.time_forward(150)
-        PC_obj.set_controlled({'O2': O2_p, 'CO': 0.})
+        PC_obj.set_controlled({input1_name: O2_p, input2_name: 0.})
         PC_obj.time_forward(50)
 
     def plot_one_co_on(x_co):
         PC_obj.reset()
         _one_co_on(x_co)
         PC_obj.get_and_plot(f'{dest_dir}/x_co_{x_co:.2f}.png',
-                            plot_params={'time_segment': [0, 200], 'additional_plot': ['thetaCO', 'thetaO'],
-                                         'plot_mode': 'separately', 'out_names': ['CO2']})
+                            plot_params={'time_segment': [0, 200], 'additional_plot': list(add_names),
+                                         'plot_mode': 'separately', 'out_names': [output_name]})
 
     def run_full_cutoff_series():
         PC_obj.reset()
@@ -319,8 +332,8 @@ def Libuda2001_CO_cutoff_policy(PC_obj: ProcessController, dest_dir='./PC_plots/
             _one_co_on(x_co)
             x_co += 0.05
         PC_obj.get_and_plot(f'{dest_dir}/full_series.png',
-                            plot_params={'time_segment': [0, None], 'additional_plot': ['thetaCO', 'thetaO'],
-                                         'plot_mode': 'separately', 'out_names': ['CO2']})
+                            plot_params={'time_segment': [0, None], 'additional_plot': list(add_names),
+                                         'plot_mode': 'separately', 'out_names': [output_name]})
 
     for arg in program:
         if isinstance(arg, tuple):
@@ -328,8 +341,8 @@ def Libuda2001_CO_cutoff_policy(PC_obj: ProcessController, dest_dir='./PC_plots/
             for v in arg:
                 _one_co_on(v)
             PC_obj.get_and_plot(f'{dest_dir}/series.png',
-                            plot_params={'time_segment': [0, None], 'additional_plot': ['thetaCO', 'thetaO'],
-                                         'plot_mode': 'separately', 'out_names': ['CO2']})
+                            plot_params={'time_segment': [0, None], 'additional_plot': list(add_names),
+                                         'plot_mode': 'separately', 'out_names': [output_name]})
         elif isinstance(arg, float):
             plot_one_co_on(arg)
         elif isinstance(arg, str) and (arg == 'full'):
@@ -345,7 +358,7 @@ def Libuda2001_original_simulation():
     PC_obj = ProcessController(LibudaModel(init_cond={'thetaCO': 0., 'thetaO': 0.25}, Ts=440.),
                                target_func_to_maximize=get_target_func('CO2_value'))
     PC_obj.set_plot_params(output_lims=[-1.e-3, 0.05], output_ax_name='CO2 formation rate')
-    Libuda2001_CO_cutoff_policy(PC_obj)
+    Libuda2001_CO_cutoff_policy(PC_obj, ['full'])
 
 
 def Pt_exp(path: str):
@@ -451,6 +464,7 @@ def KMC_simple_tests():
                                RESOLUTION=1,  # always should be 1 if we use KMC, otherwise we will get wrong results!
                                supposed_step_count=100,  # memory controlling parameters
                                supposed_exp_time=1.e-3)
+
     PC_obj.set_plot_params(input_lims=[-1e-5, None], input_ax_name='Pressure, Pa',
                            output_lims=[-1e-2, None],
                            additional_lims=[-1e-2, 1. + 1.e-2],
@@ -462,6 +476,7 @@ def KMC_simple_tests():
                        # ('O2 conversion', overall_O2_conversion),
                        # ('CO conversion', overall_CO_conversion)
                        )
+
     # PC_obj.analyser_dt = 1.e-7
     # PC_obj.reset()
     # for i in range(4):
@@ -479,6 +494,62 @@ def KMC_simple_tests():
 
     # BENCHMARK
     # benchmark_runs(PC_obj, './PC_plots/model_benchmarks', 'count')
+
+
+def Ziff_model_poisoning_speed_test():
+    size = [80, 25]
+    PC_Ziff = ProcessController(KMC_Ziff_model(*size,
+                                               # log_on=True,
+                                               # O2_top=1.1e5, CO_top=1.1e5,
+                                               # CO2_rate_top=3.e5,
+                                               CO2_count_top=1.e4,
+                                               # T=373.,
+                                               ),
+                                analyser_dt=2e+2,
+                                target_func_to_maximize=get_target_func('CO2_value'),
+                                target_func_name='CO2_count',
+                                target_int_or_sum='sum',
+                                RESOLUTION=1,  # ATTENTION! Always should be 1 if we use KMC, otherwise we will get wrong results!
+                                supposed_step_count=200,  # memory controlling parameters
+                                supposed_exp_time=2e+6)
+    PC_obj = PC_Ziff
+    PC_obj.set_metrics(
+                       # ('integral CO2', CO2_integral),
+                       # ('CO2 count', CO2_count),
+                       ('CO2 count', lambda time_arr, arr: np.sum(arr[:, 0])),
+                       # ('O2 conversion', overall_O2_conversion),
+                       # ('CO conversion', overall_CO_conversion)
+    )
+
+    PC_obj.set_plot_params(input_lims=[-1e-5, None], input_ax_name='Pressure, Pa',
+                           output_lims=[-1e-2, None],
+                           additional_lims=[-1e-2, 1. + 1.e-2],
+                           # output_ax_name='CO2 formation rate, $(Pt atom * sec)^{-1}$',
+                           output_ax_name='CO x O events count')
+
+    time_step = 2e+3
+
+    PC_obj.reset()
+    PC_obj.set_controlled({'x': 1.})
+    CO_cov = 0.
+    while CO_cov < 0.96:
+        PC_obj.time_forward(time_step)
+        time_history, _ = PC_obj.get_process_output()
+        CO_cov = PC_obj.additional_graph['thetaCO'][time_history.size - 1]
+    PC_obj.plot('PC_plots/Ziff_poisoning_speed_test/Ziff_CO_poisoning_speed.png',
+                **{'time_segment': [0, None], 'additional_plot': ['thetaCO', 'thetaO'],
+                   'plot_mode': 'separately', 'out_names': ['CO2_count']})
+
+    PC_obj.reset()
+    PC_obj.set_controlled({'x': 0.})
+    O_cov = 0.
+    while O_cov < 0.9:
+        PC_obj.time_forward(time_step)
+        time_history, _ = PC_obj.get_process_output()
+        O_cov = PC_obj.additional_graph['thetaO'][time_history.size - 1]
+    PC_obj.plot('PC_plots/Ziff_poisoning_speed_test/Ziff_O_poisoning_speed.png',
+                **{'time_segment': [0, None], 'additional_plot': ['thetaCO', 'thetaO'],
+                   'plot_mode': 'separately', 'out_names': ['CO2_count']})
 
 
 def main():
@@ -502,7 +573,22 @@ def main():
 
     # Libuda2001_original_simulation()
 
-    KMC_simple_tests()
+    # KMC_simple_tests()
+
+    # Ziff_model_poisoning_speed_test()
+
+    # run_constant_policies_bunch(PC_setup.default_PC_setup('LibudaG'), 500, 1,
+    #                             out_foldpath='PC_plots/LibudaGeneralized/DEBUG/',
+    #                             plot_params={'time_segment': [0, None], 'additional_plot': ['thetaB', 'thetaA'],
+    #                                          'plot_mode': 'separately', 'out_names': ['outputC']})
+    Libuda2001_CO_cutoff_policy(PC_setup.default_PC_setup('LibudaG'),
+                                ['full'],
+                                'PC_plots/LibudaGeneralized/DEBUG/Libuda_regime',
+                                p_total=1.,
+                                input1_name='inputB', input2_name='inputA', output_name='outputC',
+                                add_names=('thetaA', 'thetaB'))
+
+    # Libuda2001_original_simulation()
 
     # test_PC_with_Libuda()
 

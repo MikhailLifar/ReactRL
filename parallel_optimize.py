@@ -4,6 +4,7 @@ from test_models import *
 from ProcessController import *
 from predefined_policies import *
 from targets_metrics import *
+import PC_setup
 
 from multiple_jobs_functions import run_jobs_list
 
@@ -99,38 +100,16 @@ def main_cluster_function():
     #                                supposed_step_count=2 * episode_time // time_step,  # memory controlling parameters
     #                                supposed_exp_time=2 * episode_time)
 
-    size = [20, 20]
-    PC_KMC = ProcessController(KMC_CO_O2_Pt_Model((*size, 1), log_on=True,
-                                                  O2_top=1.1e5, CO_top=1.1e5,
-                                                  CO2_rate_top=3.e5, CO2_count_top=1.e4,
-                                                  T=373.),
-                               analyser_dt=0.1e-7,
-                               target_func_to_maximize=get_target_func('CO2_count'),
-                               target_func_name='CO2_count',
-                               target_int_or_sum='sum',
-                               RESOLUTION=1,  # ATTENTION! Always should be 1 if we use KMC, otherwise we will get wrong results!
-                               supposed_step_count=1000,  # memory controlling parameters
-                               supposed_exp_time=1.e-5)
-    PC_obj = PC_KMC
-    # O2_top = 10.e-4
-    # CO_top = 10.e-4
-    # max_top = max(O2_top, CO_top)
+    # # O2_top = 10.e-4
+    # # CO_top = 10.e-4
+    # # max_top = max(O2_top, CO_top)
+    #
+    # # PC_obj.process_to_control.assign_and_eval_values(O2_top=O2_top, CO_top=CO_top)
+    # # PC_obj.set_plot_params(output_lims=None, output_ax_name='?',
+    # #                        input_ax_name='Pressure, Pa')
 
-    PC_obj.set_metrics(
-                       # ('integral CO2', CO2_integral),
-                       ('CO2 count', CO2_count),
-                       # ('O2 conversion', overall_O2_conversion),
-                       # ('CO conversion', overall_CO_conversion)
-    )
-
-    # PC_obj.process_to_control.assign_and_eval_values(O2_top=O2_top, CO_top=CO_top)
-    # PC_obj.set_plot_params(output_lims=None, output_ax_name='?',
-    #                        input_ax_name='Pressure, Pa')
-    PC_KMC.set_plot_params(input_lims=[-1e-5, None], input_ax_name='Pressure, Pa',
-                           output_lims=[-1e-2, None],
-                           additional_lims=[-1e-2, 1. + 1.e-2],
-                           # output_ax_name='CO2 formation rate, $(Pt atom * sec)^{-1}$',
-                           output_ax_name='CO x O events count')
+    # PC_obj = PC_setup.default_PC_setup('Pd_monte_coffee')
+    PC_obj = PC_setup.default_PC_setup('Ziff')
 
     # gauss_target_1 = get_target_func('Gauss(CO_sub_default)xConv_I', default=1e-4, sigma=1e-5 * episode_time, eps=1e-4)
     # gauss_target_2 = get_target_func('Gauss(CO_sub_default)xConvSum_I', default=1e-4, sigma=1e-5 * episode_time, eps=1e-4)
@@ -195,46 +174,110 @@ def main_cluster_function():
     #
     #     return complicated_ext
 
-    def get_switch_between_pure_ext(max_dict, first_turned):
-        second_turns = ('O2' if first_turned == 'CO' else 'CO')
+    # def get_switch_between_pure_ext(max_dict, first_turned):
+    #     second_turned = ('O2' if first_turned == 'CO' else 'CO')
+    #
+    #     def switch_between_pure(d):
+    #         d[f'{first_turned}_1'] = max_dict[first_turned]
+    #         d[f'{second_turned}_1'] = 0.
+    #
+    #         d[f'{second_turned}_2'] = max_dict[second_turned]
+    #         d[f'{first_turned}_2'] = 0.
+    #
+    #         if ('total' in d) and ('first_part' in d):
+    #             d['t1'], d['t2'] = d['first_part'] * d['total'], (1 - d['first_part']) * d['total']
+    #
+    #         d['O2_t1'] = d['CO_t1'] = d['t1']
+    #         d['O2_t2'] = d['CO_t2'] = d['t2']
+    #
+    #     return switch_between_pure
+
+    def get_SBP_ext_for_Ziff(first_turned):
 
         def switch_between_pure(d):
-            d[f'{first_turned}_1'] = max_dict[first_turned]
-            d[f'{second_turns}_1'] = 0.
+            d['x_1'] = 1. - (first_turned == 'O2') * 1.
+            d['x_2'] = 1. - (first_turned == 'CO') * 1.
 
-            d[f'{second_turns}_2'] = max_dict[second_turns]
-            d[f'{first_turned}_2'] = 0.
+            if ('total' in d) and ('first_part' in d):
+                d['t1'], d['t2'] = int(d['first_part'] * d['total']), int((1 - d['first_part']) * d['total'])
 
-            d['O2_t1'] = d['CO_t1'] = d['t1']
-            d['O2_t2'] = d['CO_t2'] = d['t2']
+            d['x_t1'], d['x_t2'] = d['t1'], d['t2']
 
         return switch_between_pure
 
+    # def get_O2_CO_from_x_co_ext(pressures_sum):
+    #     def new_ext(d):
+    #         d['O2_value'] = pressures_sum * (1 - d['x_value'])
+    #         d['CO_value'] = pressures_sum * d['x_value']
+    #
+    #     return new_ext
+
     # OPTIMIZER CALL
-    episode_time = 2.e-6
-    # sum_of_pressures = 1.e+5
+
+    # SBP
+
+    # # PdMCoffee
+    # episode_time = 2.e-6
+    # # sum_of_pressures = 1.e+5
+    # cyclesteps = 2
+    # # nsteps = 4
+    # # ext = get_discrete_turns_ext(sum_of_pressures, cyclesteps, episode_time / nsteps)
+    # ext = get_switch_between_pure_ext({'O2': 1.e+5, 'CO': 1.e+5, }, first_turned='O2')
+
+    # Ziff
     cyclesteps = 2
-    # nsteps = 4
-    # ext = get_discrete_turns_ext(sum_of_pressures, cyclesteps, episode_time / nsteps)
-    ext = get_switch_between_pure_ext({'O2': 1.e+5, 'CO': 1.e+5, }, first_turned='O2')
+    episode_time = 2.e+5
+    ext = get_SBP_ext_for_Ziff(first_turned='O2')
+
     run_jobs_list(**get_for_repeated_opt_iterations(func_to_optimize_policy(
                                                         PC_obj, AnyStepPolicy(cyclesteps, dict()), episode_time, episode_time / 1000,
                                                         expand_description=ext,
                                                         to_plot={'out_names': ['CO2_count'], 'additional_plot': ['thetaCO', 'thetaO']}),
-                                                    optimize_bounds={'t1': (1.e-8, 1.5e-8), 't2': (1.5e-7, 2.e-7)},
+                                                    # optimize_bounds={'t1': (1.e-8, 1.5e-8), 't2': (1.5e-7, 2.e-7)},
+                                                    # optimize_bounds={'total': (0.5e-7, 1.e-7), 'first_part': (0.6, 0.8)},  # first good PdMCoffee SBP point
+                                                    optimize_bounds={'total': (1e+3, 3.e+3), 'first_part': (0.4, 0.6)},  # first good Ziff SBP point
                                                     cut_left=False, cut_right=False,
-                                                    method='Nelder-Mead', try_num=5,
+                                                    method='Nelder-Mead', try_num=10,
                                                     debug_params={'DEBUG': True, 'folder': 'auto'},
-                                                    optimize_options={'maxiter': 1}),
-                  PC=PC_obj,
-                  out_fold_path='./optimize_out/DEBUG/230407_SBP_light_mode',
-                  separate_folds=False,
-                  repeat=3,
+                                                    optimize_options={'maxiter': 30}),
+
                   const_params={},
+                  PC=PC_obj,
+                  repeat=1,
                   sort_iterations_by='fvalue',
+                  cluster_command_ops=False,
                   python_interpreter='../RL_10_21/venv/bin/python',
+                  out_fold_path='./optimize_out/230417_Ziff_SBP_total_2000',
+                  separate_folds=False,
                   at_same_time=30,
                   )
+
+    # # Ziff
+
+    # CONSTANT
+    # episode_time = 2.e+5  # Ziff model
+
+    # episode_time = 2.e-6  # Pd MonteCoffee
+    # sum_of_pressures = 1.e+5
+    #
+    # run_jobs_list(**get_for_repeated_opt_iterations(func_to_optimize_policy(
+    #                                                     PC_obj, ConstantPolicy(dict()), episode_time, episode_time / 200,
+    #                                                     expand_description=get_O2_CO_from_x_co_ext(sum_of_pressures),
+    #                                                     to_plot={'out_names': ['CO2_count'], 'additional_plot': ['thetaCO', 'thetaO']}),
+    #                                                 optimize_bounds={'x_value': (0.2, 0.4)},  # 0.4, 0.55 for Ziff
+    #                                                 cut_left=False, cut_right=False,
+    #                                                 method='Nelder-Mead', try_num=20,
+    #                                                 debug_params={'DEBUG': True, 'folder': 'auto'},
+    #                                                 optimize_options={'maxiter': 30}),
+    #               PC=PC_obj,
+    #               out_fold_path='./optimize_out/DEBUG/230415_PdMCoffee_debug',
+    #               separate_folds=False,
+    #               repeat=1,
+    #               const_params={},
+    #               sort_iterations_by='fvalue',
+    #               python_interpreter='../RL_10_21/venv/bin/python',
+    #               at_same_time=30,
+    #               )
 
     # iter_optimize_cluster(func_to_optimize_policy(
     #                             PC_obj, AnyStepPolicy(cyclesteps, dict()), episode_time, episode_time / 1000,

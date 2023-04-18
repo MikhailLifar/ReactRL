@@ -1,4 +1,4 @@
-# import numpy as np
+import numpy as np
 
 from ProcessController import ProcessController
 from test_models import *
@@ -8,33 +8,24 @@ from multiple_jobs_functions import *
 from optimize_funcs import get_for_param_opt_iterations
 from predefined_policies import *
 
+import PC_setup
+
 
 def main():
-    size = [20, 20]
-    PC_KMC = ProcessController(KMC_CO_O2_Pt_Model((*size, 1), log_on=True,
-                                                  O2_top=1.1e5, CO_top=1.1e5,
-                                                  CO2_rate_top=3.e5, CO2_count_top=1.e4,
-                                                  T=373.),
-                               analyser_dt=0.125e-8,
-                               target_func_to_maximize=get_target_func('CO2_count'),
-                               target_func_name='CO2_count',
-                               target_int_or_sum='sum',
-                               RESOLUTION=1,  # ATTENTION! Always should be 1 if we use KMC, otherwise we will get wrong results!
-                               supposed_step_count=1000,  # memory controlling parameters
-                               supposed_exp_time=1.e-5)
-    PC_obj = PC_KMC
-    PC_obj.set_metrics(
-                       # ('integral CO2', CO2_integral),
-                       ('CO2 count', CO2_count),
-                       # ('O2 conversion', overall_O2_conversion),
-                       # ('CO conversion', overall_CO_conversion)
-    )
+    # size = [20, 20]
+    # PC_KMC = ProcessController(KMC_CO_O2_Pt_Model((*size, 1), log_on=True,
+    #                                               O2_top=1.1e5, CO_top=1.1e5,
+    #                                               CO2_rate_top=3.e5, CO2_count_top=1.e4,
+    #                                               T=373.),
+    #                            analyser_dt=1,
+    #                            target_func_to_maximize=get_target_func('CO2_count'),
+    #                            target_func_name='CO2_count',
+    #                            target_int_or_sum='sum',
+    #                            RESOLUTION=1,  # ATTENTION! Always should be 1 if we use KMC, otherwise we will get wrong results!
+    #                            supposed_step_count=1000,  # memory controlling parameters
+    #                            supposed_exp_time=1.e-5)
 
-    PC_KMC.set_plot_params(input_lims=[-1e-5, None], input_ax_name='Pressure, Pa',
-                           output_lims=[-1e-2, None],
-                           additional_lims=[-1e-2, 1. + 1.e-2],
-                           # output_ax_name='CO2 formation rate, $(Pt atom * sec)^{-1}$',
-                           output_ax_name='CO x O events count')
+    PC_obj = PC_setup.default_PC_setup('Ziff')
 
     # def for_one_x0_several_x1(x0):
     #     variants_of_x1 = filter(lambda x: (x < 9.e-5) and (x > 1.e-5),
@@ -48,10 +39,11 @@ def main():
     #     new_params += [*p]
     # variants = new_params
 
+    # Ziff Switch Between Pure
     run_jobs_list(
-        **(get_for_SBP_iteration(2.e-6, 'O2')),
+        **(get_for_SBP_iteration(2.e+5, 'O2', ziff_model=True)),
         **(jobs_list_from_grid(
-            (0.25e-7, 0.5e-7, 0.75e-7),
+            (i * 1.e+3 for i in range(1, 4)),
             map(lambda x: 0.1 * x, range(1, 10)),
             names=('total', 'first_part'),
         )),
@@ -60,12 +52,50 @@ def main():
         sort_iterations_by='CO2',
         PC=PC_obj,
         repeat=3,
-        out_fold_path='PC_plots/230410_SwitchBetweenPure_20x20',
+        out_fold_path='PC_plots/230415_Ziff_80x25_SBP',
         separate_folds=False,
         cluster_command_ops=False,
         python_interpreter='../RL_10_21/venv/bin/python',
         at_same_time=100,
     )
+
+    # Ziff benchmark
+    # pressure_unit = 1.e+4
+    # pairs_num = 26
+    # run_jobs_list(
+    #     **(get_for_Ziff_iterations(pressure_unit, 24.e+4, take_from_the_end=0.1, CO2_output_column=0)),
+    #     params_variants=np.linspace(0., 1., pairs_num).reshape(-1, 1).tolist(),
+    #     names=('x', ),
+    #     names_groups=(),
+    #     const_params={},
+    #     sort_iterations_by='CO2',
+    #     PC=PC_obj,
+    #     repeat=3,
+    #     out_fold_path='PC_plots/230413_DEBUG_Ziff_model',
+    #     separate_folds=False,
+    #     cluster_command_ops=False,
+    #     python_interpreter='../RL_10_21/venv/bin/python',
+    #     at_same_time=100,
+    # )
+
+    # run_jobs_list(
+    #     **(get_for_SBP_iteration(2.e-6, 'O2')),
+    #     **(jobs_list_from_grid(
+    #         (0.25e-7, 0.5e-7, 0.75e-7),
+    #         map(lambda x: 0.1 * x, range(1, 10)),
+    #         names=('total', 'first_part'),
+    #     )),
+    #     names_groups=(),
+    #     const_params={'O2_max': 1.e+5, 'CO_max': 1.e+5},
+    #     sort_iterations_by='CO2',
+    #     PC=PC_obj,
+    #     repeat=3,
+    #     out_fold_path='PC_plots/230410_SwitchBetweenPure_20x20',
+    #     separate_folds=False,
+    #     cluster_command_ops=False,
+    #     python_interpreter='../RL_10_21/venv/bin/python',
+    #     at_same_time=100,
+    # )
 
     # run_jobs_list(
     #     **(get_for_SBP_iteration(2.e-6)),
