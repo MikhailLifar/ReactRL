@@ -34,11 +34,12 @@ class KMC_Ziff_model(BaseModel):
 
     model_name = 'ZiffModel'
 
-    names = {'input': ['x'], 'output': ['CO2_count']}
+    names = {'input': ['x'], 'output': ['CO2_count', 'x']}
     bottom = {'input': dict(), 'output': dict(), }
     top = {'input': dict(), 'output': dict(), }
 
     bottom['input']['x'], top['input']['x'] = 0., 1.
+    bottom['output']['x'], top['output']['x'] = 0., 1.
     bottom['output']['CO2_count'] = 0
 
     def __init__(self, m, n, **params):
@@ -82,7 +83,7 @@ class KMC_Ziff_model(BaseModel):
             self.plot['thetaO'] = self.thetaO
             self.plot['thetaCO'] = self.thetaCO
 
-        self.model_output = np.array([self.CO2_count - self.prev_CO2_count])
+        self.model_output = np.array([self.CO2_count - self.prev_CO2_count, x])
         return self.model_output
 
     def step(self, x):

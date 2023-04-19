@@ -146,7 +146,10 @@ def make_subdir_return_path(origin_path,
         while os.path.exists(f'{origin_path}/{subdir_name}{ind}{postfix}/'):
             ind += 1
         subdir_name = f'{subdir_name}{ind}{postfix}'
-    os.makedirs(f'{origin_path}/{subdir_name}/', exist_ok=False)
+    os.makedirs(f'{origin_path}/{subdir_name}/',
+                exist_ok=False,
+                # exist_ok=True  # FOR DEBUG ONLY
+                )
     return f'{origin_path}/{subdir_name}'
 
 

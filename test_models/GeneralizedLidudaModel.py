@@ -34,13 +34,18 @@ class GeneralizedLibudaModel(BaseModel):
 
     """
 
-    names = {'input': ['inputB', 'inputA'], 'output': ['outputC']}
+    names = {'input': ['inputB', 'inputA'], 'output': ['outputC', 'B', 'A']}
 
     bottom = {'input': dict(), 'output': dict()}
     top = {'input': dict(), 'output': dict()}
     bottom['input']['inputA'] = bottom['input']['inputB'] = 0.
     top['input']['inputA'] = top['input']['inputB'] = 1.
+
+    bottom['output']['A'] = bottom['output']['B'] = 0.
     bottom['output']['outputC'] = 0.
+
+    top['output']['A'] = top['output']['B'] = 1.
+    top['output']['outputC'] = 1.
 
     model_name = 'GeneralizedLibuda'
 
@@ -71,7 +76,7 @@ class GeneralizedLibudaModel(BaseModel):
         # save initial cond
         self.plot = {'thetaA': self.thetaA, 'thetaB': self.thetaB}
 
-        self.top['output']['outputC'] = self['rate_react'] * self['thetaA_max'] * self['thetaB_max']
+        # self.top['output']['outputC'] = self['rate_react'] * self['thetaA_max'] * self['thetaB_max']
         self.fill_limits()
 
         self.add_info = self.get_add_info()
@@ -144,10 +149,11 @@ class GeneralizedLibudaModel(BaseModel):
         # but it didn't influence much on results
 
         if save_for_plot:
-            self.plot['thetaA'] = self.thetaA
             self.plot['thetaB'] = self.thetaB
+            self.plot['thetaA'] = self.thetaA
 
-        self.model_output = np.array([self['rate_react'] * self.thetaB * self.thetaA])
+        # model_output is normalized to be between 0 and 1
+        self.model_output = np.array([(self.thetaB / self['thetaB_max']) * (self.thetaA / self['thetaA_max']), inputB, inputA])
         self.t += delta_t
         return self.model_output
 

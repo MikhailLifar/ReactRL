@@ -2,6 +2,9 @@ from parallel_trainRL_funcs import *
 from test_models import *
 from targets_metrics import *
 
+from multiple_jobs_functions import jobs_list_from_grid, run_jobs_list
+import PC_setup
+
 
 # train_grid_parallel(['full_ep_mean', 'full_ep_mean', 'each_step_base', 'each_step_base'],
 #                      names=('env:reward_spec', ),
@@ -50,9 +53,6 @@ from targets_metrics import *
 #                      unique_folder=False,
 #                      at_same_time=45)
 
-episode_time = 500
-time_step = 10
-
 # LibudaDegradPC = ProcessController(LibudaModelWithDegradation(init_cond={'thetaCO': 0., 'thetaO': 0.},
 #                                                               Ts=273+160),
 #                                    target_func_to_maximize=CO2_value,
@@ -88,78 +88,159 @@ time_step = 10
 #                                    long_term_target_to_maximize=get_target_func('CO2xConversion_I', eps=1.),
 #                                    supposed_step_count=2 * episode_time // time_step,  # memory controlling parameters
 #                                    supposed_exp_time=2 * episode_time)
-episode_time = 2.e-5
-time_step = 2.e-6
-size = (5, 5)
-PC_KMC = ProcessController(KMC_CO_O2_Pt_Model((*size, 1), log_on=False,
-                                              O2_bottom=1.1e2, CO_bottom=1.1e2,
-                                              O2_top=1.1e4, CO_top=1.1e4,
-                                              CO2_rate_top=1.4e6, CO2_count_top=3.e2,
-                                              T=373.),
-                           analyser_dt=0.5e-6,
-                           target_func_to_maximize=get_target_func('CO2_count'), RESOLUTION=1,
-                           supposed_step_count=2 * int(episode_time / time_step + 1),  # memory controlling parameters
-                           supposed_exp_time=2 * episode_time)
+# episode_time = 2.e-5
+# time_step = 2.e-6
+# size = (5, 5)
+# PC_KMC = ProcessController(KMC_CO_O2_Pt_Model((*size, 1), log_on=False,
+#                                               O2_bottom=1.1e2, CO_bottom=1.1e2,
+#                                               O2_top=1.1e4, CO_top=1.1e4,
+#                                               CO2_rate_top=1.4e6, CO2_count_top=3.e2,
+#                                               T=373.),
+#                            analyser_dt=0.5e-6,
+#                            target_func_to_maximize=get_target_func('CO2_count'), RESOLUTION=1,
+#                            supposed_step_count=2 * int(episode_time / time_step + 1),  # memory controlling parameters
+#                            supposed_exp_time=2 * episode_time)
+#
+# PC_obj = PC_KMC
+# # PC_obj = PC_PtReturnK3K1
+#
+# PC_obj.set_plot_params(input_lims=[-1e-5, None], input_ax_name='Pressure, Pa',
+#                        output_lims=[-1e-2, None],
+#                        # output_ax_name='CO2 formation rate, $(Pt atom * sec)^{-1}$',
+#                        output_ax_name='CO x O events count',
+#                        )
+# # PC_obj.set_plot_params(input_ax_name='Pressure',
+# #                        output_ax_name='?', output_lims=[0., None])
+# PC_obj.set_metrics(
+#                    # ('CO2', CO2_integral),
+#                    ('CO2 count', CO2_count),
+#                    # ('O2 conversion', overall_O2_conversion),
+#                    # ('CO conversion', overall_CO_conversion)
+#                    )
 
-PC_obj = PC_KMC
-# PC_obj = PC_PtReturnK3K1
-
-PC_obj.set_plot_params(input_lims=[-1e-5, None], input_ax_name='Pressure, Pa',
-                       output_lims=[-1e-2, None],
-                       # output_ax_name='CO2 formation rate, $(Pt atom * sec)^{-1}$',
-                       output_ax_name='CO x O events count',
-                       )
-# PC_obj.set_plot_params(input_ax_name='Pressure',
-#                        output_ax_name='?', output_lims=[0., None])
-PC_obj.set_metrics(
-                   # ('CO2', CO2_integral),
-                   ('CO2 count', CO2_count),
-                   # ('O2 conversion', overall_O2_conversion),
-                   # ('CO conversion', overall_CO_conversion)
-                   )
+# PC_obj = PC_setup.default_PC_setup('LibudaG')
+# PC_obj = PC_setup.default_PC_setup('Ziff')
+PC_obj = PC_setup.general_PC_setup('Ziff', ('to_model_constructor', 'CO2_count_top', 2.e+3))
 
 # Gauss_x_Conv_x_Conv = get_target_func('(Gauss)x(Conv)x(Conv)_I', default=1e-4, sigma=1e-5 * episode_time, eps=1e-4)
 # name1 = '(Gauss)x(Conv)x(Conv)'
 # Gauss_x__Conv_Plus_Conv_ = get_target_func('(Gauss)x(Conv+Conv)_I', default=1e-4, sigma=1e-5 * episode_time, eps=1e-4)
 # name2 = '(Gauss)x(Conv+Conv)'
 
-train_grid_parallel(['full_ep_mean', 'full_ep_base', 'each_step_base'],
-                    [(1, False),
-                     # (2, False),
-                     (3, False),
-                     # (4, False),
-                     (5, False), ],
-                    names=('env:reward_spec', 'env:state_spec'),
-                    const_params={
-                     'env': {'episode_time': episode_time,
-                             'time_step': time_step,
-                             'names_to_state': ['CO2_count', 'O2_Pa', 'CO_Pa'],
-                             'continuous_actions': True,
-                             # 'continuous_actions': {'CO': [0., 1.e+4], 'O2': 1.e+4},
-                             # 'discrete_actions': True,
-                             # 'discrete_actions': {'CO': [7e-5, 0.], 'O2': 7.e-5},
-                             'target_type': 'one_row',
-                             'normalize_coef': 1.e+5,
-                             },
-                     'agent_name': 'vpg',
-                     'agent': {},
-                     'model': {
-                         # 'v_d': 0.01,
-                         # 'v_r': 0.1,
-                         # 'border': 4.,
-                         'O2_top': 1.e+4,
-                         'CO_top': 1.e+4,
-                         }
-                    },
-                    repeat=3,
-                    out_path='run_RL_out/230221_KMC_debug',
-                    file_to_execute_path='code/parallel_trainRL.py',
-                    python_interpreter='../RL_10_21/venv/bin/python',
-                    on_cluster=True,
-                    controller=PC_obj,
-                    n_episodes=5,
-                    unique_folder=False,
-                    at_same_time=45)
+## LibudaG
+#episode_time = 500
+#time_step = 10
+
+
+# Ziff
+episode_time = 2.e+5
+time_step = 2.e+3
+run_jobs_list(**get_for_RL_iterations(),
+              **jobs_list_from_grid(
+                  ['vpg', 'ppo'],
+                  ['each_step_base'],
+                  [{'rows': 1, 'use_differences': False},
+                   {'rows': 3, 'use_differences': False},
+                   {'rows': 5, 'use_differences': False},
+                   {'rows': 13, 'use_differences': False},
+                   {'rows': 13, 'use_differences': True}],
+                  names=('agent_name', 'env:reward_spec', 'env:state_spec')
+              ),
+              const_params={
+                  'n_episodes': 40,
+                  'env': {'episode_time': episode_time,
+                          'time_step': time_step,
+                          'names_to_state': ['CO2_count', 'x'],
+                          'continuous_actions': True,
+                          # 'continuous_actions': {'CO': [0., 1.e+4], 'O2': 1.e+4},
+                          # 'discrete_actions': True,
+                          # 'discrete_actions': {'CO': [7e-5, 0.], 'O2': 7.e-5},
+                          'target_type': 'one_row',
+                          'normalize_coef': 2.e-5,
+                         },
+                  'agent': {},
+                  'model': {},
+              },
+              PC=PC_obj,
+              repeat=3,
+              sort_iterations_by='deterministic_test::max_on_test',
+              cluster_command_ops=False,
+              python_interpreter='../RL_10_21/venv/bin/python',
+              out_fold_path='./run_RL_out/230418_Ziff_debug',
+              at_same_time=30,
+              )
+
+# run_jobs_list(**get_for_RL_iterations(),
+#               **jobs_list_from_grid(
+#                   ['full_ep_mean'],
+#                   [{'rows': 3, 'use_differences': False},
+#                    {'rows': 5, 'use_differences': False},
+#                    {'rows': 13, 'use_differences': False},
+#                    {'rows': 13, 'use_differences': True}],
+#                   names=('env:reward_spec', 'env:state_spec')
+#               ),
+#               const_params={
+#                   'n_episodes': 40,
+#                   'env': {'episode_time': episode_time,
+#                           'time_step': time_step,
+#                           'names_to_state': ['outputC', 'B', 'A'],
+#                           'continuous_actions': True,
+#                           # 'continuous_actions': {'CO': [0., 1.e+4], 'O2': 1.e+4},
+#                           # 'discrete_actions': True,
+#                           # 'discrete_actions': {'CO': [7e-5, 0.], 'O2': 7.e-5},
+#                           'target_type': 'one_row',
+#                           'normalize_coef': 1.e-3,
+#                          },
+#                   'agent_name': 'ppo',
+#                   'agent': {},
+#                   'model': {},
+#               },
+#               PC=PC_obj,
+#               repeat=3,
+#               sort_iterations_by='deterministic_test::max_on_test',
+#               cluster_command_ops=False,
+#               python_interpreter='../RL_10_21/venv/bin/python',
+#               out_fold_path='./run_RL_out/230418_LibudaG_debug',
+#               at_same_time=30,
+#               )
+
+# train_grid_parallel(['full_ep_mean', 'full_ep_base', 'each_step_base'],
+#                     [(1, False),
+#                      # (2, False),
+#                      (3, False),
+#                      # (4, False),
+#                      (5, False), ],
+#                     names=('env:reward_spec', 'env:state_spec'),
+#                     const_params={
+#                      'env': {'episode_time': episode_time,
+#                              'time_step': time_step,
+#                              'names_to_state': ['CO2_count', 'O2_Pa', 'CO_Pa'],
+#                              'continuous_actions': True,
+#                              # 'continuous_actions': {'CO': [0., 1.e+4], 'O2': 1.e+4},
+#                              # 'discrete_actions': True,
+#                              # 'discrete_actions': {'CO': [7e-5, 0.], 'O2': 7.e-5},
+#                              'target_type': 'one_row',
+#                              'normalize_coef': 1.e+5,
+#                              },
+#                      'agent_name': 'vpg',
+#                      'agent': {},
+#                      'model': {
+#                          # 'v_d': 0.01,
+#                          # 'v_r': 0.1,
+#                          # 'border': 4.,
+#                          'O2_top': 1.e+4,
+#                          'CO_top': 1.e+4,
+#                          }
+#                     },
+#                     repeat=3,
+#                     out_path='run_RL_out/230221_KMC_debug',
+#                     file_to_execute_path='code/parallel_trainRL.py',
+#                     python_interpreter='../RL_10_21/venv/bin/python',
+#                     on_cluster=True,
+#                     controller=PC_obj,
+#                     n_episodes=5,
+#                     unique_folder=False,
+#                     at_same_time=45)
 
 # MAIN TEST FOR LIBUDA
 # train_grid_parallel(['full_ep_mean', 'full_ep_base', 'each_step_base'],

@@ -163,9 +163,9 @@ def run_jobs_list(
         if summarize_function is not None:
             try:
                 summarize_function(out_fold_path)
-            except Exception:
-                with open(f'{out_fold_path}/summary_failed.txt', 'w') as _:
-                    pass
+            except Exception as e:
+                with open(f'{out_fold_path}/summary_failed.txt', 'w') as fwrite:
+                    fwrite.write(str(e))
 
         # The results of different iterations should be collected
         df = pd.DataFrame(index=np.arange(iterations_number))

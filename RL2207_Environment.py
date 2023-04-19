@@ -107,7 +107,7 @@ class RL2207_Environment(Environment):
         state_spec['shape'] = (state_spec['rows'], one_state_row_len)
         self.state_spec = copy.deepcopy(state_spec)
 
-        self.state_memory = np.zeros((10, one_state_row_len))
+        self.state_memory = np.zeros((2 * self.state_spec['rows'] + 2, one_state_row_len))
 
         self.discrete_actions = copy.deepcopy(discrete_actions)
         self.continuous_actions = copy.deepcopy(continuous_actions)

@@ -407,7 +407,7 @@ class ProcessController:
 
         additional = tuple()
         if isinstance(additional_plot, str):
-            if additional_plot == 'all_mode':
+            if additional_plot == 'all_plots':
                 for name in self.additional_graph:
                     additional += (output_time_stamp, self.additional_graph[name][:output_time_stamp.shape[0]], name)
             elif additional_plot in self.additional_graph:
