@@ -1,15 +1,38 @@
-import \
-    copy
+import copy
 
 from ProcessController import ProcessController
 from test_models import *
 from targets_metrics import *
 
 
-PARAMS = {
+DEFAULT_PARAMS = {
+        'Libuda2001': {
+            'model_class': LibudaModelReturnK3K1AndPressures,
+            'to_model_constructor': {},
+            'to_PC_constructor': {
+                'analyser_dt': 1,
+                'target_func_to_maximize': get_target_func('CO2_value'),
+                'target_func_name': 'CO2 form. rate',
+                'target_int_or_sum': 'int',
+                'RESOLUTION': 10,
+                'supposed_step_count': 10000,
+                'supposed_exp_time': 10000,
+            },
+            'to_set_plot_params': {
+                'input_lims': [-1e-5, None],
+                'input_ax_name': 'Pressure, Pa',
+                'output_lims': [-1e-2, None],
+                'output_ax_name': 'CO2 formation rate, $(Pt atom * sec)^{-1}$',
+                'additional_lims': [-1e-2, 1. + 1.e-2],
+            },
+            'metrics': (('integral CO2', CO2_integral),
+                        # ('O2 conversion', overall_O2_conversion),
+                        # ('CO conversion', overall_CO_conversion)
+                        )
+        },
         'LibudaG': None,
-        'Ziff': {
-            'model_class': KMC_Ziff_model,
+        'ZGB': {
+            'model_class': ZGBModel,
             # 'size': [80, 25],  # [128, 256]
             'to_model_constructor': {
                 'm': 80, 'n': 25,
@@ -21,11 +44,14 @@ PARAMS = {
             },
             'to_PC_constructor': {
                 'analyser_dt': 2e+2,
+                # 'target_func_to_maximize': get_target_func('CO2_value'),
+                # 'target_func_name': 'CO2_count',
                 'target_func_to_maximize': get_target_func('CO2_value'),
-                'target_func_name': 'CO2_count',
-                'target_int_or_sum': 'sum',
+                'target_func_name': 'CO2_prod_rate',
+                # 'target_int_or_sum': 'sum',
+                'target_int_or_sum': 'int',
                 'RESOLUTION': 1,
-                'supposed_step_count': 2000,
+                'supposed_step_count': 100000,
                 'supposed_exp_time': 1e+6,
             },
             'to_set_plot_params': {
@@ -34,15 +60,26 @@ PARAMS = {
                 'output_lims': [-1e-2, None],
                 # 'output_ax_name': 'CO2 formation rate, $(Pt atom * sec)^{-1}$',
                 'additional_lims': [-1e-2, 1. + 1.e-2],
-                'output_ax_name': 'CO x O events count'
+                # 'output_ax_name': 'CO x O events count'
+                'output_ax_name': 'CO2_prod_rate'
             },
-            'metrics': (('CO2 count', lambda time_arr, arr: np.sum(arr[:, 0]), ),
-                        # ('integral CO2', CO2_integral),
+            'metrics': (
+                        # ('CO2 count', lambda time_arr, arr: np.sum(arr[:, 0]), ),
+                        ('integral CO2', CO2_integral),
                         # ('O2 conversion', overall_O2_conversion),
                         # ('CO conversion', overall_CO_conversion)
                         )
         }
     }
+
+# ZGBk setup
+DEFAULT_PARAMS['ZGBk'] = copy.deepcopy(DEFAULT_PARAMS['ZGB'])
+DEFAULT_PARAMS['ZGBk']['model_class'] = ZGBkModel
+DEFAULT_PARAMS['ZGBk']['to_model_constructor'].update({'m': 100, 'n': 100, 'k': 0.02})
+DEFAULT_PARAMS['ZGBk']['to_PC_constructor'].update({'analyser_dt': 1.e+3,
+                                                    'supposed_step_count': int(1e+5),
+                                                    'supposed_exp_time': 1e+7,
+                                                    })
 
 
 def default_PC_setup(model_id: str):
@@ -82,7 +119,7 @@ def default_PC_setup(model_id: str):
         )
 
     elif model_id == 'Ziff':
-        parameters = PARAMS['Ziff']
+        parameters = DEFAULT_PARAMS['Ziff']
         model = parameters['model_class'](**parameters['to_model_constructor'])
         PC_obj = ProcessController(model, **(parameters['to_PC_constructor']))
         PC_obj.set_plot_params(**(parameters['to_set_plot_params']))
@@ -125,7 +162,7 @@ def default_PC_setup(model_id: str):
 
 def general_PC_setup(model_id, *change_parameters):
     # change_parameters: tuples of (k1, k2 in params[k1], k3 in params[k2]... v)
-    parameters = copy.deepcopy(PARAMS[model_id])
+    parameters = copy.deepcopy(DEFAULT_PARAMS[model_id])
     for tup in change_parameters:
         d = parameters
         for k in tup[:-2]:

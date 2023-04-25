@@ -47,6 +47,9 @@ class ConstantPolicy(AbstractPolicy):
 
 class TwoStepPolicy(AbstractPolicy):
     names = ('1', '2', 't1', 't2')
+    #
+    # def __init__(self, params, minimal_t_sum):
+    #     AbstractPolicy.__init__(self, params)
 
     def _call(self, t):
         if isinstance(t, np.ndarray):
@@ -88,14 +91,14 @@ class SinPolicy(AbstractPolicy):
 
     """
 
-    names = ('A', 'omega', 'alpha', 'bias')
+    names = ('A', 'T', 'alpha', 'bias')
 
     def __init__(self, params_dict):
         AbstractPolicy.__init__(self, params_dict)
         # assert self['alpha'] > 1e-5
 
     def _call(self, t):
-        return self['A'] * np.sin(self['omega'] * t + self['alpha']) + self['bias']
+        return self['A'] * np.sin(2 * np.pi / self['T'] * t + self['alpha']) + self['bias']
 
 
 class SinOfPowerPolicy(AbstractPolicy):

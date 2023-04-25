@@ -147,17 +147,17 @@ class ProcessController:
             self.time_forward(time_step_seq[i])
             self.set_controlled({name: in_data_df.loc[i + 1, name] for name in in_data_df.columns})
 
-    def process_by_policy_objs(self, policies, episode_time, resolution):
-        time_seq = np.arange(0., episode_time, resolution)
+    def process_by_policy_objs(self, policies, episode_time, policy_step):
+        time_seq = np.arange(0., episode_time, policy_step)
         controlled_to_pass = np.array([p(time_seq) for p in policies]).transpose()
 
         for i in range(time_seq.size):
             self.set_controlled(controlled_to_pass[i])
-            self.time_forward(resolution)
+            self.time_forward(policy_step)
         while self.get_current_time() < episode_time:
-            self.time_forward(resolution)
+            self.time_forward(policy_step)
 
-    def const_preprocess(self, in_values, process_time=300, RESOLUTION=20):
+    def const_preprocess(self, in_values, process_time=300):
         """
         Makes updates for the inner process without saving data from this updates in history.
         Method can be used to bring inner process in a desirable state
@@ -168,8 +168,8 @@ class ProcessController:
         :param RESOLUTION:
         :return:
         """
-        dt = self.analyser_dt * RESOLUTION
-        count = int(process_time // dt)
+        dt = self.analyser_dt * self.RESOLUTION
+        count = int(process_time / dt)
         if isinstance(in_values, dict):
             in_values_arr = np.array([in_values[name] for name in self.controlled_names])
         else:
@@ -349,7 +349,7 @@ class ProcessController:
         if not os.path.exists(f'{d}/_info.txt'):
             with open(f'{d}/info.txt', 'w') as f:
                 f.write('-----Model-----\n')
-                f.write(self.process_to_control.add_info)
+                f.write(self.process_to_control.get_model_info())
                 f.write('\n-----ProcessController-----\n')
                 f.write(self.get_info())
 

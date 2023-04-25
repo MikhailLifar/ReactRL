@@ -25,7 +25,8 @@ def main():
     #                            supposed_step_count=1000,  # memory controlling parameters
     #                            supposed_exp_time=1.e-5)
 
-    PC_obj = PC_setup.default_PC_setup('Ziff')
+    # PC_obj = PC_setup.default_PC_setup('Ziff')
+    PC_obj = PC_setup.general_PC_setup('Libuda2001')
 
     # def for_one_x0_several_x1(x0):
     #     variants_of_x1 = filter(lambda x: (x < 9.e-5) and (x > 1.e-5),
@@ -39,25 +40,73 @@ def main():
     #     new_params += [*p]
     # variants = new_params
 
-    # Ziff Switch Between Pure
+    # LIBUDA
+
+    # SBP
     run_jobs_list(
-        **(get_for_SBP_iteration(2.e+5, 'O2', ziff_model=True)),
+        **(get_for_SBP_iteration(500, 'O2', ziff_model=False,
+                                 out_name_to_observe='CO2')),
         **(jobs_list_from_grid(
-            (i * 1.e+3 for i in range(1, 4)),
+            # (i * 5. for i in range(1, 4)),
+            # (i * 5. for i in range(4, 8)),
+            (i * 5. for i in range(8, 12)),
             map(lambda x: 0.1 * x, range(1, 10)),
             names=('total', 'first_part'),
         )),
         names_groups=(),
-        const_params={'O2_max': 1.e+5, 'CO_max': 1.e+5},
+        const_params={'O2_max': 1.e-4, 'CO_max': 1.e-4},
         sort_iterations_by='CO2',
         PC=PC_obj,
-        repeat=3,
-        out_fold_path='PC_plots/230415_Ziff_80x25_SBP',
+        repeat=1,
+        out_fold_path='PC_plots/230419_Libuda_SBP_part3',
         separate_folds=False,
         cluster_command_ops=False,
         python_interpreter='../RL_10_21/venv/bin/python',
-        at_same_time=100,
+        at_same_time=110,
     )
+
+    # benchmark
+    # pressure_unit = 1.e-5
+    # pairs_num = 26
+    # variants = np.linspace(0., 1., pairs_num).reshape(-1, 1)
+    # variants = np.hstack((variants, -1 * variants + 1)) * 10 * pressure_unit
+    # # pairs_num = 3
+    # run_jobs_list(
+    #     **(get_for_Ziff_iterations(pressure_unit, 500, take_from_the_end=0.1, CO2_output_column=0,
+    #                                out_names_to_plot='CO2')),
+    #     params_variants=variants.tolist(),
+    #     names=('O2', 'CO'),
+    #     names_groups=(),
+    #     const_params={},
+    #     sort_iterations_by='CO2',
+    #     PC=PC_obj,
+    #     repeat=1,
+    #     out_fold_path='PC_plots/230419_Libuda_benchmark',
+    #     separate_folds=False,
+    #     cluster_command_ops=False,
+    #     python_interpreter='../RL_10_21/venv/bin/python',
+    #     at_same_time=100,
+    # )
+
+    # Ziff Switch Between Pure
+    # run_jobs_list(
+    #     **(get_for_SBP_iteration(2.e+5, 'O2', ziff_model=True)),
+    #     **(jobs_list_from_grid(
+    #         (i * 1.e+3 for i in range(1, 4)),
+    #         map(lambda x: 0.1 * x, range(1, 10)),
+    #         names=('total', 'first_part'),
+    #     )),
+    #     names_groups=(),
+    #     const_params={'O2_max': 1.e+5, 'CO_max': 1.e+5},
+    #     sort_iterations_by='CO2',
+    #     PC=PC_obj,
+    #     repeat=3,
+    #     out_fold_path='PC_plots/230415_Ziff_80x25_SBP',
+    #     separate_folds=False,
+    #     cluster_command_ops=False,
+    #     python_interpreter='../RL_10_21/venv/bin/python',
+    #     at_same_time=100,
+    # )
 
     # Ziff benchmark
     # pressure_unit = 1.e+4

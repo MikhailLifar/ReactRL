@@ -109,7 +109,8 @@ def main_cluster_function():
     # #                        input_ax_name='Pressure, Pa')
 
     # PC_obj = PC_setup.default_PC_setup('Pd_monte_coffee')
-    PC_obj = PC_setup.default_PC_setup('Ziff')
+    # PC_obj = PC_setup.default_PC_setup('Ziff')
+    PC_obj = PC_setup.general_PC_setup('Ziff', ('to_PC_constructor', 'analyser_dt', 5.e+1))
 
     # gauss_target_1 = get_target_func('Gauss(CO_sub_default)xConv_I', default=1e-4, sigma=1e-5 * episode_time, eps=1e-4)
     # gauss_target_2 = get_target_func('Gauss(CO_sub_default)xConvSum_I', default=1e-4, sigma=1e-5 * episode_time, eps=1e-4)
@@ -192,18 +193,28 @@ def main_cluster_function():
     #
     #     return switch_between_pure
 
-    def get_SBP_ext_for_Ziff(first_turned):
+    # def get_SBP_ext_for_Ziff(first_turned):
+    #
+    #     def switch_between_pure(d):
+    #         d['x_1'] = 1. - (first_turned == 'O2') * 1.
+    #         d['x_2'] = 1. - (first_turned == 'CO') * 1.
+    #
+    #         if ('total' in d) and ('first_part' in d):
+    #             d['t1'], d['t2'] = int(d['first_part'] * d['total']), int((1 - d['first_part']) * d['total'])
+    #
+    #         d['x_t1'], d['x_t2'] = d['t1'], d['t2']
+    #
+    #     return switch_between_pure
 
-        def switch_between_pure(d):
-            d['x_1'] = 1. - (first_turned == 'O2') * 1.
-            d['x_2'] = 1. - (first_turned == 'CO') * 1.
+    def get_SBPOverlap_ext_Ziff():
+        # for 4 step policy
+        # output x1..x4, x_t1..x_t4
 
-            if ('total' in d) and ('first_part' in d):
-                d['t1'], d['t2'] = int(d['first_part'] * d['total']), int((1 - d['first_part']) * d['total'])
+        def complicated_ext(d):
+            d['x_1'], d['x_3'] = 0., 1.
+            d['x_2'] = d['x_4'] = 0.5
 
-            d['x_t1'], d['x_t2'] = d['t1'], d['t2']
-
-        return switch_between_pure
+        return complicated_ext
 
     # def get_O2_CO_from_x_co_ext(pressures_sum):
     #     def new_ext(d):
@@ -225,21 +236,26 @@ def main_cluster_function():
     # ext = get_switch_between_pure_ext({'O2': 1.e+5, 'CO': 1.e+5, }, first_turned='O2')
 
     # Ziff
-    cyclesteps = 2
+    # cyclesteps = 2
+    cyclesteps = 4
     episode_time = 2.e+5
-    ext = get_SBP_ext_for_Ziff(first_turned='O2')
+    # ext = get_SBP_ext_for_Ziff(first_turned='O2')
+    ext = get_SBPOverlap_ext_Ziff()
 
     run_jobs_list(**get_for_repeated_opt_iterations(func_to_optimize_policy(
-                                                        PC_obj, AnyStepPolicy(cyclesteps, dict()), episode_time, episode_time / 1000,
+                                                        PC_obj,
+                                                        AnyStepPolicy(cyclesteps, dict()),
+                                                        episode_time, episode_time / 1000,
                                                         expand_description=ext,
                                                         to_plot={'out_names': ['CO2_count'], 'additional_plot': ['thetaCO', 'thetaO']}),
                                                     # optimize_bounds={'t1': (1.e-8, 1.5e-8), 't2': (1.5e-7, 2.e-7)},
                                                     # optimize_bounds={'total': (0.5e-7, 1.e-7), 'first_part': (0.6, 0.8)},  # first good PdMCoffee SBP point
-                                                    optimize_bounds={'total': (1e+3, 3.e+3), 'first_part': (0.4, 0.6)},  # first good Ziff SBP point
+                                                    # optimize_bounds={'total': (1e+3, 3.e+3), 'first_part': (0.4, 0.6)},  # first good Ziff SBP point
+                                                    optimize_bounds={'x_t1': (800, 1200), 'x_t3': (800, 1200), 'x_t2': (0, 1200), 'x_t4': (0, 1200), },  # SBP with overlap, near good SBP point
                                                     cut_left=False, cut_right=False,
-                                                    method='Nelder-Mead', try_num=10,
+                                                    method='Nelder-Mead', try_num=30,
                                                     debug_params={'DEBUG': True, 'folder': 'auto'},
-                                                    optimize_options={'maxiter': 30}),
+                                                    optimize_options={'maxiter': 3}),
 
                   const_params={},
                   PC=PC_obj,
@@ -247,12 +263,12 @@ def main_cluster_function():
                   sort_iterations_by='fvalue',
                   cluster_command_ops=False,
                   python_interpreter='../RL_10_21/venv/bin/python',
-                  out_fold_path='./optimize_out/230417_Ziff_SBP_total_2000',
+                  out_fold_path='./optimize_out/230420_Ziff_SBPOverlap_2000_0.5_good_point',
                   separate_folds=False,
                   at_same_time=30,
                   )
 
-    # # Ziff
+    # Ziff
 
     # CONSTANT
     # episode_time = 2.e+5  # Ziff model

@@ -79,8 +79,6 @@ class GeneralizedLibudaModel(BaseModel):
         # self.top['output']['outputC'] = self['rate_react'] * self['thetaA_max'] * self['thetaB_max']
         self.fill_limits()
 
-        self.add_info = self.get_add_info()
-
         self.resample_when_reset = resample_when_reset
 
     def _check_params(self, params_dict):
@@ -97,13 +95,6 @@ class GeneralizedLibudaModel(BaseModel):
 
     def _resample(self):
         self._sample_model()
-        self.add_info = self.get_add_info()
-
-    def get_add_info(self):
-        s = f'Model name: {self.model_name}\n' + ('-' * 10) + '\n'
-        for name in self.params:
-            s += f'{name}: {self[name]}\n'
-        return s
 
     # def assign_constants(self, **kw):
     #     # change default

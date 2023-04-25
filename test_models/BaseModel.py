@@ -32,11 +32,13 @@ class BaseModel:
     model_name = '???'
     limits = {}
 
+    predefined_params = dict()
+
     def __init__(self, params=None):
+        self.params = dict()
+        self.params.update(self.predefined_params)
         if isinstance(params, dict):
-            self.params = params
-        elif params is None:
-            self.params = dict()
+            self.params.update(params)
         else:
             raise AssertionError(f'Invalid value for params: {params}')
         self.t = 0.
@@ -60,7 +62,7 @@ class BaseModel:
 
     def set_params(self, params):
         assert isinstance(params, dict), 'Params is not a dictionary!'
-        self.params = params
+        self.params.update(params)
 
     def __getitem__(self, item):
         return self.params[item]
@@ -94,6 +96,12 @@ class BaseModel:
 
     def assign_and_eval_values(self, **kw):
         raise NotImplementedError
+
+    def get_model_info(self):
+        s = f'Model name: {self.model_name}\n' + ('-' * 10) + '\n'
+        for name in self.params:
+            s += f'{name}: {self[name]}\n'
+        return s
 
     def reset(self):
         self.t = 0.

@@ -498,13 +498,13 @@ def KMC_simple_tests():
 
 def Ziff_model_poisoning_speed_test():
     size = [80, 25]
-    PC_Ziff = ProcessController(KMC_Ziff_model(*size,
-                                               # log_on=True,
-                                               # O2_top=1.1e5, CO_top=1.1e5,
-                                               # CO2_rate_top=3.e5,
-                                               CO2_count_top=1.e4,
-                                               # T=373.,
-                                               ),
+    PC_Ziff = ProcessController(ZGBModel(*size,
+                                         # log_on=True,
+                                         # O2_top=1.1e5, CO_top=1.1e5,
+                                         # CO2_rate_top=3.e5,
+                                         CO2_count_top=1.e4,
+                                         # T=373.,
+                                         ),
                                 analyser_dt=2e+2,
                                 target_func_to_maximize=get_target_func('CO2_value'),
                                 target_func_name='CO2_count',
@@ -552,6 +552,24 @@ def Ziff_model_poisoning_speed_test():
                    'plot_mode': 'separately', 'out_names': ['CO2_count']})
 
 
+def ZGBk_dynamic_advantage_run():
+    PC_obj = PC_setup.general_PC_setup('ZGBk')
+    PC_obj.reset()
+    MC_time_step = PC_obj.process_to_control.m * PC_obj.process_to_control.n
+    t_p, t_d = 150 * MC_time_step, 10 * MC_time_step,
+    x_p, x_d = 0.535, 0.5
+    for _ in range(5):
+        PC_obj.set_controlled((x_p, ))
+        PC_obj.time_forward(t_p)
+        PC_obj.set_controlled((x_d, ))
+        PC_obj.time_forward(t_d)
+
+    PC_obj.get_and_plot(f'PC_plots/ZGBk_dynamic_advantage/ZGBk_dynamic_advantage.png',
+                        plot_params={'time_segment': [0, None], 'additional_plot': ['thetaCO', 'thetaO'],
+                                     'plot_mode': 'separately', 'out_names': 'CO2_prod_rate'})
+    # R = PC_obj.integrate_along_history(out_name='CO2_prod_rate')
+
+
 def main():
     # custom_experiment()
 
@@ -581,12 +599,32 @@ def main():
     #                             out_foldpath='PC_plots/LibudaGeneralized/DEBUG/',
     #                             plot_params={'time_segment': [0, None], 'additional_plot': ['thetaB', 'thetaA'],
     #                                          'plot_mode': 'separately', 'out_names': ['outputC']})
-    Libuda2001_CO_cutoff_policy(PC_setup.default_PC_setup('LibudaG'),
-                                ['full'],
-                                'PC_plots/LibudaGeneralized/DEBUG/Libuda_regime',
-                                p_total=1.,
-                                input1_name='inputB', input2_name='inputA', output_name='outputC',
-                                add_names=('thetaA', 'thetaB'))
+    # Libuda2001_CO_cutoff_policy(PC_setup.default_PC_setup('LibudaG'),
+    #                             ['full'],
+    #                             'PC_plots/LibudaGeneralized/DEBUG/Libuda_regime',
+    #                             p_total=1.,
+    #                             input1_name='inputB', input2_name='inputA', output_name='outputC',
+    #                             add_names=('thetaA', 'thetaB'))
+
+    # ZGB Lopez Albano
+    # size = [256, 256]
+    # PC_obj = PC_setup.general_PC_setup('Ziff',
+    #                                    ('to_model_constructor', {'m': size[0], 'n': size[1], 'CO2_count_top': 1.e+5}),
+    #                                    ('to_PC_constructor', 'supposed_step_count', 100000),
+    #                                    ('to_PC_constructor', 'supposed_exp_time', 2.e+7),
+    #                                    ('to_PC_constructor', 'analyser_dt', 1.e+3),
+    #                                    )
+    # time_unit = size[0] * size[1]
+    # T = 20 * time_unit
+    # # x_0 = (0.52 + 0.39) / 2
+    # x_0 = 0.455
+    # PC_obj.const_preprocess({'x': x_0}, 5 * time_unit)
+    # PC_obj.process_by_policy_objs((SinPolicy({'A': 0.11, 'T': T, 'alpha': 0., 'bias': x_0}), ), 10 * T, 5.e+2)
+    # PC_obj.get_and_plot(f'PC_plots/Ziff_Lopez_article/try3.png',
+    #                     plot_params={'time_segment': [0, None], 'additional_plot': ['thetaO', 'thetaCO'],
+    #                                  'plot_mode': 'separately', 'out_names': ['CO2_count']})
+
+    ZGBk_dynamic_advantage_run()
 
     # Libuda2001_original_simulation()
 

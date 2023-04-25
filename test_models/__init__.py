@@ -4,4 +4,4 @@ from .LibudaModel import *
 from .GeneralizedLidudaModel import GeneralizedLibudaModel
 from .PtModel import *
 from .KMC_CO_O2_Pt_Model import *
-from .KMC_Ziff_model import KMC_Ziff_model
+from .ZGBModel import ZGBModel, ZGBkModel

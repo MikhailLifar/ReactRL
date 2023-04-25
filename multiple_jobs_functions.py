@@ -126,7 +126,7 @@ def run_jobs_list(
                 os.system(f'run-cluster -m {ops["m"]} -n {ops["n"]} "{python_interpreter} {file_to_execute_path} {i}"')
             else:
                 os.system(f'{python_interpreter} {file_to_execute_path} {i}')
-        if cluster_command_ops is not None:
+        if cluster_command_ops and (cluster_command_ops is not None):
             os.system(f'run-cluster -m 2000 -n 1 "{python_interpreter} {file_to_execute_path} -2"')
         else:
             os.system(f'{python_interpreter} {file_to_execute_path} -2')
@@ -274,7 +274,8 @@ def one_turn_search_iteration(PC, params: dict, foldpath, it_arg):
     return {'Total_CO2_Count': R}
 
 
-def get_for_SBP_iteration(episode_time, first_to_turn: str, ziff_model: bool = False):
+def get_for_SBP_iteration(episode_time, first_to_turn: str, ziff_model: bool = False,
+                          out_name_to_observe='CO2_count', ):
 
     def switch_between_pure_iteration(PC, params: dict, foldpath, it_arg):
         O2_max, CO_max = params['O2_max'], params['CO_max']
@@ -299,8 +300,8 @@ def get_for_SBP_iteration(episode_time, first_to_turn: str, ziff_model: bool = F
 
         _, output_history = PC.get_and_plot(f'{foldpath}/SBP_{it_arg}_t0({t0:.4g})_t1({t1:.4g}).png',
                                             plot_params={'time_segment': [0, None], 'additional_plot': ['thetaCO', 'thetaO'],
-                                                         'plot_mode': 'separately', 'out_names': ['CO2_count']})
-        R = PC.integrate_along_history(out_name='CO2_count')
+                                                         'plot_mode': 'separately', 'out_names': out_name_to_observe})
+        R = PC.integrate_along_history(out_name=out_name_to_observe)
 
         return {'CO2': R}
 
@@ -308,6 +309,7 @@ def get_for_SBP_iteration(episode_time, first_to_turn: str, ziff_model: bool = F
 
 
 def get_for_Ziff_iterations(pressure_unit: float, episode_time, CO2_output_column=3,
+                            out_names_to_plot=('CO2_count',),
                             take_from_the_end=0.5):
     import lib
     import json
@@ -323,7 +325,7 @@ def get_for_Ziff_iterations(pressure_unit: float, episode_time, CO2_output_colum
         PC.time_forward(episode_time)
         PC.get_and_plot(f'{foldpath}/Ziff_O2({O2 / pressure_unit:.2f})_CO({CO / pressure_unit:.2f})_{it_arg}.png',
                         plot_params={'time_segment': [0, None], 'additional_plot': ['thetaCO', 'thetaO'],
-                                     'plot_mode': 'separately', 'out_names': ['CO2_count']})
+                                     'plot_mode': 'separately', 'out_names': out_names_to_plot})
         CO2_and_covs[0] = PC.get_process_output()[1][:, CO2_output_column]  # should be CO2 output column
         CO2_and_covs[1] = PC.additional_graph['thetaO'][:CO2_and_covs[0].size]
         CO2_and_covs[2] = PC.additional_graph['thetaCO'][:CO2_and_covs[0].size]

@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from .BaseModel import *
 
 
-class KMC_Ziff_model(BaseModel):
+class ZGBModel(BaseModel):
     """
     There is a surface of sites of size m x n
     Sites can be: 0 - empty, 1 - CO covered, 2 - O covered
@@ -32,18 +32,20 @@ class KMC_Ziff_model(BaseModel):
             pass
     """
 
-    model_name = 'ZiffModel'
+    model_name = 'ZGB_model'
 
-    names = {'input': ['x'], 'output': ['CO2_count', 'x']}
+    names = {'input': ['x'], 'output': ['CO2_prod_rate', 'x', 'CO2_count']}
     bottom = {'input': dict(), 'output': dict(), }
     top = {'input': dict(), 'output': dict(), }
 
     bottom['input']['x'], top['input']['x'] = 0., 1.
     bottom['output']['x'], top['output']['x'] = 0., 1.
     bottom['output']['CO2_count'] = 0
+    bottom['output']['CO2_prod_rate'], top['output']['CO2_prod_rate'] = 0., 1.
 
     def __init__(self, m, n, **params):
         BaseModel.__init__(self, params)
+        self.params['size'] = (m, n)
         self.m, self.n = m, n
         self.surface = np.zeros((m, n), dtype=np.int8)
         self.area = self.m * self.n
@@ -69,7 +71,7 @@ class KMC_Ziff_model(BaseModel):
     def update(self, data_slice, delta_t, save_for_plot=False):
         # Note: now delta_t is discrete, it means number of steps
         if abs((int(delta_t) - delta_t) / delta_t) > 1.e-5:
-            warnings.warn(f'In KMC_Ziff model delta_t is supposed to be integer, but {delta_t} was given')
+            warnings.warn(f'In ZGB model delta_t is supposed to be integer, but {delta_t} was given')
         delta_t = int(delta_t)
 
         self.prev_CO2_count = self.CO2_count
@@ -83,7 +85,8 @@ class KMC_Ziff_model(BaseModel):
             self.plot['thetaO'] = self.thetaO
             self.plot['thetaCO'] = self.thetaCO
 
-        self.model_output = np.array([self.CO2_count - self.prev_CO2_count, x])
+        delta_CO2_count = self.CO2_count - self.prev_CO2_count
+        self.model_output = np.array([delta_CO2_count / delta_t, x, delta_CO2_count])
         return self.model_output
 
     def step(self, x):
@@ -138,5 +141,28 @@ class KMC_Ziff_model(BaseModel):
 
         self.plot = {'thetaCO': self.thetaCO, 'thetaO': self.thetaO}
 
+
+class ZGBkModel(ZGBModel):
+    """
+    ZGB model with desorption
+    """
+
+    model_name = 'ZGBk_model'
+
+    predefined_params = {'k_crit': 0.0406}
+
+    def __init__(self, m, n, **params):
+        ZGBModel.__init__(self, m, n, **params)
+        assert 'k' in params, 'Error! Desorption rate is not assigned'
+        assert 0 <= params['k'] <= self.params['k_crit'], f'Error! Desorption rate is not within a range [0, {self["k_crit"]}]'
+
+    def step(self, x):
+        if np.random.random() < self.params['k']:
+            # CO desorption
+            i, j = np.random.randint([0, 0], [self.m, self.n], (2, ))
+            if self.surface[i, j] == 1:
+                self.surface[i, j] = 0
+        else:
+            ZGBModel.step(self, x)
 
 

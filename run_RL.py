@@ -4,10 +4,8 @@ import os
 
 import itertools
 
-import \
-    numpy as np
+import numpy as np
 # import tensorflow as tflow
-# import numpy as np
 # import tensorforce
 from tensorforce.agents import Agent
 
