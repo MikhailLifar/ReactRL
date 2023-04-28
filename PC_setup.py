@@ -10,27 +10,51 @@ DEFAULT_PARAMS = {
             'model_class': LibudaModelReturnK3K1AndPressures,
             'to_model_constructor': {},
             'to_PC_constructor': {
-                'analyser_dt': 1,
                 'target_func_to_maximize': get_target_func('CO2_value'),
-                'target_func_name': 'CO2 form. rate',
-                'target_int_or_sum': 'int',
+                'target_func_name': 'CO2_form_rate',
                 'RESOLUTION': 10,
                 'supposed_step_count': 10000,
                 'supposed_exp_time': 10000,
             },
             'to_set_plot_params': {
-                'input_lims': [-1e-5, None],
+                'input_lims': [-1e-5, 1.1e-4],
                 'input_ax_name': 'Pressure, Pa',
-                'output_lims': [-1e-2, None],
-                'output_ax_name': 'CO2 formation rate, $(Pt atom * sec)^{-1}$',
+                'output_lims': [-1e-2, 0.1],
+                'output_ax_name': 'CO2 formation rate, $(Pd atom * sec)^{-1}$',
                 'additional_lims': [-1e-2, 1. + 1.e-2],
             },
-            'metrics': (('integral CO2', CO2_integral),
+            'metrics': (
+                        # ('integral CO2', CO2_integral),
                         # ('O2 conversion', overall_O2_conversion),
                         # ('CO conversion', overall_CO_conversion)
                         )
         },
         'LibudaG': None,
+        'Lynch': {
+            'model_class': LynchModel,
+            'to_model_constructor': {},
+            'to_PC_constructor': {
+                'analyser_dt': 1,
+                'target_func_to_maximize': get_target_func('CO2_value'),
+                'target_func_name': 'CO2_prod_rate',
+                'RESOLUTION': 97,
+                'supposed_step_count': 10000,
+                'supposed_exp_time': 1e+4,
+            },
+            'to_set_plot_params': {
+                'input_lims': [-1e-5, 1 + 1e-5],
+                'input_ax_name': 'Pressure, Pa',
+                'output_lims': [-1e-2, None],
+                'additional_lims': [-1e-2, 1. + 1.e-2],
+                'output_ax_name': 'CO2_prod_rate'
+            },
+            'metrics': (
+                        # ('CO2 count', lambda time_arr, arr: np.sum(arr[:, 0]), ),
+                        ('integral CO2', CO2_integral),
+                        # ('O2 conversion', overall_O2_conversion),
+                        # ('CO conversion', overall_CO_conversion)
+                        )
+        },
         'ZGB': {
             'model_class': ZGBModel,
             # 'size': [80, 25],  # [128, 256]
@@ -52,7 +76,7 @@ DEFAULT_PARAMS = {
                 'target_int_or_sum': 'int',
                 'RESOLUTION': 1,
                 'supposed_step_count': 100000,
-                'supposed_exp_time': 1e+6,
+                'supposed_exp_time': 1e+2,
             },
             'to_set_plot_params': {
                 'input_lims': [-1e-5, None],
@@ -71,6 +95,11 @@ DEFAULT_PARAMS = {
                         )
         }
     }
+
+# LibudaD setup
+DEFAULT_PARAMS['LibudaD'] = copy.deepcopy(DEFAULT_PARAMS['Libuda2001'])
+DEFAULT_PARAMS['LibudaD']['model_class'] = LibudaModelWithDegradation
+DEFAULT_PARAMS['LibudaD']['to_model_constructor'].update({'v_d': 0.01, 'v_r': 0.1, 'border': 4.})
 
 # ZGBk setup
 DEFAULT_PARAMS['ZGBk'] = copy.deepcopy(DEFAULT_PARAMS['ZGB'])

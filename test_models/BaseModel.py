@@ -39,7 +39,7 @@ class BaseModel:
         self.params.update(self.predefined_params)
         if isinstance(params, dict):
             self.params.update(params)
-        else:
+        elif params is not None:
             raise AssertionError(f'Invalid value for params: {params}')
         self.t = 0.
         self.model_output = None

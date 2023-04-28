@@ -155,3 +155,84 @@ class GeneralizedLibudaModel(BaseModel):
         self.thetaA = self['thetaA_init']
         self.thetaB = self['thetaB_init']
         self.plot = {'thetaA': self.thetaA, 'thetaB': self.thetaB}
+
+
+class LynchModel(BaseModel):
+    """
+    Model is based on the 5 dimensionless diff. equations
+    3 for gases (O2, CO, CO2), 2 for coverages
+    model parameters:
+    K1, K1_des, K2_2, K2_des, K_3, alpha
+
+    also:
+    F_CO2 (always 0)
+    F_CO and F_O2 (inputs) (F_CO + F_O2 = 1)
+
+    default params (params from the article)
+    K1: 35, K1_des: -0.5, K2: 20, K2_des: 50, K3: 6, alpha: 1
+
+    """
+
+    names = {'input': ['O2', 'CO'], 'output': ['CO2', 'O2', 'CO']}
+
+    bottom = {'input': dict(), 'output': dict()}
+    top = {'input': dict(), 'output': dict()}
+
+    bottom['input']['O2'] = bottom['input']['CO'] = 0.
+    top['input']['O2'] = top['input']['CO'] = 1.
+
+    bottom['output']['O2'] = bottom['output']['CO'] = 0.
+    bottom['output']['CO2'] = 0.
+
+    top['output']['O2'] = top['output']['CO'] = 1.
+
+    predefined_params = {'K1': 35, 'K1_des': 0.5, 'K2': 20, 'K2_des': 50, 'K3': 6,
+                         'alpha': 1, 'F_CO2': 0.}
+
+    def __init__(self, **params):
+        BaseModel.__init__(self, params)
+        self.X = self.Y = self.Z = 0.
+        self.thetaCO = self.thetaO = 0.
+
+        self.top['output']['CO2'] = self['K3']
+        self.fill_limits()
+
+        self.plot = {'thetaCO': self.thetaCO, 'thetaO': self.thetaO}
+        self.model_output = np.empty(3)
+
+    def update(self, data_slice, delta_t, save_for_plot=False):
+        # Euler's method
+        F_O2, F_CO = data_slice
+
+        X, Y, Z = self.X, self.Y, self.Z
+        thetaO, thetaCO = self.thetaO, self.thetaCO
+
+        free_frac = (1. - thetaO - thetaCO)
+
+        CO_adsorp_term = self.params['K1'] * X * free_frac
+        CO_desorp_term = self.params['K1_des'] * thetaCO
+        O2_adsorp_term = self.params['K2'] * Y * free_frac * free_frac
+        O2_desorp_term = self.params['K2_des'] * thetaO * thetaO
+        reaction_term = self.params['K3'] * thetaO * thetaCO
+
+        Q_expr = 1 - CO_adsorp_term + CO_desorp_term - O2_adsorp_term + O2_desorp_term + reaction_term
+
+        self.X += (F_CO - Q_expr * X - CO_adsorp_term + CO_desorp_term) * delta_t
+        self.Y += (F_O2 - Q_expr * Y - O2_adsorp_term + O2_desorp_term) * delta_t
+        self.Z += (self.params['F_CO2'] - Q_expr * Z + reaction_term) * delta_t
+
+        self.thetaO += (2 * O2_adsorp_term - 2 * O2_desorp_term - reaction_term) * self.params['alpha'] * delta_t
+        self.thetaCO += (CO_adsorp_term - CO_desorp_term - reaction_term) * self.params['alpha'] * delta_t
+
+        if save_for_plot:
+            self.plot['thetaCO'] = self.thetaCO
+            self.plot['thetaO'] = self.thetaO
+
+        self.model_output[:] = np.array([Z, F_O2, F_CO])
+        # self.t += delta_t
+        return self.model_output
+
+    def reset(self):
+        BaseModel.reset(self)
+        self.X = self.Y = self.Z = 0.
+        self.thetaCO = self.thetaO = 0.

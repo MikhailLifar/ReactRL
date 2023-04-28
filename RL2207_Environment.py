@@ -111,9 +111,9 @@ class RL2207_Environment(Environment):
 
         self.discrete_actions = copy.deepcopy(discrete_actions)
         self.continuous_actions = copy.deepcopy(continuous_actions)
-        self.action_vector = None
+        self.action_vector = np.empty(1)
         self.names_of_action = None
-        self.idxs_of_action = None
+        self.idxs_of_action = np.empty(1)
 
         self.reset_mode = reset_mode
 

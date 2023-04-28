@@ -212,6 +212,15 @@ class ProcessController:
         # t1 = time.time()
         RESOLUTION = self.RESOLUTION
 
+        # extend the memory 10 times if we run out of it
+        if measurements_count > self.output_history_dt.size:
+            self.output_history_dt = np.hstack((self.output_history_dt,
+                                                np.tile(np.full_like(self.output_history_dt, -1), 9)))
+            self.output_history = np.vstack((self.output_history,
+                                             np.tile(np.empty_like(self.output_history), (9, 1))))
+            for name, arr in self.additional_graph.items():
+                self.additional_graph[name] = np.hstack((arr, np.tile(np.empty_like(arr), 9)))
+
         if not self.real_exp:
             for i in range(last_ind, measurements_count):
                 for j in range(RESOLUTION):
@@ -221,9 +230,9 @@ class ProcessController:
                 self.output_history_dt[i] = i * self.analyser_dt
                 for name in self.additional_graph:
                     self.additional_graph[name][i] = self.process_to_control.plot[name]
-                # # debug statements
-                # if (i - 60) % 100 == 0:
-                #     pass
+                # debug statements
+                if (i - 60) % 100 == 0:
+                    pass
         else:
             for i in range(last_ind, measurements_count):
                 t = (i-1) * self.analyser_dt - self.analyser_delay
