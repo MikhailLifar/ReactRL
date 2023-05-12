@@ -1,6 +1,5 @@
 import copy
-import \
-    warnings
+import warnings
 
 import numpy as np
 
@@ -293,7 +292,7 @@ class LibudaModelReturnK3K1AndPressures(LibudaModel):
         return self.model_output
 
 
-class LibudaModelWithDegradation(LibudaModel):
+class LibudaModelWithDegradation(LibudaModelReturnK3K1AndPressures):
     model_name = 'LibudaDegrad'
 
     def __init__(self, Ts=440., init_cond: dict = None,
@@ -302,8 +301,8 @@ class LibudaModelWithDegradation(LibudaModel):
         for name in ['v_d', 'v_r', 'border']:
             if name in kwargs_to_super:
                 del kwargs_to_super[name]
-        LibudaModel.__init__(self, Ts=Ts, init_cond=init_cond,
-                             **kwargs_to_super)
+        LibudaModelReturnK3K1AndPressures.__init__(self, Ts=Ts, init_cond=init_cond,
+                                                   **kwargs_to_super)
 
         # degradation related attributes
         if not len(kwargs):
@@ -332,10 +331,10 @@ class LibudaModelWithDegradation(LibudaModel):
         if 'border' in kw:
             self.ratio_border = kw['border']
             del kw['border']
-        LibudaModel.assign_constants(self, **kw)
+        LibudaModelReturnK3K1AndPressures.assign_constants(self, **kw)
 
     def get_add_info(self):
-        s = LibudaModel.get_add_info(self)
+        s = LibudaModelReturnK3K1AndPressures.get_add_info(self)
         s = s + f'--model with degradation--\n' + \
                 f'-degradation params-\n' + \
                 f'v_degrad: {self.v_degrad}\n' + \
@@ -345,23 +344,23 @@ class LibudaModelWithDegradation(LibudaModel):
 
     def update(self, data_slice, delta_t, save_for_plot=False):
         # update and compute output such as in the model without degradation
-        LibudaModel.update(self, data_slice, delta_t, save_for_plot)
+        LibudaModelReturnK3K1AndPressures.update(self, data_slice, delta_t, save_for_plot)
         O2 = data_slice[0]
         CO = data_slice[1]
 
         # # deactivation like the old one used during the tests for the russian article
         # # deactivation parameters for the tests: Vd = 0.01, Vr = 1.5, border = 4.
         # # other parameters: Ts = 440, init_cond = {'thetaO': 0.25, 'thetaCO': 0.5}
-        if O2 <= CO / 2 / self.ratio_border:  # if O2 flow is too small
-            ratio = 2 * self.ratio_border
-        else:
-            ratio = CO / O2
-
-        # # more physical deactivation
-        # if CO <= O2 / 2 / self.ratio_border:  # if CO flow is too small
+        # if O2 <= CO / 2 / self.ratio_border:  # if O2 flow is too small
         #     ratio = 2 * self.ratio_border
         # else:
-        #     ratio = O2 / CO
+        #     ratio = CO / O2
+
+        # more physical deactivation
+        if CO <= O2 / 2 / self.ratio_border:  # if CO flow is too small
+            ratio = 2 * self.ratio_border
+        else:
+            ratio = O2 / CO
 
         ratio_border = self.ratio_border
         if ratio >= ratio_border:
@@ -380,11 +379,11 @@ class LibudaModelWithDegradation(LibudaModel):
             self.plot['D'] = self.D
 
         # out (of model) = out * k
-        self.model_output *= self.D
+        self.model_output[0] *= self.D
         return self.model_output
 
     def reset(self):
-        LibudaModel.reset(self)
+        LibudaModelReturnK3K1AndPressures.reset(self)
         self.D = 1.
         self.plot['D'] = self.D
 

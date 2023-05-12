@@ -24,12 +24,40 @@ DEFAULT_PARAMS = {
                 'additional_lims': [-1e-2, 1. + 1.e-2],
             },
             'metrics': (
-                        # ('integral CO2', CO2_integral),
+                        ('integral CO2', CO2_integral),
                         # ('O2 conversion', overall_O2_conversion),
                         # ('CO conversion', overall_CO_conversion)
                         )
         },
-        'LibudaG': None,
+        'LibudaG': {
+            'model_class': GeneralizedLibudaModel,
+            'to_model_constructor': {
+                # Libuda original params
+                'set_Libuda': True,
+                'resample_when_reset': False,
+            },
+            'to_PC_constructor': {
+                'analyser_dt': 1,
+                'target_func_to_maximize': lambda x: x[0],
+                'target_func_name': 'C production rate',
+                'target_int_or_sum': 'int',
+                'RESOLUTION': 20,
+                'supposed_step_count': 10000,
+                'supposed_exp_time': 2e+4,
+            },
+            'to_set_plot_params': {
+                'input_lims': [-1e-5, 1 + 1e-5],
+                'input_ax_name': '?',
+                'output_lims': [-1e-2, None],
+                'additional_lims': [-1e-2, 1. + 1.e-2],
+                'output_ax_name': 'C prod rate'
+            },
+            'metrics': (
+                ('integral C', lambda time_arr, arr: integral(time_arr, arr[:, 0])),
+                # ('O2 conversion', overall_O2_conversion),
+                # ('CO conversion', overall_CO_conversion)
+            )
+        },
         'Lynch': {
             'model_class': LynchModel,
             'to_model_constructor': {},
@@ -93,6 +121,31 @@ DEFAULT_PARAMS = {
                         # ('O2 conversion', overall_O2_conversion),
                         # ('CO conversion', overall_CO_conversion)
                         )
+        },
+        'VanNeer': {
+            'model_class': VanNeerModel,
+            'to_model_constructor': {},
+            'to_PC_constructor': {
+                'analyser_dt': 1.e-5,
+                'target_func_to_maximize': get_target_func('CO2_value'),
+                'target_func_name': 'CO2_prod_rate',
+                'RESOLUTION': 97,
+                'supposed_step_count': int(5.e+6),
+                'supposed_exp_time': 1e+3,
+            },
+            'to_set_plot_params': {
+                'input_lims': [-1e-5, 1 + 1e-5],
+                'input_ax_name': 'Concentration, mol/$m^{3}$',
+                'output_lims': None,
+                'additional_lims': [-1e-2, 1. + 1.e-2],
+                'output_ax_name': 'CO2_prod_rate'
+            },
+            'metrics': (
+                        # ('CO2 count', lambda time_arr, arr: np.sum(arr[:, 0]), ),
+                        ('integral CO2', CO2_integral),
+                        # ('O2 conversion', overall_O2_conversion),
+                        # ('CO conversion', overall_CO_conversion)
+                        )
         }
     }
 
@@ -100,6 +153,10 @@ DEFAULT_PARAMS = {
 DEFAULT_PARAMS['LibudaD'] = copy.deepcopy(DEFAULT_PARAMS['Libuda2001'])
 DEFAULT_PARAMS['LibudaD']['model_class'] = LibudaModelWithDegradation
 DEFAULT_PARAMS['LibudaD']['to_model_constructor'].update({'v_d': 0.01, 'v_r': 0.1, 'border': 4.})
+
+# LibudaGWithT setup
+DEFAULT_PARAMS['LibudaGWithT'] = copy.deepcopy(DEFAULT_PARAMS['LibudaG'])
+DEFAULT_PARAMS['LibudaGWithT']['model_class'] = LibudaGWithTemperature
 
 # ZGBk setup
 DEFAULT_PARAMS['ZGBk'] = copy.deepcopy(DEFAULT_PARAMS['ZGB'])
@@ -113,41 +170,7 @@ DEFAULT_PARAMS['ZGBk']['to_PC_constructor'].update({'analyser_dt': 1.e+3,
 
 def default_PC_setup(model_id: str):
 
-    if model_id == 'LibudaG':
-        PC_LibudaG = ProcessController(GeneralizedLibudaModel(
-                                            # params={
-                                            # 'thetaA_max': 0.5, 'thetaB_max': 0.25,
-                                            # 'thetaA_init': 0., 'thetaB_init': 0.25,
-                                            # 'rate_ads_A': 0.14895,
-                                            # 'rate_des_A': 0.07162,
-                                            # 'rate_ads_B': 0.06594,
-                                            # 'rate_react': 5.98734,
-                                            # 'C_B_inhibit_A': 0.3,
-                                            # 'C_A_inhibit_B': 1.,
-                                            # },
-                                            resample_when_reset=True,
-                                        ),
-                                       analyser_dt=1,
-                                       target_func_to_maximize=lambda x: x[0],
-                                       target_func_name='C production rate',
-                                       target_int_or_sum='int',
-                                       RESOLUTION=20,
-                                       supposed_step_count=2000,  # memory controlling parameters
-                                       supposed_exp_time=2e+4)
-        PC_obj = PC_LibudaG
-
-        PC_obj.set_plot_params(input_lims=[-1e-5, 1.1], input_ax_name='?',
-                               output_lims=[-1e-2, None],
-                               additional_lims=[-1e-2, 1. + 1.e-2],
-                               output_ax_name='C prod rate')
-
-        PC_obj.set_metrics(
-                       ('integral C', lambda time_arr, arr: integral(time_arr, arr[:, 0])),
-                       # ('O2 conversion', overall_O2_conversion),
-                       # ('CO conversion', overall_CO_conversion)
-        )
-
-    elif model_id == 'Ziff':
+    if model_id == 'Ziff':
         parameters = DEFAULT_PARAMS['Ziff']
         model = parameters['model_class'](**parameters['to_model_constructor'])
         PC_obj = ProcessController(model, **(parameters['to_PC_constructor']))
@@ -194,9 +217,9 @@ def general_PC_setup(model_id, *change_parameters):
     parameters = copy.deepcopy(DEFAULT_PARAMS[model_id])
     for tup in change_parameters:
         d = parameters
-        for k in tup[:-2]:
+        for k in tup[:-1]:
             d = d[k]
-        d[tup[-2]] = tup[-1]
+        d.update(tup[-1])
 
     model = parameters['model_class'](**parameters['to_model_constructor'])
     PC_obj = ProcessController(model, **(parameters['to_PC_constructor']))

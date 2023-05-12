@@ -42,7 +42,7 @@ class BaseModel:
         elif params is not None:
             raise AssertionError(f'Invalid value for params: {params}')
         self.t = 0.
-        self.model_output = None
+        self.model_output = np.full(len(self.names['input']), np.nan)
         self.add_info = ''
 
         self.plot = dict()
@@ -105,7 +105,6 @@ class BaseModel:
 
     def reset(self):
         self.t = 0.
-        self.model_output = None
 
     # @staticmethod
     # def data_from_df_to_numpy(frame):

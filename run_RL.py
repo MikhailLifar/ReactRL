@@ -240,6 +240,8 @@ def test_run(environment: RL2207_Environment, agent, out_folder, n_episodes=None
 
 
 if __name__ == '__main__':
+    # from targets_metrics import get_target_func
+    import PC_setup
 
     np.random.seed(100)
 
@@ -260,23 +262,36 @@ if __name__ == '__main__':
     #     n_episodes=10000)
 
     # PRETRAINED AGENT ARCHITECTURE
-    def target(x):
-        return x[0]
+
+    # PC_obj = ProcessController(
+    #             LibudaModelWithDegradation(
+    #                 init_cond={'thetaCO': 0., 'thetaO': 0.},
+    #                 Ts=273+160,  # 273+160
+    #                 v_d=0.01,
+    #                 v_r=0.1,
+    #                 border=4.),
+    #             target_func_to_maximize=get_target_func('CO2_value'),
+    #             supposed_step_count=100, supposed_exp_time=1000)
+
+    # PC_obj = PC_setup.general_PC_setup('Libuda2001',
+    #                                    ('to_model_constructor', {'Ts': 433.}),
+    #                                    ('to_PC_constructor', {'target_func_to_maximize': lambda x: x[4]}),
+    #                                    )
+    PC_obj = PC_setup.general_PC_setup('LibudaD',
+                                       ('to_model_constructor', {'Ts': 433.}),
+                                       ('to_PC_constructor', {'target_func_to_maximize': lambda x: x[4]}),
+                                       )
 
     my_env = RL2207_Environment(
-        ProcessController(
-            LibudaModelWithDegradation(
-                init_cond={'thetaCO': 0., 'thetaO': 0.},
-                Ts=273+160,
-                v_d=0.01,
-                v_r=0.1,
-                border=4.),
-            target_func_to_maximize=target,
-            supposed_step_count=100, supposed_exp_time=1000),
-        state_spec={'rows': 3, 'use_differences': False},
+        PC_obj,
+        state_spec={'rows': 1, 'use_differences': False},
+        names_to_state=['CO2', 'O2(Pa)', 'CO(Pa)'],
+        continuous_actions=True,
         reward_spec='full_ep_mean',
+        target_type='one_row',
         episode_time=500,
-        time_step=10)
+        time_step=10,
+    )
     my_env = Environment.create(environment=my_env, max_episode_timesteps=6000)
     # rl_agent = create_tforce_agent(my_env, 'ac',
     #                                network=dict(type='layered',
@@ -285,6 +300,10 @@ if __name__ == '__main__':
     #                                critic=dict(type='layered',
     #                                             layers=[dict(type='flatten'),
     #                                                     dict(type='dense', size=16, activation='relu')]))
-    rl_agent = create_tforce_agent(my_env, 'vpg')
+    # rl_agent = create_tforce_agent(my_env, 'vpg')
     # rl_agent = Agent.load('run_RL_out/agents/220804_LMT_0_agent', format='numpy', environment=my_env)
-    print(rl_agent.get_architecture())
+    # rl_agent = Agent.load('temp/for_english/stationary_agent', format='numpy', environment=my_env)
+    rl_agent = Agent.load('temp/for_english/periodic_agent_2', format='numpy', environment=my_env)
+    # test_run(my_env, rl_agent, 'temp/for_english/L2001_test_run', 5, deterministic=True)
+    test_run(my_env, rl_agent, 'temp/for_english/LD_test_run', 5, deterministic=True)
+    # print(rl_agent.get_architecture())

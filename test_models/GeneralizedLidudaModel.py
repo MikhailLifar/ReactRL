@@ -1,3 +1,5 @@
+import copy
+
 import numpy as np
 
 from .BaseModel import BaseModel
@@ -51,7 +53,7 @@ class GeneralizedLibudaModel(BaseModel):
 
     params_names = ['thetaB_init', 'thetaA_init',
                     'thetaB_max', 'thetaA_max',
-                    'rate_ads_A', 'rate_des_A', 'rate_ads_B', 'rate_react',
+                    'rate_ads_A', 'rate_des_A', 'rate_ads_B', 'rate_des_B', 'rate_react',
                     'C_B_inhibit_A', 'C_A_inhibit_B']
 
     params_choices = {
@@ -63,9 +65,12 @@ class GeneralizedLibudaModel(BaseModel):
         'C': (0., 0.05, 0.1, 0.3, 0.5, 0.7, 1.),
     }
 
-    def __init__(self, params=None, resample_when_reset=False):
+    def __init__(self, params=None, resample_when_reset=False, set_Libuda=False):
+        # self._check_params(params)
         BaseModel.__init__(self, params)
-        if params is None:
+        if set_Libuda:
+            self.set_Libuda()
+        elif params is None:
             self._sample_model()
 
         # initial conditions
@@ -74,7 +79,7 @@ class GeneralizedLibudaModel(BaseModel):
             assert self.params[name] <= self.params[f'{name[:name.find("_")]}_max'], 'Wrong assignment to initial conditions'
 
         # save initial cond
-        self.plot = {'thetaA': self.thetaA, 'thetaB': self.thetaB}
+        self.plot = {'thetaA': self.thetaA, 'thetaB': self.thetaB, 'error': 0.}
 
         # self.top['output']['outputC'] = self['rate_react'] * self['thetaA_max'] * self['thetaB_max']
         self.fill_limits()
@@ -96,52 +101,72 @@ class GeneralizedLibudaModel(BaseModel):
     def _resample(self):
         self._sample_model()
 
-    # def assign_constants(self, **kw):
-    #     # change default
-    #     for name in kw:
-    #         if name in self.constants:
-    #             self.constants[name] = kw[name]
-    #             # special cases
-    #             if (name == 'thetaCO_max') and ('thetaO_max' not in kw):
-    #                 self.constants['thetaO_max'] = (1. - kw[name]) / 2
-    #                 warnings.warn('thetaO_max was chosen automatically')
-    #             if (name == 'O2_top') and ('CO_top' not in kw):
-    #                 self.constants['O2_top'] = kw[name]
-    #                 warnings.warn('CO_top was chosen automatically')
-    #         else:
-    #             raise ValueError(f'Error! Invalid constant name: {name}')
-
-    # def assign_and_eval_values(self, **kw):
-    #     self.assign_constants(**kw)
-    #     self.new_values()
-    #     self.add_info = self.get_add_info()
+    def set_Libuda(self):
+        self.set_params(
+            params={
+                    'thetaA_max': 0.5, 'thetaB_max': 0.25,
+                    'thetaA_init': 0., 'thetaB_init': 0.25,
+                    'rate_ads_A': 0.14895,
+                    'rate_des_A': 0.07162,
+                    'rate_ads_B': 0.06594,
+                    'rate_des_B': 0.,
+                    'rate_react': 5.98734,
+                    'C_B_inhibit_A': 0.3,
+                    'C_A_inhibit_B': 1.,
+                    }
+        )
 
     def update(self, data_slice, delta_t, save_for_plot=False):
-        inputB = data_slice[0]
-        inputA = data_slice[1]
 
-        thetaA = self.thetaA
-        thetaB = self.thetaB
+        inputB, inputA = data_slice
 
-        StickA = 1 - thetaA / self['thetaA_max'] - self['C_B_inhibit_A'] * thetaB / self['thetaB_max']
-        # StickA = max(StickA, 0)  # optional statement. Doesn't accord Libuda2001 article
-        StickB = 1 - thetaB / self['thetaB_max'] - self['C_A_inhibit_B'] * thetaA / self['thetaA_max']
-        StickB = (StickB * StickB) if StickB > 0. else 0.
+        k_1 = self['rate_ads_A']
+        k_des1 = self['rate_des_A']
+        k_2 = self['rate_ads_B']
+        k_des2 = self['rate_des_B']
+        k_3 = self['rate_react']
+
+        def step(thetaB, thetaA, dt):
+            reaction_term = k_3 * thetaB * thetaA
+
+            StickA = 1 - thetaA / self['thetaA_max'] - self['C_B_inhibit_A'] * thetaB / self['thetaB_max']
+            # StickA = max(StickA, 0)  # optional statement. Doesn't accord Libuda2001 article
+            StickB = 1 - thetaB / self['thetaB_max'] - self['C_A_inhibit_B'] * thetaA / self['thetaA_max']
+            StickB = (StickB * StickB) if StickB > 0. else 0.
+
+            thetaB_new = thetaB + (2 * k_2 * inputB * StickB - 2 * k_des2 * thetaB * thetaB - reaction_term) * dt
+            thetaA_new = thetaA + (k_1 * inputA * StickA - k_des1 * thetaA - reaction_term) * dt
+
+            return thetaB_new, thetaA_new
+
+        def do_steps(thetaB, thetaA, dt, n_steps):
+            for i in range(n_steps):
+                thetaB, thetaA = step(thetaB, thetaA, dt / n_steps)
+            return thetaB, thetaA
 
         # # coefs estimation print
         # print(f'k1: {self["rate_ads_A"]}; k2: {self["rate_des_A"]}; k3: {self["rate_ads_B"]}; k4: {self["rate_react"]}')
 
-        self.thetaA += (self['rate_ads_A'] * inputA * StickA - self['rate_des_A'] * thetaA - self['rate_react'] * thetaA * thetaB) * delta_t
-        self.thetaB += (2 * self['rate_ads_B'] * inputB * StickB - self['rate_react'] * thetaA * thetaB) * delta_t
+        # print(self.thetaB)
+        # print(self.thetaA)
+        # exit(0)
+
+        theta_B_1step, theta_A_1step = do_steps(self.thetaB, self.thetaA, delta_t, 1)
+        theta_B_2step, theta_A_2step = do_steps(self.thetaB, self.thetaA, delta_t, 2)
+        error = max(abs(theta_A_1step - theta_A_2step), abs(theta_B_1step - theta_B_2step))
+
+        self.thetaB = theta_B_2step
+        self.thetaA = theta_A_2step
 
         # this code makes me doubt...
-        self.thetaA = min(max(0., self.thetaA), self['thetaA_max'])
         self.thetaB = min(max(0., self.thetaB), self['thetaB_max'])
+        self.thetaA = min(max(0., self.thetaA), self['thetaA_max'])
         # but it didn't influence much on results
 
         if save_for_plot:
             self.plot['thetaB'] = self.thetaB
             self.plot['thetaA'] = self.thetaA
+        self.plot['error'] = error
 
         # model_output is normalized to be between 0 and 1
         self.model_output = np.array([(self.thetaB / self['thetaB_max']) * (self.thetaA / self['thetaA_max']), inputB, inputA])
@@ -154,7 +179,89 @@ class GeneralizedLibudaModel(BaseModel):
             self._resample()
         self.thetaA = self['thetaA_init']
         self.thetaB = self['thetaB_init']
-        self.plot = {'thetaA': self.thetaA, 'thetaB': self.thetaB}
+        self.plot = {'thetaA': self.thetaA, 'thetaB': self.thetaB, 'error': 0.}
+
+    @staticmethod
+    def co_flow_part_to_pressure_part(x_co):
+        return x_co * 7 / np.sqrt(8) / (np.sqrt(7) + 7 * x_co / np.sqrt(8) - np.sqrt(7) * x_co)
+
+
+class LibudaGWithTemperature(GeneralizedLibudaModel):
+
+    names = copy.deepcopy(GeneralizedLibudaModel.names)
+    names['input'].append('T')
+    names['output'].append('T')
+
+    bottom = copy.deepcopy(GeneralizedLibudaModel.bottom)
+    top = copy.deepcopy(GeneralizedLibudaModel.top)
+    bottom['input']['T'] = bottom['output']['T'] = 400.
+    top['input']['T'] = top['output']['T'] = 600.
+
+    model_name = 'LibudaGWithT'
+
+    params_names = copy.deepcopy(GeneralizedLibudaModel.params_names)
+    for suff in ('ads_A', 'ads_B', 'des_A', 'des_B', 'react'):
+        params_names.append([f'rate_{suff}_0', f'E_{suff}'])
+        params_names.remove(f'rate_{suff}')
+
+    predefined_params = {'kB': 0.008314463}
+
+    def __init__(self, params=None, T=440., resample_when_reset=False, set_Libuda=False):
+        self.T = T
+        GeneralizedLibudaModel.__init__(self, params, resample_when_reset, set_Libuda)
+
+    def calc_for_T(self, T):
+        for suff in ('ads_A', 'ads_B', 'des_A', 'des_B', 'react'):
+            self.params[f'rate_{suff}'] = self.params[f'rate_{suff}_0'] * np.exp(-self.params[f'E_{suff}'] / self['kB'] / T)
+
+    def set_Libuda(self):
+
+        self.set_params(
+            params={
+                    'thetaA_max': 0.5, 'thetaB_max': 0.25,
+                    'thetaA_init': 0., 'thetaB_init': 0.25,
+                    'rate_ads_A_0': 1.,
+                    'rate_des_A_0': 1.,
+                    'rate_ads_B_0': 1.,
+                    'rate_des_B_0': 0.,
+                    'rate_react_0': 1.,
+                    'E_ads_A': 100.,  # chosen randomly, actual parameters should be find later
+                    'E_des_A': 136.,
+                    'E_ads_B': 120.,
+                    'E_des_B': 0.,  # zero because in the original Libuda model there is no oxygen adsorption
+                    'E_react': 60.,
+                    'C_B_inhibit_A': 0.3,
+                    'C_A_inhibit_B': 1.,
+                    })
+
+        self.T = 440.
+        self.calc_for_T(self.T)
+
+        k_1 = 0.14895 / self.params['rate_ads_A']
+        k_des1 = 0.07162 / self.params['rate_des_A']
+        k_2 = 0.06594 / self.params['rate_ads_B']
+        k_des2 = 0.
+        k_3 = 5.98734 / self.params['rate_react']
+
+        self.params.update({
+            'rate_ads_A_0': k_1, 'rate_des_A_0': k_des1,
+            'rate_ads_B_0': k_2, 'rate_des_B_0': k_des2,
+            'rate_react_0': k_3,
+        })
+
+        self.calc_for_T(self.T)
+
+    def update(self, data_slice, delta_t, save_for_plot=False):
+
+        inputB, inputA, T = data_slice
+        if abs(self.T - T) > 1:
+            self.T = T
+            self.calc_for_T(self.T)
+
+        GeneralizedLibudaModel.update(self, data_slice[:-1], delta_t, save_for_plot)
+
+        self.model_output = np.hstack((self.model_output, [T]))
+        return self.model_output
 
 
 class LynchModel(BaseModel):

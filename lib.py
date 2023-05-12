@@ -230,10 +230,13 @@ def plot_to_file(*p, fileName=None, save_csv=True,
         ax.set_ylabel(ylabel)
     if plotMoreFunction is not None:
         plotMoreFunction(ax)
+        # TODO: crutch here
+        if right_ax is not None:
+            plotMoreFunction(right_ax)
 
-    ax.legend(loc=2)
+    ax.legend(loc=2, prop={'size': 12})
     if right_ax is not None:
-        right_ax.legend(loc=1)
+        right_ax.legend(loc=1, prop={'size': 12})
 
     if fileName is None:
         fileName = 'graph.png'
@@ -291,14 +294,13 @@ def read_plottof_csv(datapath, ret_ops=False, ret_df=False, create_standard: boo
     return plot_ops, df
 
 
-def plot_from_file(*lbls_fmts, csvFileName: str, chose_labels=None, transforms=None, **plottof_ops):
+def plot_from_file(*lbls_fmts, csvFileName: str,
+                   chose_labels=None,
+                   transforms=None, x_transform=None,
+                   **plottof_ops):
     ops, _ = read_plottof_csv(csvFileName, True, False, False)
-    for i, l in enumerate(ops[2::3]):
-        if l not in lbls_fmts:
-            for lf in lbls_fmts:
-                if isinstance(lf, dict) and (l == lf['label']):
-                    ops[3 * i + 2] = lf
 
+    # filter срщыут щзы
     if chose_labels is not None:
         new_ops = []
         for i, l in enumerate(ops[2::3]):
@@ -308,10 +310,25 @@ def plot_from_file(*lbls_fmts, csvFileName: str, chose_labels=None, transforms=N
                 new_ops += ops[3*i:3*(i+1)]
         ops = new_ops
 
-    for trans_dict in transforms:
-        label_idx = ops.index(trans_dict['old_label'])
-        ops[label_idx - 1] = trans_dict['transform'](ops[label_idx - 1])
-        ops[label_idx] = trans_dict['new_label']
+    if x_transform is not None:
+        for i in range(len(ops) // 3):
+            ops[3 * i] = x_transform(ops[3 * i])
+    # transform y values
+    if transforms is not None:
+        for trans_dict in transforms:
+            label_idx = ops.index(trans_dict['old_label'])
+            ops[label_idx - 1] = trans_dict['transform'](ops[label_idx - 1])
+            if trans_dict.get('new_label', ''):
+                ops[label_idx] = trans_dict['new_label']
+            else:
+                ops[label_idx] = trans_dict['old_label']
+
+    # replace some labels with format dicts
+    for i, l in enumerate(ops[2::3]):
+        if l not in lbls_fmts:
+            for lf in lbls_fmts:
+                if isinstance(lf, dict) and (l == lf['label']):
+                    ops[3 * i + 2] = lf
 
     if 'fileName' not in plottof_ops:
         plottof_ops['fileName'] = os.path.splitext(csvFileName)[0] + '.png'

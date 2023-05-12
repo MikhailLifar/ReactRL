@@ -303,19 +303,32 @@ def count_conversion_given_exp(csv_path, L_model: LibudaModel):
 
 def Libuda2001_CO_cutoff_policy(PC_obj: ProcessController, program, dest_dir='./PC_plots/Libuda_orginal',
                                 p_total=1e-4,
-                                input1_name='O2', input2_name='CO', output_name='CO2',
+                                transform_x_co_on=None,
+                                transform_x_co_off=None,
+                                output_name_to_plot='CO2',
                                 add_names=('thetaO', 'thetaCO')):
 
+    # default transforms (as in Libuda article)
     def p_co(x_co):
         return p_total * x_co * 7 / np.sqrt(8) / (np.sqrt(7) + 7 * x_co / np.sqrt(8) - np.sqrt(7) * x_co)
 
+    def default_transform_on(x_co):
+        CO_p = p_co(x_co)
+        return {'O2': p_total - CO_p, 'CO': CO_p}
+
+    def default_transform_off(x_co):
+        return {'O2': p_total - p_co(x_co), 'CO': 0.}
+
+    if transform_x_co_on is None:
+        transform_x_co_on = default_transform_on
+        assert transform_x_co_off is None
+        transform_x_co_off = default_transform_off
+
     def _one_co_on(x_co):
         # CO_p = p_total * x_co  # simple formula
-        CO_p = p_co(x_co)
-        O2_p = p_total - CO_p
-        PC_obj.set_controlled({input1_name: O2_p, input2_name: CO_p})
+        PC_obj.set_controlled(transform_x_co_on(x_co))
         PC_obj.time_forward(150)
-        PC_obj.set_controlled({input1_name: O2_p, input2_name: 0.})
+        PC_obj.set_controlled(transform_x_co_off(x_co))
         PC_obj.time_forward(50)
 
     def plot_one_co_on(x_co):
@@ -323,7 +336,7 @@ def Libuda2001_CO_cutoff_policy(PC_obj: ProcessController, program, dest_dir='./
         _one_co_on(x_co)
         PC_obj.get_and_plot(f'{dest_dir}/x_co_{x_co:.2f}.png',
                             plot_params={'time_segment': [0, 200], 'additional_plot': list(add_names),
-                                         'plot_mode': 'separately', 'out_names': [output_name]})
+                                         'plot_mode': 'separately', 'out_names': [output_name_to_plot]})
 
     def run_full_cutoff_series():
         PC_obj.reset()
@@ -333,7 +346,7 @@ def Libuda2001_CO_cutoff_policy(PC_obj: ProcessController, program, dest_dir='./
             x_co += 0.05
         PC_obj.get_and_plot(f'{dest_dir}/full_series.png',
                             plot_params={'time_segment': [0, None], 'additional_plot': list(add_names),
-                                         'plot_mode': 'separately', 'out_names': [output_name]})
+                                         'plot_mode': 'separately', 'out_names': [output_name_to_plot]})
 
     for arg in program:
         if isinstance(arg, tuple):
@@ -341,8 +354,8 @@ def Libuda2001_CO_cutoff_policy(PC_obj: ProcessController, program, dest_dir='./
             for v in arg:
                 _one_co_on(v)
             PC_obj.get_and_plot(f'{dest_dir}/series.png',
-                            plot_params={'time_segment': [0, None], 'additional_plot': list(add_names),
-                                         'plot_mode': 'separately', 'out_names': [output_name]})
+                                plot_params={'time_segment': [0, None], 'additional_plot': list(add_names),
+                                         'plot_mode': 'separately', 'out_names': [output_name_to_plot]})
         elif isinstance(arg, float):
             plot_one_co_on(arg)
         elif isinstance(arg, str) and (arg == 'full'):
@@ -552,24 +565,6 @@ def Ziff_model_poisoning_speed_test():
                    'plot_mode': 'separately', 'out_names': ['CO2_count']})
 
 
-def ZGBk_dynamic_advantage_run():
-    PC_obj = PC_setup.general_PC_setup('ZGBk')
-    PC_obj.reset()
-    MC_time_step = PC_obj.process_to_control.m * PC_obj.process_to_control.n
-    t_p, t_d = 150 * MC_time_step, 10 * MC_time_step,
-    x_p, x_d = 0.535, 0.5
-    for _ in range(5):
-        PC_obj.set_controlled((x_p, ))
-        PC_obj.time_forward(t_p)
-        PC_obj.set_controlled((x_d, ))
-        PC_obj.time_forward(t_d)
-
-    PC_obj.get_and_plot(f'PC_plots/ZGBk_dynamic_advantage/ZGBk_dynamic_advantage.png',
-                        plot_params={'time_segment': [0, None], 'additional_plot': ['thetaCO', 'thetaO'],
-                                     'plot_mode': 'separately', 'out_names': 'CO2_prod_rate'})
-    # R = PC_obj.integrate_along_history(out_name='CO2_prod_rate')
-
-
 def main():
     # custom_experiment()
 
@@ -599,12 +594,22 @@ def main():
     #                             out_foldpath='PC_plots/LibudaGeneralized/DEBUG/',
     #                             plot_params={'time_segment': [0, None], 'additional_plot': ['thetaB', 'thetaA'],
     #                                          'plot_mode': 'separately', 'out_names': ['outputC']})
-    # Libuda2001_CO_cutoff_policy(PC_setup.default_PC_setup('LibudaG'),
-    #                             ['full'],
-    #                             'PC_plots/LibudaGeneralized/DEBUG/Libuda_regime',
-    #                             p_total=1.,
-    #                             input1_name='inputB', input2_name='inputA', output_name='outputC',
-    #                             add_names=('thetaA', 'thetaB'))
+    # PC_obj = PC_setup.general_PC_setup('LibudaG')
+    PC_obj = PC_setup.general_PC_setup('LibudaGWithT', ('to_model_constructor', {'T': 400.}))
+    get_co_part = PC_obj.process_to_control.co_flow_part_to_pressure_part
+    Libuda2001_CO_cutoff_policy(PC_obj,
+                                ['full'],
+                                'PC_plots/LibudaGeneralized/DEBUG/Libuda_regime',
+                                transform_x_co_on=lambda x: {'O2': 1. - get_co_part(x), 'CO': get_co_part(x),
+                                                             # 'T': 440.
+                                                             'T': 400.
+                                                             },
+                                transform_x_co_off=lambda x: {'O2': 1. - get_co_part(x), 'CO': 0.,
+                                                              # 'T': 440.
+                                                              'T': 400.
+                                                              },
+                                output_name_to_plot='outputC',
+                                add_names=('thetaB', 'thetaA', 'error'))
 
     # ZGB Lopez Albano
     # size = [256, 256]
@@ -624,11 +629,21 @@ def main():
     #                     plot_params={'time_segment': [0, None], 'additional_plot': ['thetaO', 'thetaCO'],
     #                                  'plot_mode': 'separately', 'out_names': ['CO2_count']})
 
-    ZGBk_dynamic_advantage_run()
+    # PC_obj = PC_setup.general_PC_setup('Libuda2001')
+    # PC_obj.process_by_policy_objs((ConstantPolicy({'value': 10.e-5}), ConstantPolicy({'value': 3.88e-5})), 500, 1)
+    # PC_obj.get_and_plot('PC_plots/L2001_optimal_const.png', plot_params={'out_names': ('CO2',)})
 
-    # Libuda2001_original_simulation()
-
-    # test_PC_with_Libuda()
+    # omega = 0.7
+    # A = 0.4
+    # T = 2 * np.pi / omega
+    # PC_obj = PC_setup.general_PC_setup('Lynch')
+    # PC_obj.process_by_policy_objs((
+    #     SinPolicy({'A': A, 'T': T, 'alpha': np.pi, 'bias': 0.5}),
+    #     SinPolicy({'A': A, 'T': T, 'alpha': 0., 'bias': 0.5}),
+    # ), 100, 0.1)
+    # PC_obj.get_and_plot(f'PC_plots/LynchReproduce/omega07.png',
+    #                     plot_params={'time_segment': [0, None], 'additional_plot': ['thetaO', 'thetaCO'],
+    #                                  'plot_mode': 'separately', 'out_names': ['CO2']})
 
     pass
 

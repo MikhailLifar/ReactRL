@@ -45,7 +45,7 @@ class ZGBModel(BaseModel):
 
     def __init__(self, m, n, **params):
         BaseModel.__init__(self, params)
-        self.params['size'] = (m, n)
+        self.params['surface_size'] = (m, n)
         self.m, self.n = m, n
         self.surface = np.zeros((m, n), dtype=np.int8)
         self.area = self.m * self.n

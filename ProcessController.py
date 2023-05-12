@@ -213,7 +213,8 @@ class ProcessController:
         RESOLUTION = self.RESOLUTION
 
         # extend the memory 10 times if we run out of it
-        if measurements_count > self.output_history_dt.size:
+        # print(self.output_history_dt.size)
+        while measurements_count > self.output_history_dt.size - 1:
             self.output_history_dt = np.hstack((self.output_history_dt,
                                                 np.tile(np.full_like(self.output_history_dt, -1), 9)))
             self.output_history = np.vstack((self.output_history,
@@ -231,8 +232,8 @@ class ProcessController:
                 for name in self.additional_graph:
                     self.additional_graph[name][i] = self.process_to_control.plot[name]
                 # debug statements
-                if (i - 60) % 100 == 0:
-                    pass
+                # if (i - 60) % 100 == 0:
+                #     pass
         else:
             for i in range(last_ind, measurements_count):
                 t = (i-1) * self.analyser_dt - self.analyser_delay
@@ -350,7 +351,7 @@ class ProcessController:
         s += '\n'
         return s
 
-    def plot(self, file_name, time_segment=None, plot_more_function=None, additional_plot: [str, list] = None, plot_mode='together',
+    def plot(self, file_name, time_segment=None, plot_more_function=None, additional_plot: [str, list] = None, plot_mode='separately',
              out_names=None, with_metrics: bool = True):
 
         # save the information about model and PC object
