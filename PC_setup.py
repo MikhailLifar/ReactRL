@@ -37,11 +37,11 @@ DEFAULT_PARAMS = {
                 'resample_when_reset': False,
             },
             'to_PC_constructor': {
-                'analyser_dt': 1,
+                'analyser_dt': 1.e-1,
                 'target_func_to_maximize': lambda x: x[0],
                 'target_func_name': 'C production rate',
                 'target_int_or_sum': 'int',
-                'RESOLUTION': 20,
+                'RESOLUTION': 1,
                 'supposed_step_count': 10000,
                 'supposed_exp_time': 2e+4,
             },
@@ -157,6 +157,10 @@ DEFAULT_PARAMS['LibudaD']['to_model_constructor'].update({'v_d': 0.01, 'v_r': 0.
 # LibudaGWithT setup
 DEFAULT_PARAMS['LibudaGWithT'] = copy.deepcopy(DEFAULT_PARAMS['LibudaG'])
 DEFAULT_PARAMS['LibudaGWithT']['model_class'] = LibudaGWithTemperature
+DEFAULT_PARAMS['LibudaGWithT']['to_set_plot_params'].update({
+    'input_lims': [380, 620],
+    'input_ax_name': 'Temperature, K',
+})
 
 # ZGBk setup
 DEFAULT_PARAMS['ZGBk'] = copy.deepcopy(DEFAULT_PARAMS['ZGB'])

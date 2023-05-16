@@ -1,8 +1,40 @@
 import copy
 
 import numpy as np
+from scipy.integrate import solve_ivp
 
 from .BaseModel import BaseModel
+
+# import sys
+# sys.path.append('../')
+
+# from .solve_de import *
+
+
+def get_dfdt_Libuda(flows,
+                    ks,
+                    theta_max_vec,
+                    Cs):
+
+    # @numba.njit
+    def dfdt_Libuda(t, thetas: np.ndarray) -> np.ndarray:
+
+        reaction_term = ks[4] * thetas[0] * thetas[1]
+
+        StickA = 1 - thetas[1] / theta_max_vec[1] - Cs[0] * thetas[0] / theta_max_vec[0]
+        # StickA = max(StickA, 0)  # optional statement. Doesn't accord Libuda2001 article
+        StickB = 1 - thetas[0] / theta_max_vec[0] - Cs[1] * thetas[1] / theta_max_vec[1]
+        if StickB > 0.:
+            StickB *= StickB
+        else:
+            StickB = 0
+
+        ret = np.array([2 * ks[2] * flows[0] * StickB - 2 * ks[3] * thetas[0] * thetas[0] - reaction_term,
+                        ks[0] * flows[1] * StickA - ks[1] * thetas[1] - reaction_term])
+
+        return ret
+
+    return dfdt_Libuda
 
 
 class GeneralizedLibudaModel(BaseModel):
@@ -120,29 +152,31 @@ class GeneralizedLibudaModel(BaseModel):
 
         inputB, inputA = data_slice
 
-        k_1 = self['rate_ads_A']
-        k_des1 = self['rate_des_A']
-        k_2 = self['rate_ads_B']
-        k_des2 = self['rate_des_B']
-        k_3 = self['rate_react']
+        # ORIGINAL
 
-        def step(thetaB, thetaA, dt):
-            reaction_term = k_3 * thetaB * thetaA
+        # k_1 = self['rate_ads_A']
+        # k_des1 = self['rate_des_A']
+        # k_2 = self['rate_ads_B']
+        # k_des2 = self['rate_des_B']
+        # k_3 = self['rate_react']
 
-            StickA = 1 - thetaA / self['thetaA_max'] - self['C_B_inhibit_A'] * thetaB / self['thetaB_max']
-            # StickA = max(StickA, 0)  # optional statement. Doesn't accord Libuda2001 article
-            StickB = 1 - thetaB / self['thetaB_max'] - self['C_A_inhibit_B'] * thetaA / self['thetaA_max']
-            StickB = (StickB * StickB) if StickB > 0. else 0.
+        # def step(thetaB, thetaA, dt):
+        #     reaction_term = k_3 * thetaB * thetaA
+        #
+        #     StickA = 1 - thetaA / self['thetaA_max'] - self['C_B_inhibit_A'] * thetaB / self['thetaB_max']
+        #     # StickA = max(StickA, 0)  # optional statement. Doesn't accord Libuda2001 article
+        #     StickB = 1 - thetaB / self['thetaB_max'] - self['C_A_inhibit_B'] * thetaA / self['thetaA_max']
+        #     StickB = (StickB * StickB) if StickB > 0. else 0.
+        #
+        #     thetaB_new = thetaB + (2 * k_2 * inputB * StickB - 2 * k_des2 * thetaB * thetaB - reaction_term) * dt
+        #     thetaA_new = thetaA + (k_1 * inputA * StickA - k_des1 * thetaA - reaction_term) * dt
+        #
+        #     return thetaB_new, thetaA_new
 
-            thetaB_new = thetaB + (2 * k_2 * inputB * StickB - 2 * k_des2 * thetaB * thetaB - reaction_term) * dt
-            thetaA_new = thetaA + (k_1 * inputA * StickA - k_des1 * thetaA - reaction_term) * dt
-
-            return thetaB_new, thetaA_new
-
-        def do_steps(thetaB, thetaA, dt, n_steps):
-            for i in range(n_steps):
-                thetaB, thetaA = step(thetaB, thetaA, dt / n_steps)
-            return thetaB, thetaA
+        # def do_steps(thetaB, thetaA, dt, n_steps):
+        #     for i in range(n_steps):
+        #         thetaB, thetaA = step(thetaB, thetaA, dt / n_steps)
+        #     return thetaB, thetaA
 
         # # coefs estimation print
         # print(f'k1: {self["rate_ads_A"]}; k2: {self["rate_des_A"]}; k3: {self["rate_ads_B"]}; k4: {self["rate_react"]}')
@@ -151,12 +185,27 @@ class GeneralizedLibudaModel(BaseModel):
         # print(self.thetaA)
         # exit(0)
 
-        theta_B_1step, theta_A_1step = do_steps(self.thetaB, self.thetaA, delta_t, 1)
-        theta_B_2step, theta_A_2step = do_steps(self.thetaB, self.thetaA, delta_t, 2)
-        error = max(abs(theta_A_1step - theta_A_2step), abs(theta_B_1step - theta_B_2step))
+        # theta_B_1step, theta_A_1step = do_steps(self.thetaB, self.thetaA, delta_t, 1)
+        # theta_B_2step, theta_A_2step = do_steps(self.thetaB, self.thetaA, delta_t, 2)
+        # error = max(abs(theta_A_1step - theta_A_2step), abs(theta_B_1step - theta_B_2step))
 
-        self.thetaB = theta_B_2step
-        self.thetaA = theta_A_2step
+        # self.thetaB = theta_B_2step
+        # self.thetaA = theta_A_2step
+
+        ks = np.array([self.params['rate_ads_A'], self['rate_des_A'],
+                       self.params['rate_ads_B'], self['rate_des_B'],
+                       self['rate_react']])
+        theta_max_vec = np.array([self.params['thetaB_max'], self.params['thetaA_max']])
+        Cs = np.array([self.params['C_B_inhibit_A'], self.params['C_A_inhibit_B']])
+        thetas = np.array([self.thetaB, self.thetaA])
+
+        # NUMBA ATTEMPT
+        # _, thetas, error = RK45vec_step(get_dfdt_Libuda(np.array([inputB, inputA]), ks, theta_max_vec, Cs), 0, thetas, delta_t)
+
+        thetas = solve_ivp(get_dfdt_Libuda(data_slice, ks, theta_max_vec, Cs), [0., delta_t], y0=thetas,
+                           t_eval=[0, delta_t], atol=1.e-6, rtol=1.e-4, first_step=delta_t / 3,)
+
+        self.thetaB, self.thetaA = thetas.y[:, -1]
 
         # this code makes me doubt...
         self.thetaB = min(max(0., self.thetaB), self['thetaB_max'])
@@ -166,7 +215,8 @@ class GeneralizedLibudaModel(BaseModel):
         if save_for_plot:
             self.plot['thetaB'] = self.thetaB
             self.plot['thetaA'] = self.thetaA
-        self.plot['error'] = error
+        # self.plot['error'] = error
+        self.plot['error'] = -1.
 
         # model_output is normalized to be between 0 and 1
         self.model_output = np.array([(self.thetaB / self['thetaB_max']) * (self.thetaA / self['thetaA_max']), inputB, inputA])
