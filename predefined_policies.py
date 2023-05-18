@@ -8,10 +8,10 @@ import numpy as np
 class AbstractPolicy:
     names = None
 
-    def __init__(self, params_dict):
+    def __init__(self, params_dict=None):
         self.params = dict()
         self.limitations = None
-        if len(params_dict) < 1:
+        if (params_dict is None) or (len(params_dict) < 1):
             return
         for name in self.names:
             self.params[name] = params_dict[name]
@@ -65,7 +65,7 @@ class AnyStepPolicy(AbstractPolicy):
     # TODO try to finish this class
     names = ()
 
-    def __init__(self, nsteps, params_dict):
+    def __init__(self, nsteps, params_dict=None):
         self.nsteps = nsteps
         self.names = tuple([str(i) for i in range(1, nsteps + 1)] + [f't{i}' for i in range(1, nsteps + 1)])
         AbstractPolicy.__init__(self, params_dict)
@@ -87,13 +87,13 @@ class AnyStepPolicy(AbstractPolicy):
 
 class SinPolicy(AbstractPolicy):
     """
-    Formula: A * sin(omega * t + alpha) + bias
+    Formula: A * sin(2 * Pi * t / T + alpha) + bias
 
     """
 
     names = ('A', 'T', 'alpha', 'bias')
 
-    def __init__(self, params_dict):
+    def __init__(self, params_dict=None):
         AbstractPolicy.__init__(self, params_dict)
         # assert self['alpha'] > 1e-5
 
@@ -109,7 +109,7 @@ class SinOfPowerPolicy(AbstractPolicy):
 
     names = ('power', 'A', 'omega', 'alpha', 'bias')
 
-    def __init__(self, params_dict):
+    def __init__(self, params_dict=None):
         AbstractPolicy.__init__(self, params_dict)
         # assert self['alpha'] > 1e-5
 

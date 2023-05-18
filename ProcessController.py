@@ -1,5 +1,6 @@
 import copy
 import os
+import warnings
 
 import scipy.interpolate
 import numpy as np
@@ -20,6 +21,26 @@ class ProcessController:
      integrate_along_history, all plotters, reset
     Additional public methods: process, const_preprocess, get_current_time
     """
+
+    # class Plotter:
+    #     """
+    #     Implementing very flexible plotter
+    #     It should be capable to plot any combination of any names (no taking into account groups)
+    #     with any plot name
+    #     It should implement graphs with twin axis
+    #     """
+    #
+    #     def __init__(self, *plots):
+    #         """
+    #
+    #         :param plots:
+    #         list of tuples
+    #         each tuple is of form (names_to_plot: tuple, twin_name, styles: tuple, twin_style
+    #          plot_more_func, plot_name ...)
+    #         """
+    #         pass
+    #
+    #     pass
 
     def __init__(self,
                  process_to_control_obj: BaseModel,
@@ -83,6 +104,7 @@ class ProcessController:
         self.target_history = None
         if target_func_to_maximize is not None:
             self.target_history = np.full(size, np.nan, dtype=np.float)
+        self.long_term_target = None
         if long_term_target_to_maximize is not None:
             self.long_term_target = long_term_target_to_maximize
 
@@ -99,12 +121,16 @@ class ProcessController:
         self.target_int_or_sum = target_int_or_sum
         self.real_exp = real_exp
 
+        # old plot
         self.plot_lims = dict()
         self.plot_axes_names = dict()
         self.target_func_name = target_func_name
         self._initialize_plot_params()
 
         self.metrics_put_on_plot = None
+
+        # 5 23 new plot
+        self.plot_specs = None
 
     def set_controlled(self, new_values):
         """
@@ -226,7 +252,7 @@ class ProcessController:
             for i in range(last_ind, measurements_count):
                 for j in range(RESOLUTION):
                     t = (i-1) * self.analyser_dt + (j + 1) * self.analyser_dt / RESOLUTION - self.analyser_delay
-                    self.process_to_control.update([func(t) for func in interp_funcs], self.analyser_dt / RESOLUTION, True)
+                    self.process_to_control.update(np.array([func(t) for func in interp_funcs]).flatten(), self.analyser_dt / RESOLUTION, True)
                 self.output_history[i] = self.process_to_control.model_output
                 self.output_history_dt[i] = i * self.analyser_dt
                 for name in self.additional_graph:
@@ -351,11 +377,238 @@ class ProcessController:
         s += '\n'
         return s
 
-    def plot(self, file_name, time_segment=None, plot_more_function=None, additional_plot: [str, list] = None, plot_mode='separately',
-             out_names=None, with_metrics: bool = True):
+    # def plot(self, file_name, time_segment=None, plot_more_function=None, additional_plot: [str, list] = None, plot_mode='separately',
+    #          input_names=None, out_names=None, with_metrics: bool = True):
+    #
+    #     warnings.warn('Old .plot method is supposed to be removed soon')
+    #
+    #     # save the information about model and PC object
+    #     d, _ = os.path.split(file_name)
+    #     if not os.path.exists(f'{d}/_info.txt'):
+    #         with open(f'{d}/info.txt', 'w') as f:
+    #             f.write('-----Model-----\n')
+    #             f.write(self.process_to_control.get_model_info())
+    #             f.write('\n-----ProcessController-----\n')
+    #             f.write(self.get_info())
+    #
+    #     # output, out_names assignment
+    #     inds = self.output_history_dt > -1
+    #     output_time_stamp, no_change_output = self.output_history_dt[inds], self.output_history[inds]
+    #     output = no_change_output
+    #
+    #     if input_names is None:
+    #         input_names = self.controlled_names
+    #
+    #     if isinstance(out_names, str):
+    #         out_names = [out_names]
+    #     if out_names is None:
+    #         assert len(self.output_names) == 1
+    #         out_names = self.output_names
+    #     # sort as in self.output_names, if 'target' in out_names - target will be the last col
+    #     out_names = [name for name in (self.output_names + ['target', 'long_term_target']) if name in out_names]
+    #     # process out_names as a list
+    #     idxs = [i for i, name in enumerate(self.output_names) if name in out_names]
+    #     if idxs:
+    #         output = output[:, idxs]
+    #     else:
+    #         output = None
+    #     if 'target' in out_names:
+    #         target_history = np.apply_along_axis(self.target_func, 1, no_change_output)
+    #         target_history = target_history.reshape(-1, 1)
+    #         if output is not None:
+    #             output = np.hstack((output, target_history))
+    #         else:
+    #             output = target_history
+    #     if output is None:
+    #         raise ValueError('Cannot assign output names!')
+    #
+    #     # interp controlled
+    #     time_history = np.cumsum(self.controlling_signals_history_dt[:self.step_count])
+    #     interp_funcs = []
+    #     if time_history.shape[0] > 1:
+    #         for name in input_names:
+    #             f = scipy.interpolate.interp1d(time_history, self.controlling_signals_history[:self.step_count, self.controlled_ind[name]], kind='next', fill_value='extrapolate')
+    #             interp_funcs.append(f)
+    #
+    #     else:
+    #
+    #         def create_f(name_in_inputs):
+    #             def func(x):
+    #                 value = self.controlling_signals_history[self.step_count - 1,
+    #                                                          self.controlled_ind[name_in_inputs]]
+    #                 return np.full_like(x, value)
+    #             return func
+    #
+    #         for name in input_names:
+    #             interp_funcs.append(lambda x: create_f(name)(x))
+    #
+    #     def plot_more_function2(ax):
+    #         ax.set_facecolor('#cacaca')
+    #         if plot_more_function is not None:
+    #             plot_more_function(ax)
+    #
+    #     additional = tuple()
+    #     if isinstance(additional_plot, str):
+    #         if additional_plot == 'all_plots':
+    #             for name in self.additional_graph:
+    #                 additional += (output_time_stamp, self.additional_graph[name][:output_time_stamp.shape[0]], name)
+    #         elif additional_plot in self.additional_graph:
+    #             additional += (output_time_stamp, self.additional_graph[additional_plot][:output_time_stamp.shape[0]], additional_plot)
+    #         additional_plot = True
+    #     elif isinstance(additional_plot, (list, tuple)):
+    #         for name in additional_plot:
+    #             if name in self.additional_graph:
+    #                 additional += (output_time_stamp, self.additional_graph[name][:output_time_stamp.shape[0]], name)
+    #         additional_plot = True
+    #     else:
+    #         additional_plot = False
+    #
+    #     common_title = ''
+    #     if 'target' in out_names:
+    #         integral = lib.integral(*self.get_target_for_passed())
+    #         common_title = f'Integral {self.target_func_name}: {integral:.3g}\n'
+    #     if 'long_term_target' in out_names:
+    #         integral = self.long_term_target(output_time_stamp, no_change_output)
+    #         common_title = f'Target: {integral:.3g}\n'
+    #         out_names.remove('long_term_target')
+    #     if with_metrics and self.metrics_put_on_plot is not None:
+    #         for name in self.metrics_put_on_plot:
+    #             common_title += f'{name}: {self.metrics_put_on_plot[name](output_time_stamp, no_change_output):.3g}, '
+    #
+    #     if plot_mode == 'together':
+    #         common_plot_list = []
+    #         for i, name in enumerate(input_names):
+    #             common_plot_list += [output_time_stamp, interp_funcs[i](output_time_stamp), name]
+    #         for i, name in enumerate(out_names):
+    #             common_plot_list += [output_time_stamp, output[:, i], name]
+    #         lib.plot_to_file(*common_plot_list, *additional, title=common_title, xlabel='Time, s', ylabel='?',
+    #                          fileName=file_name, xlim=time_segment, plotMoreFunction=plot_more_function2)
+    #     else:
+    #         input_plot_list = []
+    #         for i, name in enumerate(input_names):
+    #             input_plot_list += [output_time_stamp, interp_funcs[i](output_time_stamp), name]
+    #         output_plot_list = []
+    #         for i, name in enumerate(out_names):
+    #             output_plot_list += [output_time_stamp, output[:, i], name]
+    #             # # Check if limits for plotting are correct, it is computationally expensive!
+    #             # if self.plot_lims['input'] is not None:
+    #             #     if (np.min(input_plot_list[-1]) < self.plot_lims['input'][0]) or \
+    #             #             (np.max(input_plot_list[-1]) > self.plot_lims['input'][1]):
+    #             #         self.plot_lims['input'] = None
+    #
+    #         # # Check if limits for plotting are correct, it is computationally expensive!
+    #         # if self.plot_lims['output'] is not None:
+    #         #     if (np.min(output) < self.plot_lims['output'][0]) or \
+    #         #             (np.max(output) > self.plot_lims['output'][1]):
+    #         #         self.plot_lims['output'] = None
+    #
+    #         lib.save_to_file(*input_plot_list,
+    #                          *output_plot_list,
+    #                          *additional,
+    #                          fileName=file_name[:file_name.rfind('.')] + '_all_data.csv', )
+    #         lib.plot_to_file(*input_plot_list,
+    #                          title=common_title,
+    #                          xlabel='Time, s', ylabel=self.plot_axes_names['input'],
+    #                          save_csv=False,
+    #                          fileName=file_name[:file_name.rfind('.')] + '_in.png',
+    #                          xlim=time_segment, ylim=self.plot_lims['input'],
+    #                          plotMoreFunction=plot_more_function2)
+    #         for i, name in enumerate(out_names):
+    #             # if name == 'target:':
+    #             #     title = common_title
+    #             # else:
+    #             #     integral = self.integrate_along_history(out_name=name)
+    #             #     title = f'Integral {name} output: {integral}'
+    #             lib.plot_to_file(*(output_plot_list[3 * i: 3 * (i + 1)]),
+    #                              title=common_title,
+    #                              xlabel='Time, s',
+    #                              ylabel=self.plot_axes_names['output'],
+    #                              save_csv=False,
+    #                              fileName=file_name[:file_name.rfind('.')] + f'_{name}_out.png',
+    #                              xlim=time_segment, ylim=self.plot_lims['output'],
+    #                              plotMoreFunction=plot_more_function2)
+    #         if additional_plot and len(additional):
+    #             lib.plot_to_file(*additional,
+    #                              title=common_title,
+    #                              xlabel='Time, s',
+    #                              ylabel=self.plot_axes_names['additional'],
+    #                              save_csv=False,
+    #                              fileName=file_name[:file_name.rfind('.')] + '_add.png',
+    #                              xlim=time_segment, ylim=self.plot_lims['additional'],
+    #                              plotMoreFunction=plot_more_function2)
+    #     # if time_segment is not None:
+    #     #     i = (time_segment[0] <= output_time_stamp) & (output_time_stamp <= time_segment[1])
+    #     #     print('CO output integral =', lib.integral(output_time_stamp[i], output[i]))
+
+    def set_plot_specs(self, *plot_specs):
+        self.plot_specs = plot_specs
+
+    def plot_from_spec(self, spec, filepath):
+        """
+
+        :param filepath:
+        :param spec: {names: , groups: , styles: , to_fname:, to_plot_to_f: {}, with_metrics: ()}
+        :return:
+        """
+
+        idxs = self.output_history_dt > -1
+        t_output = self.output_history_dt[idxs]
+        t_controlled = np.cumsum(self.controlling_signals_history_dt[:self.step_count])
+
+        plot_list = []
+
+        names = spec['names']
+        len_names = len(names)
+
+        names_group = spec['groups']
+        if isinstance(names_group, str):
+            names_group = [names_group for _ in names]
+
+        styles = spec['styles']
+        if styles is None:
+            styles = [None] * len_names
+        colors = iter(['b', 'r', 'y', 'g'])
+        styles = list(styles)
+        for i, s in enumerate(styles):
+            if s is None:
+                styles[i] = {}
+            if not (styles[i].get('c', False) or styles[i].get('color', False)):
+                try:
+                    styles[i].update({'c': next(colors)})
+                except StopIteration:
+                    pass
+
+        for name, g, style in zip(names, names_group, styles):
+            if style is None:
+                style = {}
+            if 'label' not in style:
+                style.update({'label': name})
+            if g == 'input':
+                # interp controlled
+                if t_controlled.shape[0] > 1:
+                    f = scipy.interpolate.interp1d(t_controlled, self.controlling_signals_history[:self.step_count, self.controlled_ind[name]], kind='next', fill_value='extrapolate')
+                    plot_list += [t_output, f(t_output), style]
+                else:
+                    value = self.controlling_signals_history[self.step_count - 1, self.controlled_ind[name]]
+                    plot_list += [t_output, np.full_like(t_output, value), style]
+            elif g == 'output':
+                plot_list += [t_output, self.output_history[idxs, self.output_ind[name]], style]
+            elif g == 'add':
+                plot_list += [t_output, self.additional_graph[name][idxs], style]
+            elif g == 'target':
+                target_history = np.apply_along_axis(self.target_func, 1, self.output_history[idxs]).reshape(-1, 1)
+                plot_list += [t_output, target_history, style]
+            else:
+                raise ValueError(f'unknown plot group: {g}')
+
+        filepath, ext = os.path.splitext(filepath)
+        lib.plot_to_file(*plot_list, fileName=f'{filepath}{spec["to_fname"]}{ext}', **spec['to_plot_to_f'])
+        return plot_list
+
+    def plot(self, filepath):
 
         # save the information about model and PC object
-        d, _ = os.path.split(file_name)
+        d, _ = os.path.split(filepath)
         if not os.path.exists(f'{d}/_info.txt'):
             with open(f'{d}/info.txt', 'w') as f:
                 f.write('-----Model-----\n')
@@ -363,162 +616,39 @@ class ProcessController:
                 f.write('\n-----ProcessController-----\n')
                 f.write(self.get_info())
 
-        # output, out_names assignment
-        inds = self.output_history_dt > -1
-        output_time_stamp, no_change_output = self.output_history_dt[inds], self.output_history[inds]
-        output = no_change_output
-        if isinstance(out_names, str):
-            out_names = [out_names]
-        if out_names is None:
-            assert len(self.output_names) == 1
-            out_names = self.output_names
-        # sort as in self.output_names, if 'target' in out_names - target will be the last col
-        out_names = [name for name in (self.output_names + ['target', 'long_term_target']) if name in out_names]
-        # process out_names as a list
-        idxs = [i for i, name in enumerate(self.output_names) if name in out_names]
-        if idxs:
-            output = output[:, idxs]
-        else:
-            output = None
-        if 'target' in out_names:
-            target_history = np.apply_along_axis(self.target_func, 1, no_change_output)
-            target_history = target_history.reshape(-1, 1)
-            if output is not None:
-                output = np.hstack((output, target_history))
-            else:
-                output = target_history
-        if output is None:
-            raise ValueError('Cannot assign output names!')
-
-        # interp controlled
-        time_history = np.cumsum(self.controlling_signals_history_dt[:self.step_count])
-        interp_funcs = []
-        if time_history.shape[0] > 1:
-            for name in self.controlled_names:
-                f = scipy.interpolate.interp1d(time_history, self.controlling_signals_history[:self.step_count, self.controlled_ind[name]], kind='next', fill_value='extrapolate')
-                interp_funcs.append(f)
-
-        else:
-
-            def create_f(name_in_inputs):
-                def func(x):
-                    value = self.controlling_signals_history[self.step_count - 1,
-                                                             self.controlled_ind[name_in_inputs]]
-                    return np.full_like(x, value)
-                return func
-
-            for name in self.controlled_names:
-                interp_funcs.append(lambda x: create_f(name)(x))
-
-        def plot_more_function2(ax):
-            ax.set_facecolor('#cacaca')
-            if plot_more_function is not None:
-                plot_more_function(ax)
-
-        additional = tuple()
-        if isinstance(additional_plot, str):
-            if additional_plot == 'all_plots':
-                for name in self.additional_graph:
-                    additional += (output_time_stamp, self.additional_graph[name][:output_time_stamp.shape[0]], name)
-            elif additional_plot in self.additional_graph:
-                additional += (output_time_stamp, self.additional_graph[additional_plot][:output_time_stamp.shape[0]], additional_plot)
-            additional_plot = True
-        elif isinstance(additional_plot, list):
-            for name in additional_plot:
-                if name in self.additional_graph:
-                    additional += (output_time_stamp, self.additional_graph[name][:output_time_stamp.shape[0]], name)
-            additional_plot = True
-        else:
-            additional_plot = False
-
+        idxs = self.output_history_dt > -1
         common_title = ''
-        if 'target' in out_names:
+        if self.target_func is not None:
             integral = lib.integral(*self.get_target_for_passed())
             common_title = f'Integral {self.target_func_name}: {integral:.3g}\n'
-        if 'long_term_target' in out_names:
-            integral = self.long_term_target(output_time_stamp, no_change_output)
+        if self.long_term_target is not None:
+            integral = self.long_term_target(self.output_history_dt[idxs], self.output_history[idxs])
             common_title = f'Target: {integral:.3g}\n'
-            out_names.remove('long_term_target')
-        if with_metrics and self.metrics_put_on_plot is not None:
-            for name in self.metrics_put_on_plot:
-                common_title += f'{name}: {self.metrics_put_on_plot[name](output_time_stamp, no_change_output):.3g}, '
+        for name in self.metrics_put_on_plot:
+            common_title += f'{name}: {self.metrics_put_on_plot[name](self.output_history_dt[idxs], self.output_history[idxs]):.3g}, '
 
-        if plot_mode == 'together':
-            common_plot_list = []
-            for i, name in enumerate(self.controlled_names):
-                common_plot_list += [output_time_stamp, interp_funcs[i](output_time_stamp), name]
-            for i, name in enumerate(out_names):
-                common_plot_list += [output_time_stamp, output[:, i], name]
-            lib.plot_to_file(*common_plot_list, *additional, title=common_title, xlabel='Time, s', ylabel='?',
-                             fileName=file_name, xlim=time_segment, plotMoreFunction=plot_more_function2)
-        else:
-            input_plot_list = []
-            for i, name in enumerate(self.controlled_names):
-                input_plot_list += [output_time_stamp, interp_funcs[i](output_time_stamp), name]
-            output_plot_list = []
-            for i, name in enumerate(out_names):
-                output_plot_list += [output_time_stamp, output[:, i], name]
-                # # Check if limits for plotting are correct, it is computationally expensive!
-                # if self.plot_lims['input'] is not None:
-                #     if (np.min(input_plot_list[-1]) < self.plot_lims['input'][0]) or \
-                #             (np.max(input_plot_list[-1]) > self.plot_lims['input'][1]):
-                #         self.plot_lims['input'] = None
+        list_to_csv = []
+        for spec in self.plot_specs:
+            spec['to_plot_to_f']['save_csv'] = False
+            spec['to_plot_to_f']['title'] = common_title
+            list_to_csv += self.plot_from_spec(spec, filepath)
+        for i, d in enumerate(list_to_csv[2::3]):
+            list_to_csv[2 + 3 * i] = d['label']
+        lib.save_to_file(*list_to_csv,
+                         fileName=filepath[:filepath.rfind('.')] + '_all_data.csv', )
 
-            # # Check if limits for plotting are correct, it is computationally expensive!
-            # if self.plot_lims['output'] is not None:
-            #     if (np.min(output) < self.plot_lims['output'][0]) or \
-            #             (np.max(output) > self.plot_lims['output'][1]):
-            #         self.plot_lims['output'] = None
-
-            lib.save_to_file(*input_plot_list,
-                             *output_plot_list,
-                             *additional,
-                             fileName=file_name[:file_name.rfind('.')] + '_all_data.csv', )
-            lib.plot_to_file(*input_plot_list,
-                             title=common_title,
-                             xlabel='Time, s', ylabel=self.plot_axes_names['input'],
-                             save_csv=False,
-                             fileName=file_name[:file_name.rfind('.')] + '_in.png',
-                             xlim=time_segment, ylim=self.plot_lims['input'],
-                             plotMoreFunction=plot_more_function2)
-            for i, name in enumerate(out_names):
-                # if name == 'target:':
-                #     title = common_title
-                # else:
-                #     integral = self.integrate_along_history(out_name=name)
-                #     title = f'Integral {name} output: {integral}'
-                lib.plot_to_file(*(output_plot_list[3 * i: 3 * (i + 1)]),
-                                 title=common_title,
-                                 xlabel='Time, s',
-                                 ylabel=self.plot_axes_names['output'],
-                                 save_csv=False,
-                                 fileName=file_name[:file_name.rfind('.')] + f'_{name}_out.png',
-                                 xlim=time_segment, ylim=self.plot_lims['output'],
-                                 plotMoreFunction=plot_more_function2)
-            if additional_plot and len(additional):
-                lib.plot_to_file(*additional,
-                                 title=common_title,
-                                 xlabel='Time, s',
-                                 ylabel=self.plot_axes_names['additional'],
-                                 save_csv=False,
-                                 fileName=file_name[:file_name.rfind('.')] + '_add.png',
-                                 xlim=time_segment, ylim=self.plot_lims['additional'],
-                                 plotMoreFunction=plot_more_function2)
-        # if time_segment is not None:
-        #     i = (time_segment[0] <= output_time_stamp) & (output_time_stamp <= time_segment[1])
-        #     print('CO output integral =', lib.integral(output_time_stamp[i], output[i]))
-
-    def get_and_plot(self,
-                     file_name,
-                     plot_params=None):
+    def get_and_plot(self, file_name):
         # if isinstance(get_params, dict):
         #     self.get_process_output()
         # else:
+
+        # if isinstance(plot_params, dict):
+        #     self.plot(file_name, **plot_params)
+        # else:
+        #     self.plot(file_name)
+
         ret = self.get_process_output()
-        if isinstance(plot_params, dict):
-            self.plot(file_name, **plot_params)
-        else:
-            self.plot(file_name)
+        self.plot(file_name)
         return ret
 
     def reset(self):

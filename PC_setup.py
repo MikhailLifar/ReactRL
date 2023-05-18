@@ -149,6 +149,40 @@ DEFAULT_PARAMS = {
         }
     }
 
+
+DEFAULT_PLOT_SPECS = {
+    'LibudaG': (
+        # input
+        {'names': ('inputB', 'inputA', 'T'), 'groups': 'input', 'styles': (None, None, {'twin': True}),
+         'to_fname': '_input',
+         'to_plot_to_f': {
+             'xlabel': 'Time, s', 'ylabel': '?',
+             'ylim': [-5.e-2, 1. + 5.e-2],
+             'twin_params': {
+                 'ylabel': 'T, K',
+                 'ylim': [250, 900]
+             },
+             'save_csv': True,
+         }},
+        # add
+        {'names': ('thetaB', 'thetaA'), 'groups': ('add', 'add'), 'styles': None,
+         'to_fname': '_add',
+         'to_plot_to_f': {
+             'xlabel': 'Time, s', 'ylabel': '?',
+             'ylim': [-5.e-2, 1. + 5.e-2],
+             'save_csv': True,
+         }},
+        # target
+        {'names': ('reaction rate', ), 'groups': ('target', ), 'styles': None,
+         'to_fname': '_target',
+         'to_plot_to_f': {
+             'xlabel': 'Time, s', 'ylabel': 'reaction rate',
+             'ylim': [-5.e-3, None],
+             'save_csv': True,
+                     }},
+    )
+}
+
 # LibudaD setup
 DEFAULT_PARAMS['LibudaD'] = copy.deepcopy(DEFAULT_PARAMS['Libuda2001'])
 DEFAULT_PARAMS['LibudaD']['model_class'] = LibudaModelWithDegradation
@@ -161,6 +195,7 @@ DEFAULT_PARAMS['LibudaGWithT']['to_set_plot_params'].update({
     'input_lims': [380, 620],
     'input_ax_name': 'Temperature, K',
 })
+DEFAULT_PLOT_SPECS['LibudaGWithT'] = copy.deepcopy(DEFAULT_PLOT_SPECS['LibudaG'])
 
 # ZGBk setup
 DEFAULT_PARAMS['ZGBk'] = copy.deepcopy(DEFAULT_PARAMS['ZGB'])
@@ -227,8 +262,10 @@ def general_PC_setup(model_id, *change_parameters):
 
     model = parameters['model_class'](**parameters['to_model_constructor'])
     PC_obj = ProcessController(model, **(parameters['to_PC_constructor']))
-    PC_obj.set_plot_params(**(parameters['to_set_plot_params']))
+    # PC_obj.set_plot_params(**(parameters['to_set_plot_params']))
     PC_obj.set_metrics(*(parameters['metrics']))
+
+    PC_obj.set_plot_specs(*(DEFAULT_PLOT_SPECS[model_id]))
 
     return PC_obj
 

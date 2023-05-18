@@ -1,3 +1,4 @@
+import copy
 import os
 import matplotlib
 matplotlib.use('Agg')
@@ -155,7 +156,7 @@ def plot_to_file(*p, fileName=None, save_csv=True,
                  title='', xlabel='', ylabel='',
                  xlim=None, ylim=None,
                  twin_params: dict = None,
-                 plotMoreFunction=None, yscale=None, tight_layout=True, grid=False):
+                 plotMoreFunction=None, ploMoreTwinFunction=None, yscale=None, tight_layout=True, grid=False):
     """
     Simple plot multiple graphs to file
     :param twin_params:
@@ -171,6 +172,7 @@ def plot_to_file(*p, fileName=None, save_csv=True,
     :param xlim:
     :param ylim:
     :param plotMoreFunction: function(ax)
+    :param ploMoreTwinFunction:
     :return:
     """
     assert len(p) % 3 == 0, f'Number of parameters {len(p)} is not multiple of 3'
@@ -195,6 +197,7 @@ def plot_to_file(*p, fileName=None, save_csv=True,
         else:
             params = p[i*3+2]
             assert isinstance(params, dict)
+            params = copy.deepcopy(params)
             ax_to_plot = ax
             if 'twin' in params:
                 del params['twin']
@@ -230,9 +233,8 @@ def plot_to_file(*p, fileName=None, save_csv=True,
         ax.set_ylabel(ylabel)
     if plotMoreFunction is not None:
         plotMoreFunction(ax)
-        # TODO: crutch here
-        if right_ax is not None:
-            plotMoreFunction(right_ax)
+    if ploMoreTwinFunction is not None:
+        ploMoreTwinFunction(right_ax)
 
     ax.legend(loc=2, prop={'size': 12})
     if right_ax is not None:

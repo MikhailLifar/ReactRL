@@ -19,7 +19,7 @@ import lib
 from usable_functions import make_subdir_return_path, make_unique_filename
 
 # ADD_PLOTS = ['thetaCO', 'thetaO']
-ADD_PLOTS = 'all_plots'
+# ADD_PLOTS = 'all_plots'
 
 
 def create_tforce_agent(environment: RL2207_Environment, agent_name, **params):
@@ -64,12 +64,10 @@ def debug_run(environment: RL2207_Environment, agent, out_folder=None, n_episode
         if i == n_episodes - 2:
             agent.save(directory=subdir_path + '/agent', format='numpy')
         elif i == n_episodes - 1:
-            environment.controller.plot(f'{subdir_path}/{environment.cumm_episode_target:.2f}conversion{i}.png', additional_plot=ADD_PLOTS, plot_mode='separately',
-                                        out_names=names_to_plot)
+            environment.controller.plot(f'{subdir_path}/{environment.cumm_episode_target:.2f}conversion{i}.png')
     agent = Agent.load(directory=f'{subdir_path}/agent', format='numpy', environment=environment)
     run_episode(environment, agent)
-    environment.controller.plot(f'{subdir_path}/{environment.cumm_episode_target:.2f}conversion_test.png', additional_plot=ADD_PLOTS, plot_mode='separately',
-                                out_names=names_to_plot)
+    environment.controller.plot(f'{subdir_path}/{environment.cumm_episode_target:.2f}conversion_test.png')
 
 
 def run(environment: RL2207_Environment, agent, out_folder='run_RL_out', n_episodes=None, test=False,
@@ -113,16 +111,14 @@ def run(environment: RL2207_Environment, agent, out_folder='run_RL_out', n_episo
             # fig.savefig(f'{dir_path}/{environment.integral:.2f}another_conversion{i}.png')
             # plt.close(fig)
             # --DEBUG--
-            environment.controller.plot(f'{dir_path}/{environment.cumm_episode_target:.2f}conversion{i}.png',
-                                        additional_plot=ADD_PLOTS, plot_mode='separately', out_names=names_to_plot)
+            environment.controller.plot(f'{dir_path}/{environment.cumm_episode_target:.2f}conversion{i}.png')
             environment.summary_graphs(f'{dir_path}/')
             prev_graph_ind = i
 
         if environment.success:
             if (i - prev_graph_ind > 100) or\
                     ((environment.cumm_episode_target - prev_max_integral) / prev_max_integral > 0.07):
-                environment.controller.plot(f'{dir_path}/{environment.cumm_episode_target:.2f}conversion{i}.png',
-                                            additional_plot=ADD_PLOTS, plot_mode='separately', out_names=names_to_plot)
+                environment.controller.plot(f'{dir_path}/{environment.cumm_episode_target:.2f}conversion{i}.png')
                 environment.summary_graphs(f'{dir_path}/')
                 prev_graph_ind = i
 
@@ -161,8 +157,7 @@ def test_run(environment: RL2207_Environment, agent, out_folder, n_episodes=None
     for i in range(n_episodes):
         cumm_rewards[i] = run_episode(environment, agent, independent=True, deterministic=deterministic)
         # env.create_graphs(i, 'run_RL_out/')
-        environment.controller.plot(f'{out_folder}/{environment.cumm_episode_target:.2f}conversion{i}.png',
-                                    additional_plot=ADD_PLOTS, plot_mode='separately', out_names=names_to_plot)
+        environment.controller.plot(f'{out_folder}/{environment.cumm_episode_target:.2f}conversion{i}.png')
     # environment.summary_graphs(f'{out_folder}/')
     agent.save(directory=out_folder + '/agent', format='numpy')
 

@@ -123,7 +123,7 @@ def get_for_steady_state_variations(episode_time,
         PC.reset()
         PC.set_controlled(transform_params(params))
         PC.time_forward(episode_time)
-        PC.get_and_plot(f'{foldpath}/variations_{name_to_variate}({params[name_to_variate]:.2f})_{it_arg}.png',
+        PC.get_and_plot(f'{foldpath}/steady_state_variations_{name_to_variate}({params[name_to_variate]:.2f})_{it_arg}.png',
                         plot_params={'time_segment': [0, None], 'additional_plot': additional_names,
                                      'plot_mode': 'separately', 'input_names': names_to_plot['input'], 'out_names': names_to_plot['output'], })
         ret[0] = PC.get_process_output()[1][:, target['column']]  # should be CO2 output column
@@ -142,6 +142,56 @@ def get_for_steady_state_variations(episode_time,
             }
 
 
+def get_for_common_variations(policies_dict,
+                              name_to_variate,
+                              target: dict,
+                              transform_params=lambda x: x,
+                              names_to_sum_plot=None,
+                              additional_names=('thetaCO', 'thetaO'),
+                              take_from_the_end=0.5):
+
+    def _iteration(PC, params: dict, foldpath, it_arg):
+        transform_params(params)
+        ret = [0] * (1 + len(additional_names))
+
+        for name, policy in policies_dict.items():
+            policy.set_policy({p.replace(f'{name}_', ''): v for p, v in params.items() if p.startswith(f'{name}_')})
+
+        episode_time = params['episode_time']
+        calc_dt = params.get('calc_dt', False)
+        old_analyser_dt = False
+        if calc_dt:
+            old_analyser_dt = PC.analyser_dt
+            PC.analyser_dt = policy_step = calc_dt(episode_time)
+        else:
+            policy_step = params['policy_step']
+
+        PC.reset()
+        PC.process_by_policy_objs([policies_dict[name] for name in PC.controlled_names],
+                                  episode_time, policy_step)
+        PC.get_and_plot(f'{foldpath}/common_variations_{name_to_variate}({params[name_to_variate]:.2f})_{it_arg}.png')
+
+        ret[0] = PC.get_process_output()[1][:, target['column']]  # should be CO2 output column
+        for i in range(1, len(ret)):
+            ret[i] = PC.additional_graph[additional_names[i - 1]][:ret[0].size]
+        for j, v in enumerate(ret):
+            ret[j] = np.mean(v[int(v.size * (1. - take_from_the_end)):])
+
+        if old_analyser_dt:
+            PC.analyser_dt = old_analyser_dt
+
+        ret_d = {target['name']: ret[0]}
+        ret_d.update({name: ret[i + 1] for i, name in enumerate(additional_names)})
+        return ret_d
+
+    if names_to_sum_plot is None:
+        names_to_sum_plot = (target['name'], ) + tuple(additional_names)
+
+    return {'iteration_function': _iteration,
+            'summarize_function': get_common_1d_summarize(name_to_variate, names_to_sum_plot, 1.e-5,
+                                                          filename='common_var_summary_1d.png')}
+
+
 def get_for_Ziff_iterations(pressure_unit: float, episode_time, CO2_output_column=3,
                             out_names_to_plot=('CO2_count',),
                             take_from_the_end=0.5):
@@ -153,80 +203,6 @@ def get_for_Ziff_iterations(pressure_unit: float, episode_time, CO2_output_colum
                                            },
                                            names_to_plot={'input': None, 'output': out_names_to_plot},
                                            take_from_the_end=take_from_the_end)
-
-
-def get_for_VanNeer_iterations(episode_time, CO2_output_column=3,
-                               out_names_to_plot=('CO2',),
-                               take_from_the_end=0.5):
-    import lib
-    import json
-    import predefined_policies as policies
-
-    def _iteration(PC, params: dict, foldpath, it_arg):
-        CO2_and_covs = [0] * 3
-
-        t = 1. / (10 ** params['log_omega'])
-        T1, T2 = 500, 700
-        pO2 = pCO = 1000
-        R = PC.process_to_control['R']
-        T_policy = policies.TwoStepPolicy({'1': T1, '2': T2, 't1': t / 2, 't2': t / 2})
-        O2_policy = policies.TwoStepPolicy({'1': pO2 / T1 / R, '2': pO2 / T2 / R, 't1': t / 2, 't2': t / 2})
-        CO_policy = policies.TwoStepPolicy({'1': pCO / T1 / R, '2': pCO / T2 / R, 't1': t / 2, 't2': t / 2})
-
-        PC.reset()
-        PC.process_by_policy_objs((O2_policy, CO_policy, T_policy), episode_time, t / 20)
-        PC.get_and_plot(f'{foldpath}/VanNeer_omega({10 ** params["log_omega"]:.2f})_{it_arg}.png',
-                        plot_params={'time_segment': [0, None], 'additional_plot': ['thetaCO', 'thetaO'],
-                                     'plot_mode': 'separately', 'out_names': out_names_to_plot})
-        CO2_and_covs[0] = PC.get_process_output()[1][:, CO2_output_column]  # should be CO2 output column
-        CO2_and_covs[1] = PC.additional_graph['thetaO'][:CO2_and_covs[0].size]
-        CO2_and_covs[2] = PC.additional_graph['thetaCO'][:CO2_and_covs[0].size]
-
-        for j, v in enumerate(CO2_and_covs):
-            CO2_and_covs[j] = np.mean(v[int(v.size * (1. - take_from_the_end)):])
-
-        return {'CO2': CO2_and_covs[0],
-                'thetaO': CO2_and_covs[1],
-                'thetaCO': CO2_and_covs[2], }
-
-    def VanNeer_summarize(foldapth):
-        x_arr, avgs = [], []
-        for fname in filter(lambda name: name.endswith('.json'), sorted(os.listdir(foldapth))):
-            with open(f'{foldapth}/{fname}', 'r') as fread:
-                d = json.load(fread)
-                ret_d = d['return']
-                # complicated lists expansion due to possible duplicates of x values
-                remember_name = None
-                for in_name in ('O2', 'CO', 'T'):
-                    if d['variables'].get(in_name, None) is not None:
-                        x_ax_value = d['variables'][in_name]
-                        remember_name = in_name
-                        break  # only one name allowed
-                idx = next(filter(lambda i: abs(x_ax_value - x_arr[i]) < 1.e-5, range(len(x_arr))), None)
-                if idx is None:
-                    avgs.append([[ret_d['CO2'], ret_d['thetaO'], ret_d['thetaCO']]])
-                    x_arr.append(x_ax_value)
-                else:
-                    avgs[idx].append([ret_d['CO2'], ret_d['thetaO'], ret_d['thetaCO']])
-
-        for i, _ in enumerate(avgs):
-            avgs[i] = np.mean(avgs[i], axis=0)
-        x_arr, avgs = np.array(x_arr), np.array(avgs)
-        idxs = np.argsort(x_arr)
-        x_arr, avgs = x_arr[idxs], avgs[idxs]
-        lib.plot_to_file(x_arr, avgs[:, 0], {'label': 'Average CO2 prod. rate', 'linestyle': 'solid',
-                                             'marker': 'h', 'c': 'purple',
-                                             'twin': True,
-                                             },
-                         x_arr, avgs[:, 1], {'label': 'Average O2 coverage', 'linestyle': (0, (1, 1)),
-                                             'marker': 'x', 'c': 'blue'},
-                         x_arr, avgs[:, 2], {'label': 'Average CO coverage', 'linestyle': (0, (5, 5)),
-                                             'marker': '+', 'c': 'red'},
-                         fileName=f'{foldapth}/VanNeer_summarize_CO2.png',
-                         xlabel=f'{remember_name}', ylabel='coverages', title='Summarize across multiple runs',
-                         twin_params={'ylabel': 'CO2 prod. rate'}, )
-
-    return {'iteration_function': _iteration, 'summarize_function': VanNeer_summarize}
 
 
 # ZGBk_dynamic_advantage_run
