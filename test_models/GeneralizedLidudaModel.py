@@ -114,6 +114,7 @@ class GeneralizedLibudaModel(BaseModel):
         self.plot = {'thetaA': self.thetaA, 'thetaB': self.thetaB, 'error': 0.}
 
         # self.top['output']['outputC'] = self['rate_react'] * self['thetaA_max'] * self['thetaB_max']
+        self.top['output']['outputC'] = params.get('reaction_rate_top', self['rate_react'])
         self.fill_limits()
 
         self.resample_when_reset = resample_when_reset
@@ -219,7 +220,8 @@ class GeneralizedLibudaModel(BaseModel):
         self.plot['error'] = -1.
 
         # model_output is normalized to be between 0 and 1
-        self.model_output = np.array([(self.thetaB / self['thetaB_max']) * (self.thetaA / self['thetaA_max']), inputB, inputA])
+        # self.model_output = np.array([(self.thetaB / self['thetaB_max']) * (self.thetaA / self['thetaA_max']), inputB, inputA])
+        self.model_output = np.array([self.params['rate_react'] * self.thetaB * self.thetaA, inputB, inputA])
         self.t += delta_t
         return self.model_output
 
@@ -230,6 +232,11 @@ class GeneralizedLibudaModel(BaseModel):
         self.thetaA = self['thetaA_init']
         self.thetaB = self['thetaB_init']
         self.plot = {'thetaA': self.thetaA, 'thetaB': self.thetaB, 'error': 0.}
+
+    def rates(self):
+        return {'k1': self['rate_ads_A'], 'k1_des': self['rate_des_A'],
+                'k2': self['rate_ads_B'], 'k2_des': self['rate_des_B'],
+                'k3': self['rate_react']}
 
     @staticmethod
     def co_flow_part_to_pressure_part(x_co):
@@ -245,7 +252,7 @@ class LibudaGWithTemperature(GeneralizedLibudaModel):
     bottom = copy.deepcopy(GeneralizedLibudaModel.bottom)
     top = copy.deepcopy(GeneralizedLibudaModel.top)
     bottom['input']['T'] = bottom['output']['T'] = 400.
-    top['input']['T'] = top['output']['T'] = 600.
+    top['input']['T'] = top['output']['T'] = 700.
 
     model_name = 'LibudaGWithT'
 
@@ -259,6 +266,9 @@ class LibudaGWithTemperature(GeneralizedLibudaModel):
     def __init__(self, params=None, T=440., resample_when_reset=False, set_Libuda=False):
         self.T = T
         GeneralizedLibudaModel.__init__(self, params, resample_when_reset, set_Libuda)
+
+        # self.top['output']['outputC'] = params.get('reaction_rate_top', self.params['rate_react'])
+        # self.fill_limits()
 
     def calc_for_T(self, T):
         for suff in ('ads_A', 'ads_B', 'des_A', 'des_B', 'react'):

@@ -565,6 +565,48 @@ def Ziff_model_poisoning_speed_test():
                    'plot_mode': 'separately', 'out_names': ['CO2_count']})
 
 
+def LibudaGWithT_transtion_speed_test():
+    PC_obj = PC_setup.general_PC_setup('LibudaGWithT')
+
+    folder = 'PC_plots/LibudaGWithT/230516_transition_speed'
+
+    PC_obj.reset()
+    PC_obj.set_controlled([1., 0., 100 + 273])
+    PC_obj.time_forward(1000)
+    PC_obj.set_controlled([0., 1., 100 + 273])
+    PC_obj.time_forward(1000)
+    PC_obj.set_controlled([1., 0., 100 + 273])
+    PC_obj.time_forward(1000)
+    PC_obj.get_and_plot(f'{folder}/373K.png',
+                        plot_params={'time_segment': [0, None], 'additional_plot': ('thetaB', 'thetaA'),
+                                     'plot_mode': 'separately', 'input_names': ('T', ), 'out_names': ('outputC',), })
+
+    PC_obj.analyser_dt = 1.e-3
+    PC_obj.reset()
+    PC_obj.set_controlled([1., 0., 300 + 273])
+    PC_obj.time_forward(0.1)
+    PC_obj.set_controlled([0., 1., 300 + 273])
+    PC_obj.time_forward(0.1)
+    PC_obj.set_controlled([1., 0., 300 + 273])
+    PC_obj.time_forward(0.1)
+    PC_obj.get_and_plot(f'{folder}/573K.png',
+                        plot_params={'time_segment': [0, None], 'additional_plot': ('thetaB', 'thetaA'),
+                                     'plot_mode': 'separately', 'input_names': ('T', ), 'out_names': ('outputC',), })
+
+    PC_obj.analyser_dt = 1.e-5
+    PC_obj.reset()
+    PC_obj.set_controlled([1., 0., 500 + 273])
+    PC_obj.time_forward(1.e-2)
+    PC_obj.set_controlled([0., 1., 500 + 273])
+    PC_obj.time_forward(1.e-2)
+    PC_obj.set_controlled([1., 0., 500 + 273])
+    PC_obj.time_forward(1.e-2)
+    PC_obj.get_and_plot(f'{folder}/773K.png',
+                        plot_params={'time_segment': [0, None], 'additional_plot': ('thetaB', 'thetaA'),
+                                     'plot_mode': 'separately', 'input_names': ('T', ), 'out_names': ('outputC',), })
+
+
+
 def main():
     # custom_experiment()
 
@@ -594,22 +636,35 @@ def main():
     #                             out_foldpath='PC_plots/LibudaGeneralized/DEBUG/',
     #                             plot_params={'time_segment': [0, None], 'additional_plot': ['thetaB', 'thetaA'],
     #                                          'plot_mode': 'separately', 'out_names': ['outputC']})
+
     # PC_obj = PC_setup.general_PC_setup('LibudaG')
-    PC_obj = PC_setup.general_PC_setup('LibudaGWithT', ('to_model_constructor', {'T': 400.}))
-    get_co_part = PC_obj.process_to_control.co_flow_part_to_pressure_part
-    Libuda2001_CO_cutoff_policy(PC_obj,
-                                ['full'],
-                                'PC_plots/LibudaGeneralized/DEBUG/Libuda_regime',
-                                transform_x_co_on=lambda x: {'O2': 1. - get_co_part(x), 'CO': get_co_part(x),
-                                                             # 'T': 440.
-                                                             'T': 400.
-                                                             },
-                                transform_x_co_off=lambda x: {'O2': 1. - get_co_part(x), 'CO': 0.,
-                                                              # 'T': 440.
-                                                              'T': 400.
-                                                              },
-                                output_name_to_plot='outputC',
-                                add_names=('thetaB', 'thetaA', 'error'))
+    # PC_obj = PC_setup.general_PC_setup('LibudaGWithT', ('to_model_constructor', {'T': 440.}))
+    # get_co_part = PC_obj.process_to_control.co_flow_part_to_pressure_part
+    # Libuda2001_CO_cutoff_policy(PC_obj,
+    #                             ['full'],
+    #                             'PC_plots/LibudaGeneralized/DEBUG/Libuda_regime',
+    #                             transform_x_co_on=lambda x: {'inputB': 1. - get_co_part(x), 'inputA': get_co_part(x),
+    #                                                          # 'T': 440.
+    #                                                          'T': 440.
+    #                                                          },
+    #                             transform_x_co_off=lambda x: {'inputB': 1. - get_co_part(x), 'inputA': 0.,
+    #                                                           # 'T': 440.
+    #                                                           'T': 440.
+    #                                                           },
+    #                             output_name_to_plot='outputC',
+    #                             add_names=('thetaB', 'thetaA', 'error'))
+
+    LibudaGWithT_transtion_speed_test()
+
+    # LGWithT transition speed
+    # PC_obj.reset()
+    # PC_obj.set_controlled([1., 1., 400.])
+    # PC_obj.time_forward(100)
+    # # PC_obj.set_controlled([1., 1., 400.])
+    # # PC_obj.time_forward(100)
+    # PC_obj.get_and_plot(f'PC_plots/LibudaGWithT/230512_transition/400K_long_period.png',
+    #                     plot_params={'time_segment': [0, None], 'additional_plot': ['thetaB', 'thetaA'],
+    #                                  'plot_mode': 'separately', 'input_names': ['T'], 'out_names': ['outputC']})
 
     # ZGB Lopez Albano
     # size = [256, 256]

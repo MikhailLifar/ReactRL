@@ -24,11 +24,10 @@ from test_models import *
 class RL2207_Environment(Environment):
     def __init__(self, PC: ProcessController,
                  names_to_state: list = None,
-                 discrete_actions: [Dict[str, List[float]], bool] = None,
-                 continuous_actions: [Dict[str, List[float]], bool] = None,
+                 state_spec: dict = None,
+                 action_spec: [Dict, str] = 'continuous',
                  reward_spec: [str, callable] = None,
                  episode_time=500, time_step=10,
-                 state_spec: dict = None,
                  reset_mode='bottom_state',
                  initial_values: dict = None,
                  preprocess_time=0,
@@ -51,17 +50,22 @@ class RL2207_Environment(Environment):
         if (hasattr(self.model, 'model_type')) and (self.model.model_type == 'discrete'):
             raise NotImplementedError('Models with discrete inputs are not supported for now')
 
-        if discrete_actions is not None:
-            self.actions_type = 'discrete'
-        else:
-            self.actions_type = 'continuous'
-            if (hasattr(self.model, 'model_type')) and (self.model.model_type == 'discrete'):
+        if isinstance(action_spec, str):
+            action_spec = {'type': action_spec}
+        if not action_spec.get('transform_action', False):
+            action_spec['info'] = 'default - variate all inputs within predefined ranges'
+        self.action_spec = copy.deepcopy(action_spec)
+        self.transform_action = None
+        if self.action_spec['type'] == 'continuous':
+            if getattr(self.model, 'model_type', 'continuous') == 'discrete':
                 raise ValueError(f'Error: discrete model cannot hold continuous actions')
+        elif self.action_spec['type'] != 'discrete':
+            raise ValueError(f'Wrong action type: {self.action_spec["type"]}')
 
         self.time_step = time_step
         # TODO I don't like this statement
         if self.time_step <= self.controller.analyser_dt:
-            self.controller.analyser_dt = self.time_step / 2
+            self.controller.analyser_dt = self.time_step / 10
         self.episode_time = episode_time
 
         self.input_names = self.controller.controlled_names
@@ -109,12 +113,6 @@ class RL2207_Environment(Environment):
 
         self.state_memory = np.zeros((2 * self.state_spec['rows'] + 2, one_state_row_len))
 
-        self.discrete_actions = copy.deepcopy(discrete_actions)
-        self.continuous_actions = copy.deepcopy(continuous_actions)
-        self.action_vector = np.empty(1)
-        self.names_of_action = None
-        self.idxs_of_action = np.empty(1)
-
         self.reset_mode = reset_mode
 
         # self.reward_type = 'each_step'
@@ -157,13 +155,14 @@ class RL2207_Environment(Environment):
 
         # info
         self.env_info = f'model_type: {self.model_type}\n' \
-                        f'actions_type: {self.actions_type}\n' \
                         f'names to state: {self.names_to_state}\n' \
-                        f'reward: {self.reward_name}\n' \
                         f'state_spec: shape {self.state_spec["shape"]}, ' \
                         f'use_differences {self.state_spec["use_differences"]}\n' \
-                        f'length of episode: {self.episode_time}\n' \
-                        f'step length: {self.time_step}\n'
+                        f'action_type: {self.action_spec["type"]}\n' \
+                        f'action_info: {self.action_spec["info"]}\n' \
+                        f'reward: {self.reward_name}\n' \
+                        f'episode_time: {self.episode_time}\n' \
+                        f'time_step: {self.time_step}\n'
 
         self.names_to_plot = None
         if 'names_to_plot' in kwargs:
@@ -234,59 +233,21 @@ class RL2207_Environment(Environment):
         # WARNING: only the models with continuous inputs are supported for now
         min_bounds = self.model.get_bounds('min', 'input')
         max_bounds = self.model.get_bounds('max', 'input')
-        inputs_shape = min_bounds.shape
-        action_vector = np.full(inputs_shape, -1)
-        idxs = []
-        if self.actions_type == 'continuous':
-            if isinstance(self.continuous_actions, bool):
-                self.idxs_of_action = self.action_vector = action_vector
-                return dict(type='float', shape=inputs_shape, min_value=min_bounds, max_value=max_bounds)
-            lower = np.empty(inputs_shape)
-            upper = np.empty(inputs_shape)
-            for i, name in enumerate(self.model.names['input']):
-                if name in self.continuous_actions:
-                    if isinstance(self.continuous_actions[name], (int, float)):
-                        action_vector[i] = self.continuous_actions[name]
-                    elif isinstance(self.continuous_actions[name], (list, tuple)):
-                        lower[i] = self.continuous_actions[name][0]
-                        upper[i] = self.continuous_actions[name][1]
-                        for v in (lower[i], upper[i]):
-                            assert (min_bounds[i] <= v) and (v <= max_bounds[i])
-                        assert lower[i] < upper[i]
-                        idxs.append(i)
-                    elif self.continuous_actions[name] == 'enable':
-                        lower[i] = min_bounds[i]
-                        upper[i] = max_bounds[i]
-                        idxs.append(i)
-                    else:
-                        raise ValueError(f'Error: failed to determine what should being done with input name: {name}')
-                else:
-                    raise ValueError(f'Error: All input names should be specified, but at least one was not: {name}')
-            self.action_vector = action_vector
-            self.idxs_of_action = np.array(idxs)
-            return dict(type='float', shape=(len(idxs)), min_value=lower[idxs], max_value=upper[idxs])
 
-        elif self.actions_type == 'discrete':
-            if isinstance(self.discrete_actions, bool):
-                # return dict(type='int', shape=inputs_shape, num_values=21)
-                raise NotImplementedError
-            names_of_action = []
-            number_of_actions = []
-            for i, name in enumerate(self.model.names['input']):
-                if isinstance(self.discrete_actions[name], (int, float)):
-                    action_vector[i] = self.discrete_actions[name]
-                elif isinstance(self.discrete_actions[name], (list, tuple)):
-                    l = len(self.discrete_actions[name])
-                    assert l > 1
-                    number_of_actions.append(l)
-                    idxs.append(i)
-                    names_of_action.append(name)
-            self.names_of_action = np.array(names_of_action)
-            self.action_vector = action_vector
-            self.idxs_of_action = np.array(idxs)
-            return dict(type='int', shape=(len(self.idxs_of_action)), num_values=max(number_of_actions))
+        if self.action_spec['type'] == 'continuous':
+            if set(self.action_spec.keys()) <= {'type', 'info'}:
 
-        raise ValueError('Unexpected actions type error')
+                def default_transform(x):
+                    return x * (max_bounds - min_bounds) + min_bounds
+
+                self.action_spec['transform_action'] = default_transform
+                self.action_spec['shape'] = (len(min_bounds), )
+
+            self.transform_action = self.action_spec['transform_action']
+            return dict(type='float', shape=self.action_spec['shape'], min_value=0., max_value=1.)
+
+        else:
+            raise NotImplementedError('Discrete actions are yet to be implemented')
 
     def max_episode_timesteps(self):
         return super().max_episode_timesteps()
@@ -319,21 +280,7 @@ class RL2207_Environment(Environment):
         return self.end_episode
 
     def update_env(self, act):
-        if self.actions_type == 'continuous':
-            if self.idxs_of_action.size < self.action_vector.size:
-                model_inputs = self.action_vector
-                model_inputs[self.idxs_of_action] = act
-            else:
-                model_inputs = act
-        else:
-            # model_inputs = act / 20.
-            # if isinstance(self.discrete_actions, bool):
-            #     raise NotImplementedError
-            # else:
-            model_inputs = self.action_vector
-            for i, idx in enumerate(self.idxs_of_action):
-                model_inputs[idx] = self.discrete_actions[self.names_of_action[i]][act[i]]
-
+        model_inputs = self.transform_action(act)
         self.controller.set_controlled(model_inputs)
         self.controller.time_forward(dt=self.time_step)
         current_measurement = self.controller.get_process_output()[1][-1][self.inds_to_state]
@@ -412,16 +359,6 @@ class RL2207_Environment(Environment):
             return out
         else:
             return self.state_memory[:rows_num]
-
-    # def create_graphs(self, nomer, folder=''):
-    #     time_ax = self.out_data['time']
-    #     fig, ax = plt.subplots(1, 2, figsize=(15, 8), gridspec_kw={'width_ratios': [8, 2]})
-    #     ax[0].set_title(f'{self.integral:.2f}')
-    #     ax[0].plot(time_ax, self.out_data['CO2'])
-    #     ax[1].set_title('policy')
-    #     ax[1].plot(time_ax, self.out_data['actions'])
-    #     plt.savefig(f'{folder}conversion{nomer}.png')
-    #     plt.close(fig)
 
     def describe_to_file(self, filename):
         with open(filename, 'a') as fout:

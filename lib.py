@@ -183,8 +183,10 @@ def plot_to_file(*p, fileName=None, save_csv=True,
         right_ax = ax.twinx()
         if 'ylabel' in twin_params:
             right_ax.set_ylabel(twin_params['ylabel'])
-        if 'ylim' in twin_params:
-            right_ax.set_ylim(*twin_params['ylim'])
+        if twin_params.get('ylim', None) is not None:
+            y0, y1 = twin_params['ylim']
+            if y1 is not None:
+                right_ax.set_ylim(y0, y1)
 
     n = len(p)//3
     labels = {}

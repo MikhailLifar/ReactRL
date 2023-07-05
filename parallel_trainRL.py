@@ -120,7 +120,10 @@ import PC_setup
 
 # PC_obj = PC_setup.default_PC_setup('LibudaG')
 # PC_obj = PC_setup.default_PC_setup('Ziff')
-PC_obj = PC_setup.general_PC_setup('Ziff', ('to_model_constructor', 'CO2_count_top', 2.e+3))
+# PC_obj = PC_setup.general_PC_setup('Ziff', ('to_model_constructor', 'CO2_count_top', 2.e+3))
+PC_obj = PC_setup.general_PC_setup('LibudaGWithT',
+                                   ('to_model_constructor', {'params': {'reaction_rate_top': pow(3., 10)}})
+                                   )
 
 # Gauss_x_Conv_x_Conv = get_target_func('(Gauss)x(Conv)x(Conv)_I', default=1e-4, sigma=1e-5 * episode_time, eps=1e-4)
 # name1 = '(Gauss)x(Conv)x(Conv)'
@@ -128,13 +131,14 @@ PC_obj = PC_setup.general_PC_setup('Ziff', ('to_model_constructor', 'CO2_count_t
 # name2 = '(Gauss)x(Conv+Conv)'
 
 ## LibudaG
-#episode_time = 500
-#time_step = 10
+# episode_time = 500
+# time_step = 10
 
-
-# Ziff
-episode_time = 2.e+5
-time_step = 2.e+3
+# LibudaGWithT
+vary_x_co_action_spec = {'type': 'continuous',
+                         'transform_action': lambda x: [1 - x[0], x[0], 300 * x[1] + 400],
+                         'shape': 2,
+                         'info': 'control x_co = CO / (CO + O2) and T'}
 run_jobs_list(**get_for_RL_iterations(),
               **jobs_list_from_grid(
                   ['vpg', 'ppo'],
@@ -142,21 +146,20 @@ run_jobs_list(**get_for_RL_iterations(),
                   [{'rows': 1, 'use_differences': False},
                    {'rows': 3, 'use_differences': False},
                    {'rows': 5, 'use_differences': False},
-                   {'rows': 13, 'use_differences': False},
-                   {'rows': 13, 'use_differences': True}],
-                  names=('agent_name', 'env:reward_spec', 'env:state_spec')
+                   ],
+                  [(20., 1., 0.5), (2., 0.1, 5.)],
+                  names=('agent_name', 'env:reward_spec', 'env:state_spec',
+                         ('env:episode_time', 'env:time_step', 'env:normalize_coef'), )
               ),
               const_params={
                   'n_episodes': 40,
-                  'env': {'episode_time': episode_time,
-                          'time_step': time_step,
-                          'names_to_state': ['CO2_count', 'x'],
-                          'continuous_actions': True,
-                          # 'continuous_actions': {'CO': [0., 1.e+4], 'O2': 1.e+4},
-                          # 'discrete_actions': True,
-                          # 'discrete_actions': {'CO': [7e-5, 0.], 'O2': 7.e-5},
+                  'env': {
+                          # 'episode_time': episode_time,
+                          # 'time_step': time_step,
+                          'names_to_state': ['B', 'A', 'outputC', 'T'],
+                          'action_spec': vary_x_co_action_spec,
                           'target_type': 'one_row',
-                          'normalize_coef': 2.e-5,
+                          # 'normalize_coef': 2.e-5,
                          },
                   'agent': {},
                   'model': {},
@@ -166,9 +169,48 @@ run_jobs_list(**get_for_RL_iterations(),
               sort_iterations_by='deterministic_test::max_on_test',
               cluster_command_ops=False,
               python_interpreter='../RL_10_21/venv/bin/python',
-              out_fold_path='./run_RL_out/230418_Ziff_debug',
-              at_same_time=30,
+              out_fold_path='./run_RL_out/LibudaGWithT/230519_action_spec_debug_2',
+              at_same_time=110,
               )
+
+
+# ZGB
+# episode_time = 2.e+5
+# time_step = 2.e+3
+# run_jobs_list(**get_for_RL_iterations(),
+#               **jobs_list_from_grid(
+#                   ['vpg', 'ppo'],
+#                   ['each_step_base'],
+#                   [{'rows': 1, 'use_differences': False},
+#                    {'rows': 3, 'use_differences': False},
+#                    {'rows': 5, 'use_differences': False},
+#                    {'rows': 13, 'use_differences': False},
+#                    {'rows': 13, 'use_differences': True}],
+#                   names=('agent_name', 'env:reward_spec', 'env:state_spec')
+#               ),
+#               const_params={
+#                   'n_episodes': 40,
+#                   'env': {'episode_time': episode_time,
+#                           'time_step': time_step,
+#                           'names_to_state': ['CO2_count', 'x'],
+#                           'continuous_actions': True,
+#                           # 'continuous_actions': {'CO': [0., 1.e+4], 'O2': 1.e+4},
+#                           # 'discrete_actions': True,
+#                           # 'discrete_actions': {'CO': [7e-5, 0.], 'O2': 7.e-5},
+#                           'target_type': 'one_row',
+#                           'normalize_coef': 2.e-5,
+#                          },
+#                   'agent': {},
+#                   'model': {},
+#               },
+#               PC=PC_obj,
+#               repeat=3,
+#               sort_iterations_by='deterministic_test::max_on_test',
+#               cluster_command_ops=False,
+#               python_interpreter='../RL_10_21/venv/bin/python',
+#               out_fold_path='./run_RL_out/230418_Ziff_debug',
+#               at_same_time=30,
+#               )
 
 # run_jobs_list(**get_for_RL_iterations(),
 #               **jobs_list_from_grid(

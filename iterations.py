@@ -42,7 +42,8 @@ def get_common_1d_summarize(variable_name, names_to_plot, x_tolerance=1.e-5,
         lib.plot_to_file(*to_plot,
                          fileName=f'{foldapth}/{kwargs.get("filename", "summarize.png")}',
                          xlabel=f'{variable_name}', ylabel=kwargs.get('ylabel', '?'), title=kwargs.get('title', 'summary'),
-                         twin_params={'ylabel': names_to_plot[0]}, )
+                         ylim=kwargs.get('ylim', (0, None)),
+                         twin_params={'ylabel': names_to_plot[0], 'ylim': kwargs.get('twin_ylim', (0, None))})
 
     return common_summarize
 
@@ -147,6 +148,7 @@ def get_for_common_variations(policies_dict,
                               target: dict,
                               transform_params=lambda x: x,
                               names_to_sum_plot=None,
+                              kwargs_to_sum_plot=None,
                               additional_names=('thetaCO', 'thetaO'),
                               take_from_the_end=0.5):
 
@@ -187,9 +189,13 @@ def get_for_common_variations(policies_dict,
     if names_to_sum_plot is None:
         names_to_sum_plot = (target['name'], ) + tuple(additional_names)
 
+    if kwargs_to_sum_plot is None:
+        kwargs_to_sum_plot = {}
+
     return {'iteration_function': _iteration,
             'summarize_function': get_common_1d_summarize(name_to_variate, names_to_sum_plot, 1.e-5,
-                                                          filename='common_var_summary_1d.png')}
+                                                          filename='common_var_summary_1d.png',
+                                                          **kwargs_to_sum_plot)}
 
 
 def get_for_Ziff_iterations(pressure_unit: float, episode_time, CO2_output_column=3,
