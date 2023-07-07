@@ -115,3 +115,16 @@ class SinOfPowerPolicy(AbstractPolicy):
 
     def _call(self, t):
         return self['A'] * np.sin((self['omega'] * t) ** self['power'] + self['alpha']) + self['bias']
+
+
+class FourierSeriesPolicy(AbstractPolicy):
+    names = ('a_s', 'length')
+
+    def __init__(self, nterms, params_dict=None):
+        self.nterms = nterms
+        AbstractPolicy.__init__(self, params_dict)
+
+    def _call(self, t):
+        if isinstance(t, np.ndarray):
+            return np.sum(np.sin(np.tile(t, (self.nterms, 1)).T * np.arange(1, self.nterms + 1) * np.pi / self['length']) * self['a_s'], axis=1)
+        return np.sum(np.sin(np.full(self.nterms, t) * np.arange(1, self.nterms + 1) * np.pi / self['length']) * self['a_s'])

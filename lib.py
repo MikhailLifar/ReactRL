@@ -187,6 +187,8 @@ def plot_to_file(*p, fileName=None, save_csv=True,
             y0, y1 = twin_params['ylim']
             if y1 is not None:
                 right_ax.set_ylim(y0, y1)
+            else:
+                right_ax.set_ylim(y0)
 
     n = len(p)//3
     labels = {}

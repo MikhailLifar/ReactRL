@@ -85,6 +85,7 @@ class ProcessController:
         self.controlling_signals_history = np.full((self.max_step_count, len(self.controlled_names)), -1.)
         # duration of each constant region in gas_flow_history
         self.controlling_signals_history_dt = np.full(self.max_step_count, -1.)
+        self.time = 0.
 
         self.step_count = 0  # current step in flow history
 
@@ -122,10 +123,10 @@ class ProcessController:
         self.real_exp = real_exp
 
         # old plot
-        self.plot_lims = dict()
+        # self.plot_lims = dict()
         self.plot_axes_names = dict()
         self.target_func_name = target_func_name
-        self._initialize_plot_params()
+        # self._initialize_plot_params()
 
         self.metrics_put_on_plot = None
 
@@ -158,6 +159,7 @@ class ProcessController:
             self.controlling_signals_history[i] = self.controlled
             self.controlling_signals_history_dt[i] = dt
             self.step_count += 1
+        self.time += dt
 
     def process(self, time_step_seq: np.ndarray, in_data_df: pd.DataFrame):
         """
@@ -204,7 +206,8 @@ class ProcessController:
             self.process_to_control.update(in_values_arr, dt, False)
 
     def get_current_time(self):
-        return np.sum(self.controlling_signals_history_dt[:self.step_count])
+        self.time = np.sum(self.controlling_signals_history_dt[:self.step_count])
+        return self.time
 
     def get_process_output(self):
         """
@@ -328,33 +331,33 @@ class ProcessController:
         output_dt, output = self.get_process_output()
         return self.long_term_target(output_dt, output)
 
-    def _initialize_plot_lims(self):
-        for kind in ('input', 'output'):
-            self.plot_lims[kind] = [np.min(self.process_to_control.get_bounds('min', kind)),
-                                    np.max(self.process_to_control.get_bounds('max', kind))]
-            self.plot_lims[kind][0] = self.plot_lims[kind][0] * (1. - np.sign(self.plot_lims[kind][0]) * 0.03)
-            self.plot_lims[kind][1] = self.plot_lims[kind][1] * (1. + np.sign(self.plot_lims[kind][1]) * 0.03)
-        self.plot_lims['additional'] = None
-
-    def _initialize_plot_params(self):
-        self._initialize_plot_lims()
-        for kind in ('input', 'output', 'additional', 'target'):
-            self.plot_axes_names[kind] = '?'
-
-    def set_plot_params(self, **kwargs):
-        for kind in ('input', 'output', 'additional'):
-            if f'{kind}_lims' in kwargs:
-                self.plot_lims[kind] = kwargs[f'{kind}_lims']
-                del kwargs[f'{kind}_lims']
-        for kind in ('input', 'output', 'additional', 'target'):
-            if f'{kind}_ax_name' in kwargs:
-                self.plot_axes_names[kind] = kwargs[f'{kind}_ax_name']
-                del kwargs[f'{kind}_ax_name']
-        if 'target_name' in kwargs:
-            self.target_func_name = kwargs['target_name']
-            del kwargs['target_name']
-        if len(kwargs):
-            raise ValueError('At least one name contains error')
+    # def _initialize_plot_lims(self):
+    #     for kind in ('input', 'output'):
+    #         self.plot_lims[kind] = [np.min(self.process_to_control.get_bounds('min', kind)),
+    #                                 np.max(self.process_to_control.get_bounds('max', kind))]
+    #         self.plot_lims[kind][0] = self.plot_lims[kind][0] * (1. - np.sign(self.plot_lims[kind][0]) * 0.03)
+    #         self.plot_lims[kind][1] = self.plot_lims[kind][1] * (1. + np.sign(self.plot_lims[kind][1]) * 0.03)
+    #     self.plot_lims['additional'] = None
+    #
+    # def _initialize_plot_params(self):
+    #     self._initialize_plot_lims()
+    #     for kind in ('input', 'output', 'additional', 'target'):
+    #         self.plot_axes_names[kind] = '?'
+    #
+    # def set_plot_params(self, **kwargs):
+    #     for kind in ('input', 'output', 'additional'):
+    #         if f'{kind}_lims' in kwargs:
+    #             self.plot_lims[kind] = kwargs[f'{kind}_lims']
+    #             del kwargs[f'{kind}_lims']
+    #     for kind in ('input', 'output', 'additional', 'target'):
+    #         if f'{kind}_ax_name' in kwargs:
+    #             self.plot_axes_names[kind] = kwargs[f'{kind}_ax_name']
+    #             del kwargs[f'{kind}_ax_name']
+    #     if 'target_name' in kwargs:
+    #         self.target_func_name = kwargs['target_name']
+    #         del kwargs['target_name']
+    #     if len(kwargs):
+    #         raise ValueError('At least one name contains error')
 
     def set_metrics(self, *args):
         """
@@ -609,7 +612,7 @@ class ProcessController:
 
         # save the information about model and PC object
         d, _ = os.path.split(filepath)
-        if not os.path.exists(f'{d}/_info.txt'):
+        if not os.path.exists(f'{d}/info.txt'):
             with open(f'{d}/info.txt', 'w') as f:
                 f.write('-----Model-----\n')
                 f.write(self.process_to_control.get_model_info())
@@ -637,7 +640,13 @@ class ProcessController:
         lib.save_to_file(*list_to_csv,
                          fileName=filepath[:filepath.rfind('.')] + '_all_data.csv', )
 
-    def get_and_plot(self, file_name):
+    def get_and_plot(self, file_name, plot_params=None):
+        """
+
+        :param file_name:
+        :param plot_params: deprecated since new plot method
+        :return:
+        """
         # if isinstance(get_params, dict):
         #     self.get_process_output()
         # else:
@@ -660,6 +669,7 @@ class ProcessController:
         # duration of each constant region in gas_flow_history
         self.controlling_signals_history_dt = np.full(self.max_step_count, -1.)
         self.step_count = 0  # current step in flow history
+        self.time = 0.
 
         self.output_history = np.full_like(self.output_history, -1.)
         self.output_history_dt = np.full(self.output_history.shape[0], -1.)
@@ -825,23 +835,26 @@ def func_to_optimize_policy(PC_obj: ProcessController, policy_obj: AbstractPolic
         if PC_obj.target_func is not None:
             R = PC_obj.integrate_along_history(target_mode=True,
                                                time_segment=[t_start_count_from, episode_len])
-
         elif PC_obj.long_term_target is not None:
             R = PC_obj.get_long_term_target()
+        else:
+            raise ValueError
 
         if DEBUG:
             # if not os.path.exists(f'{folder}/model_info.txt'):
             #     with open(f'{folder}/model_info.txt', 'w') as f:
             #         f.write(PC_obj.process_to_control.add_info)
 
-            def ax_func(ax):
-                # ax.set_title(f'integral: {R:.4g}')
-                pass
+            # def ax_func(ax):
+            #     # ax.set_title(f'integral: {R:.4g}')
+            #     pass
 
-            PC_obj.plot(f'{folder}/try_{ind_picture}_return_{R:.3f}.png',
-                        plot_more_function=ax_func, plot_mode='separately',
-                        time_segment=[0., episode_len],
-                        **kwargs['to_plot'])  # SMALL CRUTCH HERE!
+            # PC_obj.plot(f'{folder}/try_{ind_picture}_return_{R:.3f}.png',
+            #             plot_more_function=ax_func, plot_mode='separately',
+            #             time_segment=[0., episode_len],
+            #             **kwargs['to_plot'])  # SMALL CRUTCH HERE!
+
+            PC_obj.plot(f'{folder}/try_{ind_picture}_return_{R:.3f}.png')
 
         return -R
 

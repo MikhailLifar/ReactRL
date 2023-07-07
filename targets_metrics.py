@@ -110,6 +110,19 @@ def get_target_func(func_name, **kwargs):
 
         return CO2xCOConversion_I
 
+    elif func_name == 'CO2_plus_CO_conv_I':
+        eps, alpha = kwargs['eps'], kwargs['alpha']
+
+        def CO2_plus_CO_conv_I(output_history_dt, output_history):
+            # x = [CO2(k4 * thetaCO * thetaO), O2(k3), CO(k1)]
+            # formula, roughly: cost = (1 - alpha) * int(CO2) / (int(CO2) + eps) + alpha * int(CO2)
+            # alpha = 0 <=> consider conversion only; alpha = 1 <=> consider integral (rate) only
+            I_CO2 = integral(output_history_dt, output_history[:, 0])
+            I_CO = integral(output_history_dt, output_history[:, 2])
+            return alpha * I_CO2 / (I_CO + eps) + (1 - alpha) * I_CO2
+
+        return CO2_plus_CO_conv_I
+
     # LONG-TERM, WITH GAUSS
     elif func_name == '(Gauss)x(Conv)x(Conv)_I':
         CO_0 = kwargs['default']

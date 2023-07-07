@@ -52,7 +52,8 @@ def get_for_RL_iterations():
                 f.write(f'{p}: {agent_params[p]}\n')
         ret = run(env_obj, agent_rl,
                   out_folder=foldpath,
-                  n_episodes=params['n_episodes'], create_unique_folder=False)
+                  n_episodes=params['n_episodes'], create_unique_folder=False,
+                  reset_callback=params['reset_callback'])
 
         # individual iteration file
         x_vector = np.arange(env_obj.stored_integral_data['integral'][:env_obj.count_episodes].size)[::20]

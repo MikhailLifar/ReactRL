@@ -36,7 +36,8 @@ def create_tforce_agent(environment: RL2207_Environment, agent_name, **params):
     return agent
 
 
-def run_episode(environment: RL2207_Environment, agent, independent: bool = False, deterministic: bool = False):
+def run_episode(environment: RL2207_Environment, agent, independent: bool = False, deterministic: bool = False,
+                reset_callback=None):
     # Initialize episode
     state = environment.reset()
     # print(state)
@@ -51,6 +52,9 @@ def run_episode(environment: RL2207_Environment, agent, independent: bool = Fals
         if not independent:
             agent.observe(terminal=terminal, reward=reward)
     print('Episode end')
+
+    if reset_callback is not None:
+        reset_callback(environment)
 
     return environment.cumm_episode_target
 
@@ -71,14 +75,14 @@ def debug_run(environment: RL2207_Environment, agent, out_folder=None, n_episode
 
 
 def run(environment: RL2207_Environment, agent, out_folder='run_RL_out', n_episodes=None, test=False,
-        create_unique_folder=True):
+        create_unique_folder=True, reset_callback=None):
     if test:
         if create_unique_folder:
             dir_path = make_subdir_return_path(out_folder, postfix='_test')
         else:
             dir_path = out_folder
         test_run(environment, agent, n_episodes=n_episodes, out_folder=dir_path,
-                 deterministic=True)
+                 deterministic=True, reset_callback=reset_callback)
         return
     if n_episodes is None:
         n_episodes = 30000
@@ -100,7 +104,7 @@ def run(environment: RL2207_Environment, agent, out_folder='run_RL_out', n_episo
 
     for i in range(n_episodes):
         # Initialize episode
-        run_episode(environment, agent)
+        run_episode(environment, agent, reset_callback=reset_callback)
         if not (i % plot_period) or (i > n_episodes - 5):
             # env.create_graphs(i, 'run_RL_out/')
             # --DEBUG--
@@ -139,13 +143,14 @@ def run(environment: RL2207_Environment, agent, out_folder='run_RL_out', n_episo
     test_agent = Agent.load(directory=f'{dir_path}/agent', format='numpy', environment=environment)
     os.makedirs(f'{dir_path}/testing', exist_ok=False)
     os.makedirs(f'{dir_path}/testing_deterministic', exist_ok=False)
-    ret['stochastic_test'] = test_run(environment, test_agent, out_folder=f'{dir_path}/testing')
-    ret['deterministic_test'] = test_run(environment, test_agent, out_folder=f'{dir_path}/testing_deterministic', deterministic=True)
+    ret['stochastic_test'] = test_run(environment, test_agent, out_folder=f'{dir_path}/testing', reset_callback=reset_callback)
+    ret['deterministic_test'] = test_run(environment, test_agent, out_folder=f'{dir_path}/testing_deterministic', deterministic=True,
+                                         reset_callback=reset_callback)
     return ret
 
 
 def test_run(environment: RL2207_Environment, agent, out_folder, n_episodes=None, deterministic=False,
-             reset_mode='bottom_state'):
+             reset_mode='bottom_state', reset_callback=None):
     environment.describe_to_file(f'{out_folder}/_info.txt')
     environment.reset_mode = reset_mode
     if n_episodes is None:
@@ -155,7 +160,7 @@ def test_run(environment: RL2207_Environment, agent, out_folder, n_episodes=None
     cumm_rewards = np.zeros(n_episodes)
 
     for i in range(n_episodes):
-        cumm_rewards[i] = run_episode(environment, agent, independent=True, deterministic=deterministic)
+        cumm_rewards[i] = run_episode(environment, agent, independent=True, deterministic=deterministic, reset_callback=reset_callback)
         # env.create_graphs(i, 'run_RL_out/')
         environment.controller.plot(f'{out_folder}/{environment.cumm_episode_target:.2f}conversion{i}.png')
     # environment.summary_graphs(f'{out_folder}/')

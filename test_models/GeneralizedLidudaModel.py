@@ -257,7 +257,7 @@ class LibudaGWithTemperature(GeneralizedLibudaModel):
     model_name = 'LibudaGWithT'
 
     params_names = copy.deepcopy(GeneralizedLibudaModel.params_names)
-    for suff in ('ads_A', 'ads_B', 'des_A', 'des_B', 'react'):
+    for suff in ('ads_A', 'des_A', 'ads_B', 'des_B', 'react'):
         params_names.append([f'rate_{suff}_0', f'E_{suff}'])
         params_names.remove(f'rate_{suff}')
 
@@ -271,7 +271,7 @@ class LibudaGWithTemperature(GeneralizedLibudaModel):
         # self.fill_limits()
 
     def calc_for_T(self, T):
-        for suff in ('ads_A', 'ads_B', 'des_A', 'des_B', 'react'):
+        for suff in ('ads_A', 'des_A', 'ads_B', 'des_B', 'react'):
             self.params[f'rate_{suff}'] = self.params[f'rate_{suff}_0'] * np.exp(-self.params[f'E_{suff}'] / self['kB'] / T)
 
     def set_Libuda(self):
@@ -321,6 +321,88 @@ class LibudaGWithTemperature(GeneralizedLibudaModel):
         GeneralizedLibudaModel.update(self, data_slice[:-1], delta_t, save_for_plot)
 
         self.model_output = np.hstack((self.model_output, [T]))
+        return self.model_output
+
+
+class LibudaGWithTEnergies(LibudaGWithTemperature):
+    """
+    The idea behind the class is to enable varying energies in the same manner as temperature
+    """
+
+    names = copy.deepcopy(LibudaGWithTemperature.names)
+    names['input'] += ['E_ads_A', 'E_des_A', 'E_ads_B', 'E_des_B', 'E_react', ]
+    names['output'] += ['E_ads_A', 'E_des_A', 'E_ads_B', 'E_des_B', 'E_react', ]
+
+    bottom = copy.deepcopy(LibudaGWithTemperature.bottom)
+    top = copy.deepcopy(LibudaGWithTemperature.top)
+    for suff in ('ads_A', 'des_A', 'ads_B', 'des_B', 'react'):
+        bottom['input'][f'E_{suff}'] = bottom['output'][f'E_{suff}'] = 0.
+        top['input'][f'E_{suff}'] = top['output'][f'E_{suff}'] = 200.
+
+    params_names = copy.deepcopy(GeneralizedLibudaModel.params_names)
+    for suff in ('ads_A', 'des_A', 'ads_B', 'des_B', 'react'):
+        params_names.append(f'rate_{suff}_0')
+        params_names.remove(f'rate_{suff}')
+
+    predefined_params = copy.deepcopy(LibudaGWithTemperature.predefined_params)
+
+    model_name = 'LibudaGWithTEnergies'
+
+    def __init__(self, params=None, T=440., Es=(100., 136., 120., 0., 60.), resample_when_reset=False, set_Libuda=False):
+        self.Es = np.array(Es)  # order of Es is always following: ads_A, des_A, ads_B, des_B, react
+        self.T = T
+        self.calc_for_T = None
+        LibudaGWithTemperature.__init__(self, params, T, resample_when_reset, set_Libuda)
+
+    def _calc_for_T_and_Es(self, T, Es):
+        for i, suff in enumerate(('ads_A', 'des_A', 'ads_B', 'des_B', 'react')):
+            self.params[f'rate_{suff}'] = self.params[f'rate_{suff}_0'] * np.exp(-Es[i] / self['kB'] / T)
+
+    def set_Libuda(self):
+
+        self.set_params(
+            params={
+                    'thetaA_max': 0.5, 'thetaB_max': 0.25,
+                    'thetaA_init': 0., 'thetaB_init': 0.25,
+                    'rate_ads_A_0': 1.,
+                    'rate_des_A_0': 1.,
+                    'rate_ads_B_0': 1.,
+                    'rate_des_B_0': 0.,
+                    'rate_react_0': 1.,
+                    'C_B_inhibit_A': 0.3,
+                    'C_A_inhibit_B': 1.,
+                    })
+
+        self.T = 440.
+        self.Es = np.array((100., 136., 120., 0., 60.))
+        self._calc_for_T_and_Es(self.T, self.Es)
+
+        k_1 = 0.14895 / self.params['rate_ads_A']
+        k_des1 = 0.07162 / self.params['rate_des_A']
+        k_2 = 0.06594 / self.params['rate_ads_B']
+        k_des2 = 0.
+        k_3 = 5.98734 / self.params['rate_react']
+
+        self.params.update({
+            'rate_ads_A_0': k_1, 'rate_des_A_0': k_des1,
+            'rate_ads_B_0': k_2, 'rate_des_B_0': k_des2,
+            'rate_react_0': k_3,
+        })
+
+        self._calc_for_T_and_Es(self.T, self.Es)
+
+    def update(self, data_slice, delta_t, save_for_plot=False):
+
+        inputB, inputA, T = data_slice[:3]
+        Es = data_slice[3:]
+        if (data_slice.size < 3) or (np.linalg.norm([T, *Es]) > 1):
+            self.T = T
+            self.Es = Es
+            self._calc_for_T_and_Es(T, Es)
+
+        GeneralizedLibudaModel.update(self, data_slice[:2], delta_t, save_for_plot)
+
+        self.model_output = np.hstack((self.model_output, [T, *Es]))
         return self.model_output
 
 
@@ -403,3 +485,4 @@ class LynchModel(BaseModel):
         BaseModel.reset(self)
         self.X = self.Y = self.Z = 0.
         self.thetaCO = self.thetaO = 0.
+

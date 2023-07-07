@@ -370,7 +370,7 @@ def Libuda2001_CO_cutoff_policy(PC_obj: ProcessController, program, dest_dir='./
 def Libuda2001_original_simulation():
     PC_obj = ProcessController(LibudaModel(init_cond={'thetaCO': 0., 'thetaO': 0.25}, Ts=440.),
                                target_func_to_maximize=get_target_func('CO2_value'))
-    PC_obj.set_plot_params(output_lims=[-1.e-3, 0.05], output_ax_name='CO2 formation rate')
+    # PC_obj.set_plot_params(output_lims=[-1.e-3, 0.05], output_ax_name='CO2 formation rate')
     Libuda2001_CO_cutoff_policy(PC_obj, ['full'])
 
 
@@ -606,7 +606,6 @@ def LibudaGWithT_transtion_speed_test():
                                      'plot_mode': 'separately', 'input_names': ('T', ), 'out_names': ('outputC',), })
 
 
-
 def main():
     # custom_experiment()
 
@@ -637,24 +636,31 @@ def main():
     #                             plot_params={'time_segment': [0, None], 'additional_plot': ['thetaB', 'thetaA'],
     #                                          'plot_mode': 'separately', 'out_names': ['outputC']})
 
-    # PC_obj = PC_setup.general_PC_setup('LibudaG')
-    # PC_obj = PC_setup.general_PC_setup('LibudaGWithT', ('to_model_constructor', {'T': 440.}))
+    PC_obj = PC_setup.general_PC_setup('Libuda2001')
+    # PC_obj = PC_setup.general_PC_setup('LibudaG', ('to_model_constructor', {'params': {}}))
+    # PC_obj = PC_setup.general_PC_setup('LibudaGWithT', ('to_model_constructor', {'T': 440., 'params': {}}))
+    # PC_obj = PC_setup.general_PC_setup('LibudaGWithTEs', ('to_model_constructor', {'T': 440., 'params': {}}))
     # get_co_part = PC_obj.process_to_control.co_flow_part_to_pressure_part
-    # Libuda2001_CO_cutoff_policy(PC_obj,
-    #                             ['full'],
-    #                             'PC_plots/LibudaGeneralized/DEBUG/Libuda_regime',
-    #                             transform_x_co_on=lambda x: {'inputB': 1. - get_co_part(x), 'inputA': get_co_part(x),
-    #                                                          # 'T': 440.
-    #                                                          'T': 440.
-    #                                                          },
-    #                             transform_x_co_off=lambda x: {'inputB': 1. - get_co_part(x), 'inputA': 0.,
-    #                                                           # 'T': 440.
-    #                                                           'T': 440.
-    #                                                           },
-    #                             output_name_to_plot='outputC',
-    #                             add_names=('thetaB', 'thetaA', 'error'))
+    get_co_part = GeneralizedLibudaModel.co_flow_part_to_pressure_part
+    Libuda2001_CO_cutoff_policy(PC_obj,
+                                ['full'],
+                                'PC_plots/Libuda/DEBUG/Libuda_regime',
+                                transform_x_co_on=lambda x: {'O2': 1. - get_co_part(x), 'CO': get_co_part(x),
+                                                             # 'inputB': 1. - get_co_part(x), 'inputA': get_co_part(x),
+                                                             # 'T': 440.
+                                                             # 'T': 440.
+                                                             },
+                                transform_x_co_off=lambda x: {'O2': 1. - get_co_part(x), 'CO': 0.,
+                                                              # 'inputB': 1. - get_co_part(x), 'inputA': 0.,
+                                                              # 'T': 440.
+                                                              # 'T': 440.
+                                                              },
+                                # output_name_to_plot='outputC',
+                                output_name_to_plot='CO2',
+                                # add_names=('thetaB', 'thetaA', 'error'),
+                                add_names=('thetaO', 'thetaCO'))
 
-    LibudaGWithT_transtion_speed_test()
+    # LibudaGWithT_transtion_speed_test()
 
     # LGWithT transition speed
     # PC_obj.reset()

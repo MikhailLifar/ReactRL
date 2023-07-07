@@ -1,7 +1,10 @@
-# import matplotlib
+import matplotlib
 # matplotlib.use('Agg')
+matplotlib.use('TkAgg')
 # import itertools
 import os
+
+import numpy as np
 
 import matplotlib.pyplot as plt
 
@@ -111,14 +114,26 @@ def working_with_csv_test():
 
 def test_policy():
     import predefined_policies as pp
+    plt.switch_backend('TkAgg')
 
-    nsteps = 5
-    policy = pp.AnyStepPolicy(nsteps, dict())
+    # any step policy
+    # nsteps = 5
+    # policy = pp.AnyStepPolicy(nsteps, dict())
+    #
+    # params = {str(i): 10 + i for i in range(1, nsteps + 1)}
+    # tparams = {f't{i}': i for i in range(1, nsteps + 1)}
+    # policy.set_policy({**params, **tparams})
+    # policy(np.linspace(0, 50, 51))
 
-    params = {str(i): 10 + i for i in range(1, nsteps + 1)}
-    tparams = {f't{i}': i for i in range(1, nsteps + 1)}
-    policy.set_policy({**params, **tparams})
-    policy(np.linspace(0, 50, 51))
+    # fourier series policy
+    policy = pp.FourierSeriesPolicy(5, {'a_s': np.array([1., 1., 1., 1., 1.]), 'length': 10})
+    t = np.linspace(0, 60, 300)
+    p_of_t = policy(t)
+    p_of_t_2 = np.array([policy(t0) for t0 in t])
+    fig, ax = plt.subplots()
+    ax.plot(t, p_of_t_2, c='b', linewidth=5)
+    ax.plot(t, p_of_t, c='r', linewidth=3)
+    plt.show()
 
 
 def test_jobs_functions():
@@ -174,11 +189,11 @@ def Libuda_coefs_estimation():
 if __name__ == '__main__':
     # working_with_csv_test()
 
-    # test_policy()
+    test_policy()
 
     # test_jobs_functions()
 
-    Libuda_coefs_estimation()
+    # Libuda_coefs_estimation()
 
     # benchmark_RL_agents()
 

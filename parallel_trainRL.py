@@ -1,6 +1,9 @@
+import numpy as np
+
 from parallel_trainRL_funcs import *
 from test_models import *
 from targets_metrics import *
+from predefined_policies import FourierSeriesPolicy
 
 from multiple_jobs_functions import jobs_list_from_grid, run_jobs_list
 import PC_setup
@@ -118,12 +121,15 @@ import PC_setup
 #                    # ('CO conversion', overall_CO_conversion)
 #                    )
 
-# PC_obj = PC_setup.default_PC_setup('LibudaG')
+PC_obj = PC_setup.general_PC_setup('LibudaG', ('to_model_constructor', {'params': {'reaction_rate_top': 0.1}}))
 # PC_obj = PC_setup.default_PC_setup('Ziff')
 # PC_obj = PC_setup.general_PC_setup('Ziff', ('to_model_constructor', 'CO2_count_top', 2.e+3))
-PC_obj = PC_setup.general_PC_setup('LibudaGWithT',
-                                   ('to_model_constructor', {'params': {'reaction_rate_top': pow(3., 10)}})
-                                   )
+# PC_obj = PC_setup.general_PC_setup('LibudaGWithT',
+#                                    ('to_model_constructor', {'params': {'reaction_rate_top': pow(3., 10)}})
+#                                    )
+# PC_obj = PC_setup.general_PC_setup('Libuda2001',
+#                                    ('to_model_constructor', {'params': {'reaction_rate_top': pow(3., 10)}})
+#                                    )
 
 # Gauss_x_Conv_x_Conv = get_target_func('(Gauss)x(Conv)x(Conv)_I', default=1e-4, sigma=1e-5 * episode_time, eps=1e-4)
 # name1 = '(Gauss)x(Conv)x(Conv)'
@@ -131,14 +137,31 @@ PC_obj = PC_setup.general_PC_setup('LibudaGWithT',
 # name2 = '(Gauss)x(Conv+Conv)'
 
 ## LibudaG
-# episode_time = 500
-# time_step = 10
+episode_time = 100
+time_step = 10
 
-# LibudaGWithT
-vary_x_co_action_spec = {'type': 'continuous',
-                         'transform_action': lambda x: [1 - x[0], x[0], 300 * x[1] + 400],
-                         'shape': 2,
-                         'info': 'control x_co = CO / (CO + O2) and T'}
+
+def get_time_dependent_action_transform(terms_number, length):
+    random_coefs = np.random.random(terms_number) - 0.5
+    random_coefs /= np.sum(np.abs(random_coefs))
+    fourier_policy = FourierSeriesPolicy(terms_number, {'a_s': random_coefs, 'length': length})
+
+    def transform_(act, time):
+        return np.hstack((act, [fourier_policy(time) / 2 + 0.5]))
+
+    def callback_(env):
+        random_coefs_0 = np.random.random(terms_number) - 0.5
+        random_coefs_0 /= np.sum(np.abs(random_coefs_0))
+        fourier_policy.set_policy({'a_s': random_coefs_0, 'length': length})
+
+    return transform_, callback_
+
+
+transform, callback = get_time_dependent_action_transform(5, episode_time)
+vary_o2_co_is_arbitrary = {'type': 'continuous',
+                           'transform_action': transform,
+                           'shape': 1,
+                           'info': 'control O2, CO(t) is random fourier series'}
 run_jobs_list(**get_for_RL_iterations(),
               **jobs_list_from_grid(
                   ['vpg', 'ppo'],
@@ -147,19 +170,18 @@ run_jobs_list(**get_for_RL_iterations(),
                    {'rows': 3, 'use_differences': False},
                    {'rows': 5, 'use_differences': False},
                    ],
-                  [(20., 1., 0.5), (2., 0.1, 5.)],
-                  names=('agent_name', 'env:reward_spec', 'env:state_spec',
-                         ('env:episode_time', 'env:time_step', 'env:normalize_coef'), )
+                  names=('agent_name', 'env:reward_spec', 'env:state_spec', )
               ),
               const_params={
                   'n_episodes': 40,
+                  'reset_callback': callback,
                   'env': {
-                          # 'episode_time': episode_time,
-                          # 'time_step': time_step,
-                          'names_to_state': ['B', 'A', 'outputC', 'T'],
-                          'action_spec': vary_x_co_action_spec,
+                          'episode_time': episode_time,
+                          'time_step': time_step,
+                          'names_to_state': ['B', 'A', 'outputC'],
+                          'action_spec': vary_o2_co_is_arbitrary,
                           'target_type': 'one_row',
-                          # 'normalize_coef': 2.e-5,
+                          'normalize_coef': 10.,
                          },
                   'agent': {},
                   'model': {},
@@ -169,9 +191,49 @@ run_jobs_list(**get_for_RL_iterations(),
               sort_iterations_by='deterministic_test::max_on_test',
               cluster_command_ops=False,
               python_interpreter='../RL_10_21/venv/bin/python',
-              out_fold_path='./run_RL_out/LibudaGWithT/230519_action_spec_debug_2',
+              out_fold_path='./run_RL_out/LibudaG/230707_vary_O2_CO_is_arbitrary',
               at_same_time=110,
               )
+
+
+# LibudaGWithT
+# vary_x_co_action_spec = {'type': 'continuous',
+#                          'transform_action': lambda x: [1 - x[0], x[0], 300 * x[1] + 400],
+#                          'shape': 2,
+#                          'info': 'control x_co = CO / (CO + O2) and T'}
+# run_jobs_list(**get_for_RL_iterations(),
+#               **jobs_list_from_grid(
+#                   ['vpg', 'ppo'],
+#                   ['each_step_base'],
+#                   [{'rows': 1, 'use_differences': False},
+#                    {'rows': 3, 'use_differences': False},
+#                    {'rows': 5, 'use_differences': False},
+#                    ],
+#                   [(20., 1., 0.5), (2., 0.1, 5.)],
+#                   names=('agent_name', 'env:reward_spec', 'env:state_spec',
+#                          ('env:episode_time', 'env:time_step', 'env:normalize_coef'), )
+#               ),
+#               const_params={
+#                   'n_episodes': 40,
+#                   'env': {
+#                           # 'episode_time': episode_time,
+#                           # 'time_step': time_step,
+#                           'names_to_state': ['B', 'A', 'outputC', 'T'],
+#                           'action_spec': vary_x_co_action_spec,
+#                           'target_type': 'one_row',
+#                           # 'normalize_coef': 2.e-5,
+#                          },
+#                   'agent': {},
+#                   'model': {},
+#               },
+#               PC=PC_obj,
+#               repeat=3,
+#               sort_iterations_by='deterministic_test::max_on_test',
+#               cluster_command_ops=False,
+#               python_interpreter='../RL_10_21/venv/bin/python',
+#               out_fold_path='./run_RL_out/LibudaGWithT/230519_action_spec_debug_2',
+#               at_same_time=110,
+#               )
 
 
 # ZGB

@@ -237,7 +237,7 @@ class RL2207_Environment(Environment):
         if self.action_spec['type'] == 'continuous':
             if set(self.action_spec.keys()) <= {'type', 'info'}:
 
-                def default_transform(x):
+                def default_transform(x, time):
                     return x * (max_bounds - min_bounds) + min_bounds
 
                 self.action_spec['transform_action'] = default_transform
@@ -280,7 +280,8 @@ class RL2207_Environment(Environment):
         return self.end_episode
 
     def update_env(self, act):
-        model_inputs = self.transform_action(act)
+        current_time = self.controller.time
+        model_inputs = self.transform_action(act, current_time)
         self.controller.set_controlled(model_inputs)
         self.controller.time_forward(dt=self.time_step)
         current_measurement = self.controller.get_process_output()[1][-1][self.inds_to_state]

@@ -16,17 +16,17 @@ DEFAULT_PARAMS = {
                 'supposed_step_count': 10000,
                 'supposed_exp_time': 10000,
             },
-            'to_set_plot_params': {
-                'input_lims': [-1e-5, 1.1e-4],
-                'input_ax_name': 'Pressure, Pa',
-                'output_lims': [-1e-2, 0.1],
-                'output_ax_name': 'CO2 formation rate, $(Pd atom * sec)^{-1}$',
-                'additional_lims': [-1e-2, 1. + 1.e-2],
-            },
+            # 'to_set_plot_params': {
+            #     'input_lims': [-1e-5, 1.1e-4],
+            #     'input_ax_name': 'Pressure, Pa',
+            #     'output_lims': [-1e-2, 0.1],
+            #     'output_ax_name': 'CO2 formation rate, $(Pd atom * sec)^{-1}$',
+            #     'additional_lims': [-1e-2, 1. + 1.e-2],
+            # },
             'metrics': (
                         ('integral CO2', CO2_integral),
                         # ('O2 conversion', overall_O2_conversion),
-                        # ('CO conversion', overall_CO_conversion)
+                        ('CO conversion', overall_CO_conversion)
                         )
         },
         'LibudaG': {
@@ -151,17 +151,47 @@ DEFAULT_PARAMS = {
 
 
 DEFAULT_PLOT_SPECS = {
-    'LibudaG': (
+    'Libuda2001': [
         # input
-        {'names': ('inputB', 'inputA', 'T'), 'groups': 'input', 'styles': (None, None, {'twin': True}),
+        {'names': ('O2', 'CO'), 'groups': 'input', 'styles': (None, None),
+         'to_fname': '_input',
+         'to_plot_to_f': {
+             'xlabel': 'Time, s', 'ylabel': '?',
+             'ylim': [-5.e-6, 1.e-4 + 5.e-6],
+             'save_csv': True,
+         }},
+        # add
+        {'names': ('thetaO', 'thetaCO'), 'groups': ('add', 'add'), 'styles': None,
+         'to_fname': '_add',
+         'to_plot_to_f': {
+             'xlabel': 'Time, s', 'ylabel': '?',
+             'ylim': [-5.e-2, 1. + 5.e-2],
+             'save_csv': True,
+         }},
+        # CO2 rate
+        {'names': ('CO2', ), 'groups': ('output', ), 'styles': None,
+         'to_fname': '_output_CO2',
+         'to_plot_to_f': {
+             'xlabel': 'Time, s', 'ylabel': 'reaction rate',
+             'ylim': [-5.e-3, None],
+             'save_csv': True,
+                     }},
+        # # target
+        # {'names': ('reaction rate', ), 'groups': ('target', ), 'styles': None,
+        #  'to_fname': '_target',
+        #  'to_plot_to_f': {
+        #      'xlabel': 'Time, s', 'ylabel': 'reaction rate',
+        #      'ylim': [-5.e-3, None],
+        #      'save_csv': True,
+        #              }},
+    ],
+    'LibudaG': [
+        # input
+        {'names': ('inputB', 'inputA'), 'groups': 'input', 'styles': (None, None),
          'to_fname': '_input',
          'to_plot_to_f': {
              'xlabel': 'Time, s', 'ylabel': '?',
              'ylim': [-5.e-2, 1. + 5.e-2],
-             'twin_params': {
-                 'ylabel': 'T, K',
-                 'ylim': [250, 900]
-             },
              'save_csv': True,
          }},
         # add
@@ -180,22 +210,41 @@ DEFAULT_PLOT_SPECS = {
              'ylim': [-5.e-3, None],
              'save_csv': True,
                      }},
-    )
+    ]
 }
+
+# Libuda2001 plot specs
 
 # LibudaD setup
 DEFAULT_PARAMS['LibudaD'] = copy.deepcopy(DEFAULT_PARAMS['Libuda2001'])
 DEFAULT_PARAMS['LibudaD']['model_class'] = LibudaModelWithDegradation
 DEFAULT_PARAMS['LibudaD']['to_model_constructor'].update({'v_d': 0.01, 'v_r': 0.1, 'border': 4.})
+DEFAULT_PLOT_SPECS['LibudaD'] = DEFAULT_PLOT_SPECS['Libuda2001']
 
 # LibudaGWithT setup
 DEFAULT_PARAMS['LibudaGWithT'] = copy.deepcopy(DEFAULT_PARAMS['LibudaG'])
 DEFAULT_PARAMS['LibudaGWithT']['model_class'] = LibudaGWithTemperature
-DEFAULT_PARAMS['LibudaGWithT']['to_set_plot_params'].update({
-    'input_lims': [380, 620],
-    'input_ax_name': 'Temperature, K',
-})
+# DEFAULT_PARAMS['LibudaGWithT']['to_set_plot_params'].update({
+#     'input_lims': [380, 620],
+#     'input_ax_name': 'Temperature, K',
+# })
 DEFAULT_PLOT_SPECS['LibudaGWithT'] = copy.deepcopy(DEFAULT_PLOT_SPECS['LibudaG'])
+DEFAULT_PLOT_SPECS['LibudaGWithT'][0] = {'names': ('inputB', 'inputA', 'T'), 'groups': 'input', 'styles': (None, None, {'twin': True}),
+                                         'to_fname': '_input',
+                                         'to_plot_to_f': {
+                                             'xlabel': 'Time, s', 'ylabel': '?',
+                                             'ylim': [-5.e-2, 1. + 5.e-2],
+                                             'twin_params': {
+                                                 'ylabel': 'T, K',
+                                                 'ylim': [250, 900]
+                                             },
+                                             'save_csv': True,
+                                         }}
+
+# LibudaGWithTEnergies setup
+DEFAULT_PARAMS['LibudaGWithTEs'] = copy.deepcopy(DEFAULT_PARAMS['LibudaGWithT'])
+DEFAULT_PARAMS['LibudaGWithTEs']['model_class'] = LibudaGWithTEnergies
+DEFAULT_PLOT_SPECS['LibudaGWithTEs'] = copy.deepcopy(DEFAULT_PLOT_SPECS['LibudaGWithT'])
 
 # ZGBk setup
 DEFAULT_PARAMS['ZGBk'] = copy.deepcopy(DEFAULT_PARAMS['ZGB'])
@@ -213,7 +262,7 @@ def default_PC_setup(model_id: str):
         parameters = DEFAULT_PARAMS['Ziff']
         model = parameters['model_class'](**parameters['to_model_constructor'])
         PC_obj = ProcessController(model, **(parameters['to_PC_constructor']))
-        PC_obj.set_plot_params(**(parameters['to_set_plot_params']))
+        # PC_obj.set_plot_params(**(parameters['to_set_plot_params']))
         PC_obj.set_metrics(*(parameters['metrics']))
 
     elif model_id == 'Pd_monte_coffee':
