@@ -149,6 +149,9 @@ class GeneralizedLibudaModel(BaseModel):
                     }
         )
 
+    def assign_and_eval_values(self, **kw):
+        self.set_params(kw)
+
     def update(self, data_slice, delta_t, save_for_plot=False):
 
         inputB, inputA = data_slice

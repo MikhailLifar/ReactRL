@@ -204,6 +204,7 @@ class ProcessController:
             in_values_arr = np.array(in_values)
         for i in range(count):
             self.process_to_control.update(in_values_arr, dt, False)
+        return self.process_to_control.model_output
 
     def get_current_time(self):
         self.time = np.sum(self.controlling_signals_history_dt[:self.step_count])
@@ -647,9 +648,6 @@ class ProcessController:
         :param plot_params: deprecated since new plot method
         :return:
         """
-        # if isinstance(get_params, dict):
-        #     self.get_process_output()
-        # else:
 
         # if isinstance(plot_params, dict):
         #     self.plot(file_name, **plot_params)

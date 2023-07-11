@@ -95,7 +95,7 @@ def run(environment: RL2207_Environment, agent, out_folder='run_RL_out', n_episo
     if plot_period < 3:  # TODO: crutch here
         plot_period = 3
     # Loop over episodes
-    environment.describe_to_file(f'{dir_path}/_info.txt')
+    environment.describe_to_file(f'{dir_path}/info.txt')
 
     prev_graph_ind = 0
     prev_max_integral = 1e-9
@@ -151,7 +151,7 @@ def run(environment: RL2207_Environment, agent, out_folder='run_RL_out', n_episo
 
 def test_run(environment: RL2207_Environment, agent, out_folder, n_episodes=None, deterministic=False,
              reset_mode='bottom_state', reset_callback=None):
-    environment.describe_to_file(f'{out_folder}/_info.txt')
+    environment.describe_to_file(f'{out_folder}/info.txt')
     environment.reset_mode = reset_mode
     if n_episodes is None:
         n_episodes = 10

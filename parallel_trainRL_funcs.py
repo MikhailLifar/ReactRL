@@ -44,7 +44,7 @@ def get_for_RL_iterations():
             max_episode_timesteps=6000)
         agent_rl = create_tforce_agent(env_obj, params['agent_name'], **(params['agent']))
         # describe the agent to file
-        with open(f'{foldpath}/_info.txt', 'a') as f:
+        with open(f'{foldpath}/info.txt', 'a') as f:
             f.write(f'----Agent_information----\n')
             f.write(f'agent: {params["agent_name"]}\n')
             agent_params = params['agent']
@@ -53,7 +53,7 @@ def get_for_RL_iterations():
         ret = run(env_obj, agent_rl,
                   out_folder=foldpath,
                   n_episodes=params['n_episodes'], create_unique_folder=False,
-                  reset_callback=params['reset_callback'])
+                  reset_callback=params.get('reset_callback', None))
 
         # individual iteration file
         x_vector = np.arange(env_obj.stored_integral_data['integral'][:env_obj.count_episodes].size)[::20]

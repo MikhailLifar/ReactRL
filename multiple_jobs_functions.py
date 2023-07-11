@@ -61,6 +61,15 @@ def flatten_dict_with_only_simple_types(d):
     return ret
 
 
+def replace_not_serializable_with_str(d):
+    # TODO debug this
+    for k0, v0 in d.items():
+        if isinstance(v0, dict):
+            replace_not_serializable_with_str(v0)
+        elif not isinstance(v0, (int, float, bool, str, list, tuple)):
+            d[k0] = str(v0)
+
+
 def run_jobs_list(
         iteration_function,
         params_variants: list,
@@ -211,7 +220,8 @@ def run_jobs_list(
             raise e
         finally:
             with open(f'{out_fold_path}/result_{iter_arg}{error_indicator}.json', 'w') as handle:
-                json.dump({'variables': variable_dict, 'return': ret}, handle)
+                replace_not_serializable_with_str(variable_dict)
+                json.dump({'variables': variable_dict, 'return': ret}, handle, skipkeys=True)
 
 
 def jobs_list_from_grid(*value_sets,

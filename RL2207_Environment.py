@@ -38,6 +38,7 @@ class RL2207_Environment(Environment):
 
         :param PC:
         :param model_type:
+        :param action_spec: {'type', 'transform', 'shape', 'info'}
         :param reward_spec:
         :param episode_time:
         :param time_step:
@@ -61,6 +62,8 @@ class RL2207_Environment(Environment):
                 raise ValueError(f'Error: discrete model cannot hold continuous actions')
         elif self.action_spec['type'] != 'discrete':
             raise ValueError(f'Wrong action type: {self.action_spec["type"]}')
+        self.time_input_dependence = kwargs.get('time_input_dependence', lambda x, t: x)
+        self.input_dt = kwargs.get('input_dt', time_step)
 
         self.time_step = time_step
         # TODO I don't like this statement
@@ -237,7 +240,7 @@ class RL2207_Environment(Environment):
         if self.action_spec['type'] == 'continuous':
             if set(self.action_spec.keys()) <= {'type', 'info'}:
 
-                def default_transform(x, time):
+                def default_transform(x):
                     return x * (max_bounds - min_bounds) + min_bounds
 
                 self.action_spec['transform_action'] = default_transform
@@ -280,10 +283,13 @@ class RL2207_Environment(Environment):
         return self.end_episode
 
     def update_env(self, act):
-        current_time = self.controller.time
-        model_inputs = self.transform_action(act, current_time)
-        self.controller.set_controlled(model_inputs)
-        self.controller.time_forward(dt=self.time_step)
+        model_inputs = self.transform_action(act)
+        temp = 0.
+        while temp < self.time_step - self.input_dt + 1.e-9:
+            model_inputs = self.time_input_dependence(model_inputs, self.controller.time)
+            self.controller.set_controlled(model_inputs)
+            self.controller.time_forward(dt=self.input_dt)
+            temp += self.input_dt
         current_measurement = self.controller.get_process_output()[1][-1][self.inds_to_state]
         if self.if_use_log_scale:
             current_measurement = copy.deepcopy(current_measurement)
@@ -368,7 +374,7 @@ class RL2207_Environment(Environment):
             fout.write('-----ProcessController-----\n')
             fout.write(self.controller.get_info() + '\n')
             fout.write('-----Model-----\n')
-            fout.write(self.model.add_info + '\n')
+            fout.write(self.model.get_model_info() + '\n')
 
     def summary_graphs(self, folder=''):
         fig, ax = plt.subplots(1, figsize=(15, 8))

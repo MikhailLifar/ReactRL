@@ -118,7 +118,7 @@ class SinOfPowerPolicy(AbstractPolicy):
 
 
 class FourierSeriesPolicy(AbstractPolicy):
-    names = ('a_s', 'length')
+    names = ('a_sin', 'a_cos', 'length')
 
     def __init__(self, nterms, params_dict=None):
         self.nterms = nterms
@@ -126,5 +126,40 @@ class FourierSeriesPolicy(AbstractPolicy):
 
     def _call(self, t):
         if isinstance(t, np.ndarray):
-            return np.sum(np.sin(np.tile(t, (self.nterms, 1)).T * np.arange(1, self.nterms + 1) * np.pi / self['length']) * self['a_s'], axis=1)
-        return np.sum(np.sin(np.full(self.nterms, t) * np.arange(1, self.nterms + 1) * np.pi / self['length']) * self['a_s'])
+            temp = np.tile(t, (self.nterms, 1)).T * np.arange(1, self.nterms + 1) * np.pi / self['length']
+            return np.sum(np.sin(temp) * self['a_sin'] + np.cos(temp) * self['a_cos'], axis=1)
+        temp = np.full(self.nterms, t) * np.arange(1, self.nterms + 1) * np.pi / self['length']
+        return np.sum(np.sin(temp) * self['a_sin'] + np.cos(temp) * self['a_cos'])
+
+
+class RandomTurnsPolicy(AbstractPolicy):
+    names = ('bounds', 'period')
+    default_turns_number = 20
+
+    def __init__(self, params_dict=None):
+        AbstractPolicy.__init__(self, params_dict)
+        if params_dict is not None:
+            self.random_turns = np.random.uniform(*(self['bounds']), self.default_turns_number)
+
+    def set_policy(self, params):
+        self.params = params
+        self.reset()
+
+    def reset(self):
+        self.random_turns = np.random.uniform(*(self['bounds']), self.default_turns_number)
+
+    def _call(self, t):
+        if isinstance(t, np.ndarray):
+            ret = t // self['period']
+            for i in range(min(ret), max(ret)):
+                while i >= len(self.random_turns):
+                    self.random_turns = np.hstack((self.random_turns, np.random.uniform(*(self['bounds']),
+                                                                                        len(self.random_turns))))
+                ret[ret == i] = self.random_turns[i]
+            return ret
+        else:
+            idx = int(t // self['period'])
+            while idx >= len(self.random_turns):
+                self.random_turns = np.hstack((self.random_turns, np.random.uniform(*(self['bounds']),
+                                                                                    len(self.random_turns))))
+            return self.random_turns[idx]
