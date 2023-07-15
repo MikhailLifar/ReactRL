@@ -150,7 +150,9 @@ class GeneralizedLibudaModel(BaseModel):
         )
 
     def assign_and_eval_values(self, **kw):
+        self.top['output']['outputC'] = kw.get('reaction_rate_top', self.top['output']['outputC'])
         self.set_params(kw)
+        self.fill_limits()
 
     def update(self, data_slice, delta_t, save_for_plot=False):
 

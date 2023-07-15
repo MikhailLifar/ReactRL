@@ -28,17 +28,6 @@ def get_for_RL_iterations():
                 setattr(PC, attr_name, params[attr_name])
                 PC.target_func_name = params['target_func_name']
 
-        max_top = None
-        limit_names = [name for name in params['model'] if '_top' in name]
-        if limit_names:
-            max_top = max([params['model'][name] for name in limit_names])
-        if max_top is not None:
-            if max_top > 0.:
-                PC.set_plot_params(input_lims=[-1.e-1 * max_top, 1.1 * max_top])
-            else:
-                # PC_obj.set_plot_params(input_lims=None)
-                raise NotImplementedError
-
         env_obj = Environment.create(
             environment=RL2207_Environment(PC, **(params['env'])),
             max_episode_timesteps=6000)
@@ -53,7 +42,9 @@ def get_for_RL_iterations():
         ret = run(env_obj, agent_rl,
                   out_folder=foldpath,
                   n_episodes=params['n_episodes'], create_unique_folder=False,
-                  reset_callback=params.get('reset_callback', None))
+                  reset_callback=params.get('reset_callback', None),
+                  test_callback=params.get('test_callback', None),
+                  eval_agent=params.get('eval_agent', None),)
 
         # individual iteration file
         x_vector = np.arange(env_obj.stored_integral_data['integral'][:env_obj.count_episodes].size)[::20]

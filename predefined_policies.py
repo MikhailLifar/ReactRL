@@ -58,7 +58,10 @@ class TwoStepPolicy(AbstractPolicy):
             res = np.full_like(t, self['2'])
             res[rems < self['t1']] = self['1']
             return res
-        raise ValueError
+        r = t - (self['t1'] + self['t2']) * np.floor(t / (self['t1'] + self['t2']) + 1.e-5)
+        if r <= self['t1']:
+            return self['1']
+        return self['2']
 
 
 class AnyStepPolicy(AbstractPolicy):
