@@ -157,7 +157,7 @@ def get_for_common_variations(policies_dict,
         ret = [0] * (1 + len(additional_names))
 
         for name, policy in policies_dict.items():
-            policy.set_policy({p.replace(f'{name}_', ''): v for p, v in params.items() if p.startswith(f'{name}_')})
+            policy.update_policy({p.replace(f'{name}_', ''): v for p, v in params.items() if p.startswith(f'{name}_')})
 
         episode_time = params['episode_time']
         calc_dt = params.get('calc_dt', False)

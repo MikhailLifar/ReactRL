@@ -1,6 +1,8 @@
 # all policies have the form f(t),
 # i. e. policy is dependence of the parameter on the current time moment and only on it
 # every policy should be capable transform entire array
+import \
+    copy
 
 import numpy as np
 
@@ -10,16 +12,16 @@ class AbstractPolicy:
 
     def __init__(self, params_dict=None):
         self.params = dict()
+        self.t_init = 0.  # needed to conveniently derive policies g(t) = f(t - t0)
+        if params_dict is not None:
+            self.update_policy(params_dict)
         self.limitations = None
-        if (params_dict is None) or (len(params_dict) < 1):
-            return
-        for name in self.names:
-            self.params[name] = params_dict[name]
 
     def _call(self, t):
         raise NotImplementedError
 
     def __call__(self, t):
+        t = t - self.t_init
         res = self._call(t)
         if self.limitations is not None:
             res[res < self.limitations[0]] = self.limitations[0]
@@ -29,8 +31,9 @@ class AbstractPolicy:
     def __getitem__(self, item):
         return self.params[item]
 
-    def set_policy(self, params):
-        self.params = params
+    def update_policy(self, params: dict):
+        self.params.update(params)
+        self.t_init = params.get('t_init', 0.)
 
     def set_limitations(self, *args):
         self.limitations = args
@@ -58,10 +61,11 @@ class TwoStepPolicy(AbstractPolicy):
             res = np.full_like(t, self['2'])
             res[rems < self['t1']] = self['1']
             return res
-        r = t - (self['t1'] + self['t2']) * np.floor(t / (self['t1'] + self['t2']) + 1.e-5)
-        if r <= self['t1']:
-            return self['1']
-        return self['2']
+        else:
+            r = t - (self['t1'] + self['t2']) * np.floor(t / (self['t1'] + self['t2']) + 1.e-5)
+            if r <= self['t1']:
+                return self['1']
+            return self['2']
 
 
 class AnyStepPolicy(AbstractPolicy):
@@ -131,8 +135,9 @@ class FourierSeriesPolicy(AbstractPolicy):
         if isinstance(t, np.ndarray):
             temp = np.tile(t, (self.nterms, 1)).T * np.arange(1, self.nterms + 1) * np.pi / self['length']
             return np.sum(np.sin(temp) * self['a_sin'] + np.cos(temp) * self['a_cos'], axis=1)
-        temp = np.full(self.nterms, t) * np.arange(1, self.nterms + 1) * np.pi / self['length']
-        return np.sum(np.sin(temp) * self['a_sin'] + np.cos(temp) * self['a_cos'])
+        else:
+            temp = np.full(self.nterms, t) * np.arange(1, self.nterms + 1) * np.pi / self['length']
+            return np.sum(np.sin(temp) * self['a_sin'] + np.cos(temp) * self['a_cos'])
 
 
 class RandomTurnsPolicy(AbstractPolicy):
@@ -144,7 +149,7 @@ class RandomTurnsPolicy(AbstractPolicy):
         if params_dict is not None:
             self.random_turns = np.random.uniform(*(self['bounds']), self.default_turns_number)
 
-    def set_policy(self, params):
+    def update_policy(self, params):
         self.params = params
         self.reset()
 

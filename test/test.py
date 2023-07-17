@@ -122,7 +122,7 @@ def test_policy():
     #
     # params = {str(i): 10 + i for i in range(1, nsteps + 1)}
     # tparams = {f't{i}': i for i in range(1, nsteps + 1)}
-    # policy.set_policy({**params, **tparams})
+    # policy.update_policy({**params, **tparams})
     # policy(np.linspace(0, 50, 51))
 
     # fourier series policy
@@ -186,10 +186,16 @@ def Libuda_coefs_estimation():
     model.update([1.e-4, 1.e-4], 1, True)
 
 
+# def default_neural_net_architecture():
+#     import run_RL
+#     agent = run_RL.create_tforce_agent(, 'vpg')
+#     print(agent.get_architecture())
+
+
 if __name__ == '__main__':
     # working_with_csv_test()
 
-    test_policy()
+    # test_policy()
 
     # test_jobs_functions()
 

@@ -812,7 +812,7 @@ def func_to_optimize_policy(PC_obj: ProcessController, policy_obj: AbstractPolic
                     controlled_name_dict[param_name.replace(f'{controlled_name}_', '')] = func_description[param_name]
 
             func = copy.deepcopy(policy_obj)
-            func.set_policy(controlled_name_dict)
+            func.update_policy(controlled_name_dict)
             func.set_limitations(
                 *(PC_obj.process_to_control.limits['input'][name_ind_in_model]),
             )

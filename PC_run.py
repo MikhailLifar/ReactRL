@@ -1,4 +1,6 @@
 import os
+import time
+from typing import Union
 
 import numpy as np
 import pandas as pd
@@ -109,7 +111,7 @@ def run_constant_policies_bunch(PC: ProcessController,
     for v in variants:
         PC.reset()
         for i, p in enumerate(policies):
-            p.set_policy({'value': v[i] * input_limits[i][1]})
+            p.update_policy({'value': v[i] * input_limits[i][1]})
         PC.process_by_policy_objs(policies, episode_time, resolution)
         run_id = '_'.join(map(lambda pair: f'{pair[0]}:{pair[1]:.2f}', zip(PC.controlled_names, v)))
         PC.get_and_plot(f'{out_foldpath}/{run_id}.png', plot_params)
@@ -565,45 +567,142 @@ def Ziff_model_poisoning_speed_test():
                    'plot_mode': 'separately', 'out_names': ['CO2_count']})
 
 
-def LibudaGWithT_transtion_speed_test():
-    PC_obj = PC_setup.general_PC_setup('LibudaGWithT')
+def transition_speed_test():
 
-    folder = 'PC_plots/LibudaGWithT/230516_transition_speed'
+    def transition_test(point1, point2, period, plot_filepath):
+        PC_obj.reset()
+        PC_obj.set_controlled(point1)
+        PC_obj.time_forward(period)
+        PC_obj.set_controlled(point2)
+        PC_obj.time_forward(period)
+        PC_obj.set_controlled(point1)
+        PC_obj.time_forward(period)
+        PC_obj.get_process_output()
+        PC_obj.plot(plot_filepath)
 
-    PC_obj.reset()
-    PC_obj.set_controlled([1., 0., 100 + 273])
-    PC_obj.time_forward(1000)
-    PC_obj.set_controlled([0., 1., 100 + 273])
-    PC_obj.time_forward(1000)
-    PC_obj.set_controlled([1., 0., 100 + 273])
-    PC_obj.time_forward(1000)
-    PC_obj.get_and_plot(f'{folder}/373K.png',
-                        plot_params={'time_segment': [0, None], 'additional_plot': ('thetaB', 'thetaA'),
-                                     'plot_mode': 'separately', 'input_names': ('T', ), 'out_names': ('outputC',), })
+    # # LibudaGWithT, diff temperatures
+    # PC_obj = PC_setup.general_PC_setup('LibudaGWithT')
+    # folder = 'PC_plots/LibudaGWithT/230516_transition_speed'
+    #
+    # transition_test([1., 0., 100 + 273], [0., 1., 100 + 273], 1000, f'{folder}/373K.png')
+    #
+    # PC_obj.analyser_dt = 1.e-3
+    # transition_test([1., 0., 300 + 273], [0., 1., 300 + 273], 0.1, f'{folder}/573K.png')
+    #
+    # PC_obj.analyser_dt = 1.e-5
+    # transition_test([1., 0., 500 + 273], [0., 1., 500 + 273], 1.e-2, f'{folder}/773K.png')
 
-    PC_obj.analyser_dt = 1.e-3
-    PC_obj.reset()
-    PC_obj.set_controlled([1., 0., 300 + 273])
-    PC_obj.time_forward(0.1)
-    PC_obj.set_controlled([0., 1., 300 + 273])
-    PC_obj.time_forward(0.1)
-    PC_obj.set_controlled([1., 0., 300 + 273])
-    PC_obj.time_forward(0.1)
-    PC_obj.get_and_plot(f'{folder}/573K.png',
-                        plot_params={'time_segment': [0, None], 'additional_plot': ('thetaB', 'thetaA'),
-                                     'plot_mode': 'separately', 'input_names': ('T', ), 'out_names': ('outputC',), })
+    # LibudaG, diff rates
+    PC_obj = PC_setup.general_PC_setup('LibudaG', ('to_model_constructor', {'params': {}}))
+    PC_obj.process_to_control.set_params({'C_A_inhibit_B': 1., 'C_B_inhibit_A': 1.,
+                                          'thetaA_init': 0., 'thetaB_init': 0.,
+                                          'thetaA_max': 0.5, 'thetaB_max': 0.5, })
+    folder = 'PC_plots/LibudaG/230715_transition_speed'
 
-    PC_obj.analyser_dt = 1.e-5
-    PC_obj.reset()
-    PC_obj.set_controlled([1., 0., 500 + 273])
-    PC_obj.time_forward(1.e-2)
-    PC_obj.set_controlled([0., 1., 500 + 273])
-    PC_obj.time_forward(1.e-2)
-    PC_obj.set_controlled([1., 0., 500 + 273])
-    PC_obj.time_forward(1.e-2)
-    PC_obj.get_and_plot(f'{folder}/773K.png',
-                        plot_params={'time_segment': [0, None], 'additional_plot': ('thetaB', 'thetaA'),
-                                     'plot_mode': 'separately', 'input_names': ('T', ), 'out_names': ('outputC',), })
+    PC_obj.process_to_control.set_params({f'rate_{suff}': 0.05 for suff in ('ads_A', 'des_A', 'ads_B', 'des_B', 'react')})
+    transition_test([1., 0.], [0., 1.], 200, f'{folder}/all_rates_005.png')
+
+    PC_obj.process_to_control.set_params({f'rate_{suff}': 1. for suff in ('ads_A', 'des_A', 'ads_B', 'des_B', 'react')})
+    transition_test([1., 0.], [0., 1.], 10, f'{folder}/all_rates_1.png')
+
+    pass
+
+
+def SBP_constant_ratio(PC: ProcessController, inputs_start, inputs_end, period_bounds, resolutions: Union[int, list] = 10,
+                       DEBUG=False, **kwargs):
+    # TODO: Note - current implementation works exclusively for a model with two inputs
+    assert len(PC.controlled_names) == 2
+
+    if isinstance(resolutions, int):
+        resolutions = [resolutions] * 2 + [9]
+    resol_const, resol_T, resol_frac_T = resolutions
+
+    episode_time = period_bounds[1]
+    policy_step = period_bounds[0] / 5
+
+    debug_folder = './DEBUG/SBPvsCONSTANT'
+    t0 = t1 = None
+    if DEBUG:
+        t0 = time.time()
+
+    # constant
+    constant_policies = [ConstantPolicy() for _ in PC.controlled_names]
+    constant_returns = []
+    for p in np.linspace(0., 1., resol_const):
+        inputs = (1. - p) * inputs_start + p * inputs_end
+        for i, obj in enumerate(constant_policies):
+            obj.update_policy({'value': inputs[i]})
+        PC.reset()
+        PC.process_by_policy_objs(constant_policies, episode_time, policy_step)
+        PC.get_process_output()
+        if DEBUG:
+            PC.plot(f'{debug_folder}/constant_{p:.2f}.png')
+        if PC.target_func is not None:
+            constant_returns.append(PC.integrate_along_history(target_mode=True))
+        elif PC.long_term_target is not None:
+            constant_returns.append(PC.get_long_term_target())
+
+    if kwargs.get('plot_both_best', False):
+        best_const_p = np.linspace(0., 1., resol_const)[np.argmax(constant_returns)]
+        inputs = (1 - best_const_p) * inputs_start + best_const_p * inputs_end
+        for i, obj in enumerate(constant_policies):
+            obj.update_policy({'value': inputs[i]})
+        PC.reset()
+        PC.process_by_policy_objs(constant_policies, episode_time, policy_step)
+        PC.get_process_output()
+        PC.plot(f'{kwargs["folder"]}/best_constant_{kwargs["ind_picture"]}.png')
+
+    # SBP
+    SBP_policies = [TwoStepPolicy() for _ in PC.controlled_names]
+    SBP_returns = []
+    for log_T in np.linspace(np.log(period_bounds[0]), np.log(period_bounds[1]), resol_T):
+        T = np.exp(log_T)
+        for p in np.linspace(0.05, 0.95, resol_frac_T):
+            t1, t2 = p * T, (1. - p) * T
+            SBP_policies[0].update_policy({'1': inputs_start[0], '2': inputs_end[0], 't1': t1, 't2': t2, })
+            SBP_policies[1].update_policy({'1': inputs_start[1], '2': inputs_end[1], 't1': t1, 't2': t2, })
+            PC.reset()
+            PC.process_by_policy_objs(SBP_policies, episode_time, policy_step)
+            PC.get_process_output()
+            if DEBUG:
+                PC.plot(f'{debug_folder}/SBP_{T:.2f}_{p:.2f}.png')
+            if PC.target_func is not None:
+                SBP_returns.append(PC.integrate_along_history(target_mode=True))
+            elif PC.long_term_target is not None:
+                SBP_returns.append(PC.get_long_term_target())
+
+    if kwargs.get('plot_both_best', False):
+        T_idx, p_idx = divmod(np.argmax(SBP_returns), resol_frac_T)
+        best_SBP = [np.linspace(np.log(period_bounds[0]), np.log(period_bounds[1]), resol_T)[T_idx],
+                    np.linspace(0.1, 0.9, resol_frac_T)[p_idx]]
+        T, p = np.exp(best_SBP[0]), best_SBP[1]
+        t1, t2 = p * T, (1. - p) * T
+        SBP_policies[0].update_policy({'1': inputs_start[0], '2': inputs_end[0], 't1': t1, 't2': t2, })
+        SBP_policies[1].update_policy({'1': inputs_start[1], '2': inputs_end[1], 't1': t1, 't2': t2, })
+        PC.reset()
+        PC.process_by_policy_objs(SBP_policies, episode_time, policy_step)
+        PC.get_process_output()
+        PC.plot(f'{kwargs["folder"]}/best_SBP_{kwargs["ind_picture"]}.png')
+
+    R = max(SBP_returns) / max(constant_returns)
+
+    if DEBUG:
+        t1 = time.time()
+        with open(f'{debug_folder}/results.txt', 'w') as fwrite:
+            fwrite.write(f'best ratio: {R:.5f}\n')
+            fwrite.write(f'elapsed: {t1 - t0:.5f}')
+
+    return R
+
+
+def get_to_optimize_SBP_const_ratio(PC_obj, inputs_min, inputs_max, period_bounds, resolutions):
+
+    def f_to_optimize(rates_dict, **kwargs):
+        PC_obj.process_to_control.set_params(rates_dict)
+        return -SBP_constant_ratio(PC_obj, inputs_min, inputs_max, period_bounds,
+                                   resolutions=resolutions, DEBUG=False, **kwargs)
+
+    return f_to_optimize
 
 
 def main():
@@ -636,41 +735,48 @@ def main():
     #                             plot_params={'time_segment': [0, None], 'additional_plot': ['thetaB', 'thetaA'],
     #                                          'plot_mode': 'separately', 'out_names': ['outputC']})
 
-    PC_obj = PC_setup.general_PC_setup('Libuda2001')
+    # # PC_obj = PC_setup.general_PC_setup('Libuda2001')
     # PC_obj = PC_setup.general_PC_setup('LibudaG', ('to_model_constructor', {'params': {}}))
-    # PC_obj = PC_setup.general_PC_setup('LibudaGWithT', ('to_model_constructor', {'T': 440., 'params': {}}))
-    # PC_obj = PC_setup.general_PC_setup('LibudaGWithTEs', ('to_model_constructor', {'T': 440., 'params': {}}))
-    # get_co_part = PC_obj.process_to_control.co_flow_part_to_pressure_part
-    get_co_part = GeneralizedLibudaModel.co_flow_part_to_pressure_part
-    Libuda2001_CO_cutoff_policy(PC_obj,
-                                ['full'],
-                                'PC_plots/Libuda/DEBUG/Libuda_regime',
-                                transform_x_co_on=lambda x: {'O2': 1. - get_co_part(x), 'CO': get_co_part(x),
-                                                             # 'inputB': 1. - get_co_part(x), 'inputA': get_co_part(x),
-                                                             # 'T': 440.
-                                                             # 'T': 440.
-                                                             },
-                                transform_x_co_off=lambda x: {'O2': 1. - get_co_part(x), 'CO': 0.,
-                                                              # 'inputB': 1. - get_co_part(x), 'inputA': 0.,
-                                                              # 'T': 440.
-                                                              # 'T': 440.
-                                                              },
-                                # output_name_to_plot='outputC',
-                                output_name_to_plot='CO2',
-                                # add_names=('thetaB', 'thetaA', 'error'),
-                                add_names=('thetaO', 'thetaCO'))
+    # # PC_obj.process_to_control.set_params({'C_B_inhibit_A': 1.,
+    # #                                       'thetaA_init': 0., 'thetaB_init': 0.,
+    # #                                       'thetaA_max': 0.5, 'thetaB_max': 0.5, })
+    # # PC_obj = PC_setup.general_PC_setup('LibudaGWithT', ('to_model_constructor', {'T': 440., 'params': {}}))
+    # # PC_obj = PC_setup.general_PC_setup('LibudaGWithTEs', ('to_model_constructor', {'T': 440., 'params': {}}))
+    # # get_co_part = PC_obj.process_to_control.co_flow_part_to_pressure_part
+    # get_co_part = GeneralizedLibudaModel.co_flow_part_to_pressure_part
+    # Libuda2001_CO_cutoff_policy(PC_obj,
+    #                             ['full'],
+    #                             'PC_plots/LibudaG/DEBUG/Libuda_regime',
+    #                             transform_x_co_on=lambda x: {
+    #                                                          # 'O2': 1. - get_co_part(x), 'CO': get_co_part(x),
+    #                                                          'inputB': 1. - get_co_part(x), 'inputA': get_co_part(x),
+    #                                                          # 'T': 440.
+    #                                                          # 'T': 440.
+    #                                                          },
+    #                             transform_x_co_off=lambda x: {
+    #                                                           # 'O2': 1. - get_co_part(x), 'CO': 0.,
+    #                                                           'inputB': 1. - get_co_part(x), 'inputA': 0.,
+    #                                                           # 'inputB': 1., 'inputA': 0.,
+    #                                                           # 'T': 440.
+    #                                                           # 'T': 440.
+    #                                                           },
+    #                             output_name_to_plot='outputC',
+    #                             # output_name_to_plot='CO2',
+    #                             add_names=('thetaB', 'thetaA', 'error'),
+    #                             # add_names=('thetaO', 'thetaCO')
+    #                             )
 
-    # LibudaGWithT_transtion_speed_test()
+    # transition_speed_test()
 
-    # LGWithT transition speed
-    # PC_obj.reset()
-    # PC_obj.set_controlled([1., 1., 400.])
-    # PC_obj.time_forward(100)
-    # # PC_obj.set_controlled([1., 1., 400.])
-    # # PC_obj.time_forward(100)
-    # PC_obj.get_and_plot(f'PC_plots/LibudaGWithT/230512_transition/400K_long_period.png',
-    #                     plot_params={'time_segment': [0, None], 'additional_plot': ['thetaB', 'thetaA'],
-    #                                  'plot_mode': 'separately', 'input_names': ['T'], 'out_names': ['outputC']})
+    PC_obj = PC_setup.general_PC_setup('LibudaG', ('to_model_constructor', {'params': {}}))
+    PC_obj.process_to_control.set_params({'C_A_inhibit_B': 1., 'C_B_inhibit_A': 1.,
+                                          'thetaA_init': 0., 'thetaB_init': 0.,
+                                          'thetaA_max': 0.5, 'thetaB_max': 0.5,
+                                          'rate_ads_A': 1., 'rate_react': 1.,
+                                          'rate_des_A': 0.05, 'rate_ads_B': 0.05, 'rate_des_B': 0.05,
+                                          })
+    # PC_obj.process_to_control.set_params({f'rate_{suff}': 1. for suff in ('ads_A', 'des_A', 'ads_B', 'des_B', 'react')})
+    SBP_constant_ratio(PC_obj, np.array([1., 0.]), np.array([0., 1.]), np.array([2., 200.]), resolutions=[20, 4, 4], DEBUG=True)
 
     # ZGB Lopez Albano
     # size = [256, 256]

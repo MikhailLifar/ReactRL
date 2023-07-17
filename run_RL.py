@@ -143,6 +143,7 @@ def run(environment: RL2207_Environment, agent, out_folder='run_RL_out', n_episo
     lib.plot_to_file(agent_metric_data[:, 0], agent_metric_data[:, 1],
                      {'label': 'agent metric', 'c': 'b'},
                      xlabel='Episode number', ylabel='Agent metric',
+                     ylim=[-1.e-2, None],
                      fileName=f'{dir_path}/agent_metric.png')
 
     # # folder renaming
