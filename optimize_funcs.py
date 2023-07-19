@@ -220,9 +220,23 @@ def optimize_list_cluster(params_variants: list,
                       unique_folder=False)
 
 
-def get_for_repeated_opt_iterations(func_for_optimize, optimize_bounds, cut_left=True, cut_right=True,
+def get_for_repeated_opt_iterations(func_for_optimize, optimize_bounds, constrains=lambda d: None,
+                                    cut_left=True, cut_right=True,
                                     method=None, try_num=30,
                                     optimize_options=None, debug_params=None):
+    """
+
+    :param func_for_optimize:
+    :param optimize_bounds:
+    :param constrains: constrains(d: dict). Returns None, but changes dict
+    :param cut_left:
+    :param cut_right:
+    :param method:
+    :param try_num:
+    :param optimize_options:
+    :param debug_params:
+    :return:
+    """
 
     rng = np.random.default_rng(0)
     dim = len(optimize_bounds)
@@ -236,7 +250,9 @@ def get_for_repeated_opt_iterations(func_for_optimize, optimize_bounds, cut_left
     range_arr = max_arr - min_arr
 
     def convert_to_dict(vector):
-        return {el: vector[i] for i, el in enumerate(param_names)}
+        ret = {el: vector[j] for j, el in enumerate(param_names)}
+        constrains(ret)
+        return ret
 
     def func_for_optimize1(vector):
         return func_for_optimize(convert_to_dict(vector))

@@ -69,7 +69,6 @@ class TwoStepPolicy(AbstractPolicy):
 
 
 class AnyStepPolicy(AbstractPolicy):
-    # TODO try to finish this class
     names = ()
 
     def __init__(self, nsteps, params_dict=None):
@@ -90,6 +89,29 @@ class AnyStepPolicy(AbstractPolicy):
                 res[(rems >= cum_ts[i]) & (rems < t)] = self[f'{i + 1}']
             return res
         raise ValueError
+
+
+class TrianglePolicy(AbstractPolicy):
+    names = ('1', '2', 't1', 't2')
+
+    def _call(self, t):
+        if isinstance(t, np.ndarray):
+            rems = np.floor(t / (self['t1'] + self['t2']) + 1e-5)  # TODO bug with 1e-5
+            rems = t - rems * (self['t1'] + self['t2'])
+            res = np.empty_like(t)
+            # left side from a vertex
+            idx = rems < self['t1']
+            if np.any(idx):
+                res[idx] = rems[idx] / self['t1'] * (self['2'] - self['1']) + self['1']
+            # right side from a vertex
+            idx = ~idx
+            res[idx] = (rems[idx] - self['t1']) / self['t2'] * (self['1'] - self['2']) + self['2']
+            return res
+        else:
+            r = t - (self['t1'] + self['t2']) * np.floor(t / (self['t1'] + self['t2']) + 1.e-5)
+            if (r <= self['t1']) and (self['t1'] > 0.):
+                return r / self['t1'] * (self['2'] - self['1']) + self['1']
+            return (r - self['t1']) / self['t2'] * (self['1'] - self['2']) + self['2']
 
 
 class SinPolicy(AbstractPolicy):
@@ -163,7 +185,7 @@ class RandomTurnsPolicy(AbstractPolicy):
                 while i >= len(self.random_turns):
                     self.random_turns = np.hstack((self.random_turns, np.random.uniform(*(self['bounds']),
                                                                                         len(self.random_turns))))
-                ret[ret == i] = self.random_turns[i]
+                ret[ret == i] = self.random_turns[i]  # TODO here is a problem
             return ret
         else:
             idx = int(t // self['period'])

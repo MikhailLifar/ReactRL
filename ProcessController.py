@@ -332,6 +332,12 @@ class ProcessController:
         output_dt, output = self.get_process_output()
         return self.long_term_target(output_dt, output)
 
+    def get_cumulative_target(self):
+        if self.target_func is not None:
+            return self.integrate_along_history(target_mode=True)
+        elif self.long_term_target is not None:
+            return self.get_long_term_target()
+
     # def _initialize_plot_lims(self):
     #     for kind in ('input', 'output'):
     #         self.plot_lims[kind] = [np.min(self.process_to_control.get_bounds('min', kind)),
@@ -793,6 +799,7 @@ def func_to_optimize_policy(PC_obj: ProcessController, policy_obj: AbstractPolic
     :param expand_description: Function that receives and transforms dict.
         The parameter allows to tide parameters between each other and, so,
         to reduce dimensionality.
+        deprecated, replaced by constrains in get_for_repeated_opt_iterations function
     :param kwargs:
     :return:
     """

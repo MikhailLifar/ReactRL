@@ -73,9 +73,11 @@ def debug_run(environment: RL2207_Environment, agent, out_folder=None, n_episode
 
 def run(environment: RL2207_Environment, agent, out_folder='run_RL_out', n_episodes=None, test=False,
         create_unique_folder=True, reset_callback=None, test_callback=None, reset_on_test=False,
-        eval_agent=lambda agent, env: not env.cumm_episode_target, eval_period=None, ):
+        eval_agent=None, eval_period=None, ):
 
     reset_on_test = reset_callback if reset_on_test else None
+    if eval_agent is None:
+        eval_agent = lambda agent, env: env.cumm_episode_target
 
     if test:
         if create_unique_folder:
@@ -194,6 +196,32 @@ def test_run(environment: RL2207_Environment, agent, out_folder, n_episodes=None
     return {'mean_on_test': np.mean(cumm_rewards), 'max_on_test': np.max(cumm_rewards)}
 
 
+def examine_agent_vs_different_curves(environment, agent, curves, outfolder, **kwargs):
+    """
+    Note: only for an agent trained to deal with arbitrary CO
+
+    :param agent:
+    :param environment:
+    :param curves:
+    :param outfolder:
+    :param kwargs:
+    :return:
+    """
+
+    cache = []
+
+    def callback_(env, iteration):
+        if iteration >= len(curves):
+            env.time_input_dependence = cache.pop()
+            return False
+        if not cache:
+            cache.append(env.time_input_dependence)
+        env.time_input_dependence = lambda act, t: np.array([act[0], curves[iteration](t)])
+        return True
+
+    test_run(environment, agent, out_folder=outfolder, test_callback=callback_, **kwargs)
+
+
 def main():
     # from targets_metrics import get_target_func
     import PC_setup
@@ -218,49 +246,112 @@ def main():
 
     # PRETRAINED AGENT ARCHITECTURE
 
-    # PC_obj = ProcessController(
-    #             LibudaModelWithDegradation(
-    #                 init_cond={'thetaCO': 0., 'thetaO': 0.},
-    #                 Ts=273+160,  # 273+160
-    #                 v_d=0.01,
-    #                 v_r=0.1,
-    #                 border=4.),
-    #             target_func_to_maximize=get_target_func('CO2_value'),
-    #             supposed_step_count=100, supposed_exp_time=1000)
-
-    # PC_obj = PC_setup.general_PC_setup('Libuda2001',
+    # # PC_obj = ProcessController(
+    # #             LibudaModelWithDegradation(
+    # #                 init_cond={'thetaCO': 0., 'thetaO': 0.},
+    # #                 Ts=273+160,  # 273+160
+    # #                 v_d=0.01,
+    # #                 v_r=0.1,
+    # #                 border=4.),
+    # #             target_func_to_maximize=get_target_func('CO2_value'),
+    # #             supposed_step_count=100, supposed_exp_time=1000)
+    #
+    # # PC_obj = PC_setup.general_PC_setup('Libuda2001',
+    # #                                    ('to_model_constructor', {'Ts': 433.}),
+    # #                                    ('to_PC_constructor', {'target_func_to_maximize': lambda x: x[4]}),
+    # #                                    )
+    # PC_obj = PC_setup.general_PC_setup('LibudaD',
     #                                    ('to_model_constructor', {'Ts': 433.}),
     #                                    ('to_PC_constructor', {'target_func_to_maximize': lambda x: x[4]}),
     #                                    )
-    PC_obj = PC_setup.general_PC_setup('LibudaD',
-                                       ('to_model_constructor', {'Ts': 433.}),
-                                       ('to_PC_constructor', {'target_func_to_maximize': lambda x: x[4]}),
-                                       )
+    #
+    # my_env = RL2207_Environment(
+    #     PC_obj,
+    #     state_spec={'rows': 1, 'use_differences': False},
+    #     names_to_state=['CO2', 'O2(Pa)', 'CO(Pa)'],
+    #     reward_spec='full_ep_mean',
+    #     target_type='one_row',
+    #     episode_time=500,
+    #     time_step=10,
+    # )
+    # my_env = Environment.create(environment=my_env, max_episode_timesteps=6000)
+    # # rl_agent = create_tforce_agent(my_env, 'ac',
+    # #                                network=dict(type='layered',
+    # #                                             layers=[dict(type='flatten'),
+    # #                                                     dict(type='dense', size=16, activation='relu')]),
+    # #                                critic=dict(type='layered',
+    # #                                             layers=[dict(type='flatten'),
+    # #                                                     dict(type='dense', size=16, activation='relu')]))
+    # rl_agent = create_tforce_agent(my_env, 'vpg')
+    # # rl_agent = Agent.load('run_RL_out/agents/220804_LMT_0_agent', format='numpy', environment=my_env)
+    # # rl_agent = Agent.load('temp/for_english/stationary_agent', format='numpy', environment=my_env)
+    # # rl_agent = Agent.load('temp/for_english/periodic_agent_2', format='numpy', environment=my_env)
+    # # test_run(my_env, rl_agent, 'temp/for_english/L2001_test_run', 5, deterministic=True)
+    # # test_run(my_env, rl_agent, 'temp/for_english/LD_test_run', 5, deterministic=True)
+    # print(rl_agent.get_architecture())
 
+    # EXAMINE agent against curves
+    import predefined_policies as policies
+
+    curves = [
+        policies.ConstantPolicy({'value': 0.75}),
+        policies.ConstantPolicy({'value': 0.5}),
+        policies.ConstantPolicy({'value': 0.25}),
+        policies.TwoStepPolicy({'1': 0., '2': 1., 't1': 5., 't2': 5., }),
+        policies.TwoStepPolicy({'1': 0., '2': 1., 't1': 10., 't2': 10., }),
+        policies.TwoStepPolicy({'1': 0.1, '2': 0.6, 't1': 5., 't2': 5., }),
+        policies.TwoStepPolicy({'1': 0.1, '2': 0.6, 't1': 10., 't2': 10., }),
+        policies.TwoStepPolicy({'1': 0.6, '2': 1., 't1': 5., 't2': 5., }),
+        policies.TwoStepPolicy({'1': 0.6, '2': 1., 't1': 10., 't2': 10., }),
+
+        # special, test only curves
+        # TRIANGLE
+        policies.TrianglePolicy({'1': 0., '2': 1., 't1': 5., 't2': 5., }),
+        policies.TrianglePolicy({'1': 0., '2': 1., 't1': 10., 't2': 10., }),
+        policies.TrianglePolicy({'1': 0.2, '2': 0.8, 't1': 5., 't2': 5., }),
+        policies.TrianglePolicy({'1': 0.2, '2': 0.8, 't1': 10., 't2': 10., }),
+
+        # SAW
+        policies.TrianglePolicy({'1': 1., '2': 0., 't1': 0., 't2': 10., }),
+        policies.TrianglePolicy({'1': 0., '2': 1., 't1': 0., 't2': 10., }),
+        policies.TrianglePolicy({'1': 1., '2': 0., 't1': 0., 't2': 5., }),
+        policies.TrianglePolicy({'1': 0., '2': 1., 't1': 0., 't2': 5., }),
+
+        # SIN
+        policies.SinPolicy({'A': 0.5, 'T': 5., 'alpha': 0., 'bias': 0.5, }),
+        policies.SinPolicy({'A': 0.5, 'T': 10., 'alpha': 0., 'bias': 0.5, }),
+        policies.SinPolicy({'A': 0.3, 'T': 5., 'alpha': 0., 'bias': 0.7, }),
+        policies.SinPolicy({'A': 0.3, 'T': 10., 'alpha': 0., 'bias': 0.7, }),
+        policies.SinPolicy({'A': 0.3, 'T': 5., 'alpha': 0., 'bias': 0.3, }),
+        policies.SinPolicy({'A': 0.3, 'T': 10., 'alpha': 0., 'bias': 0.3, }),
+    ]
+
+    PC_obj = PC_setup.general_PC_setup('LibudaG', ('to_model_constructor', {'params': {}}))
+    PC_obj.process_to_control.set_params({'C_A_inhibit_B': 1., 'C_B_inhibit_A': 1.,
+                                          'thetaA_init': 0., 'thetaB_init': 0.,
+                                          'thetaA_max': 0.5, 'thetaB_max': 0.5,
+                                          'rate_ads_A': 0.14895, 'rate_ads_B': 0.06594 * 4})
+    vary_o2_co_is_arbitrary = {'type': 'continuous',
+                               'transform_action': lambda x: x,
+                               'shape': 1,
+                               'info': 'control O2, CO(t) is random'}
     my_env = RL2207_Environment(
         PC_obj,
         state_spec={'rows': 1, 'use_differences': False},
-        names_to_state=['CO2', 'O2(Pa)', 'CO(Pa)'],
-        reward_spec='full_ep_mean',
+        names_to_state=['B', 'A', 'outputC'],
+        action_spec=vary_o2_co_is_arbitrary,
+        reward_spec='each_step_base',
         target_type='one_row',
-        episode_time=500,
-        time_step=10,
+        episode_time=30.,
+        time_step=1.,
+        normalize_coef=1.,
+        input_dt=0.1,
     )
     my_env = Environment.create(environment=my_env, max_episode_timesteps=6000)
-    # rl_agent = create_tforce_agent(my_env, 'ac',
-    #                                network=dict(type='layered',
-    #                                             layers=[dict(type='flatten'),
-    #                                                     dict(type='dense', size=16, activation='relu')]),
-    #                                critic=dict(type='layered',
-    #                                             layers=[dict(type='flatten'),
-    #                                                     dict(type='dense', size=16, activation='relu')]))
-    rl_agent = create_tforce_agent(my_env, 'vpg')
-    # rl_agent = Agent.load('run_RL_out/agents/220804_LMT_0_agent', format='numpy', environment=my_env)
-    # rl_agent = Agent.load('temp/for_english/stationary_agent', format='numpy', environment=my_env)
-    # rl_agent = Agent.load('temp/for_english/periodic_agent_2', format='numpy', environment=my_env)
-    # test_run(my_env, rl_agent, 'temp/for_english/L2001_test_run', 5, deterministic=True)
-    # test_run(my_env, rl_agent, 'temp/for_english/LD_test_run', 5, deterministic=True)
-    print(rl_agent.get_architecture())
+    agent = Agent.load('ARTICLE/bestCORTPagent/agent', format='numpy', environment=my_env)
+    my_env.actions()
+    examine_agent_vs_different_curves(my_env, agent, curves, outfolder='ARTICLE/bestCORTPagent/agent_test',
+                                      deterministic=True)
 
     pass
 

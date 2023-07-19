@@ -290,6 +290,8 @@ class RL2207_Environment(Environment):
             self.controller.set_controlled(model_inputs)
             self.controller.time_forward(dt=self.input_dt)
             temp += self.input_dt
+        if temp < self.time_step:
+            self.controller.time_forward(self.time_step - temp)
         current_measurement = self.controller.get_process_output()[1][-1][self.inds_to_state]
         if self.if_use_log_scale:
             current_measurement = copy.deepcopy(current_measurement)
