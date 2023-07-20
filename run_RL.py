@@ -326,6 +326,9 @@ def main():
         policies.SinPolicy({'A': 0.3, 'T': 10., 'alpha': 0., 'bias': 0.3, }),
     ]
 
+    for co_curve in curves:
+        co_curve.update_policy({'t_init': -0.2})
+
     PC_obj = PC_setup.general_PC_setup('LibudaG', ('to_model_constructor', {'params': {}}))
     PC_obj.process_to_control.set_params({'C_A_inhibit_B': 1., 'C_B_inhibit_A': 1.,
                                           'thetaA_init': 0., 'thetaB_init': 0.,

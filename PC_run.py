@@ -16,48 +16,6 @@ from lib import plot_to_file
 import PC_setup
 
 
-def check_func_to_optimize():
-
-    PC_L2001 = ProcessController(LibudaModel(init_cond={'thetaCO': 0., 'thetaO': 0., }, Ts=273+160),
-                                 target_func_to_maximize=CO2_value,
-                                 # supposed_step_count=2 * round(episode_time / time_step),  # memory controlling parameters
-                                 # supposed_exp_time=2 * episode_time
-                                 )
-    PC_L2001.set_plot_params(output_lims=[0., None], output_ax_name='CO2_formation_rate',
-                               input_ax_name='Pressure, Pa')
-
-    # PC_LDegrad = ProcessController(LibudaModelWithDegradation(init_cond={'thetaCO': 0., 'thetaO': 0., }, Ts=273+160,
-    #                                                           v_d=0.01, v_r=0.1, border=4.),
-    #                                target_func_to_maximize=CO2_value)
-    # PC_LDegrad.set_plot_params(output_lims=[0., 0.06], output_ax_name='CO2_formation_rate',
-    #                            input_ax_name='Pressure, Pa')
-
-    # f = func_to_optimize_sin_sol(PC_LDegrad, 500, 1.)
-    # f({'O2_A': 0., 'O2_k': 0.1 * np.pi, 'O2_bias_t': 0., 'O2_bias_f': 10.e-5,
-    #    'CO_A': 2e-5, 'CO_k': 0.1 * np.pi, 'CO_bias_t': 0., 'CO_bias_f': 3.e-5},
-    #   DEBUG=True, folder='PC_plots/test_sin_sol')
-
-    # f = func_to_optimize_policy(PC_LDegrad, TwoStepPolicy(dict()), 500, 0.5)
-    # f({'O2_1': 2.e-5, 'O2_2': 8.e-5, 'CO_1': 4.e-5, 'CO_2': 6.e-5,
-    #    'O2_t1': 20., 'O2_t2': 40., 'CO_t1': 10., 'CO_t2': 20., },
-    #   DEBUG=True, folder='PC_plots/test_func_for_any_policy/two_step_policy')
-
-    # f = func_to_optimize_policy(PC_LDegrad, SinPolicy(dict()), 500, 1.)
-    # f({'O2_A': 2.e-5, 'O2_omega': np.pi * 0.033, 'O2_alpha': np.pi, 'O2_bias': 7.e-5,
-    #    'CO_A': 7.e-5, 'CO_omega': np.pi * 0.15, 'CO_alpha': np.pi / 4, 'CO_bias': 3.e-5},
-    #   DEBUG=True, folder='PC_plots/test_func_for_any_policy/sin_policy')
-
-    # f = func_to_optimize_policy(PC_LDegrad, SinOfPowerPolicy(dict()), 500, 0.5)
-    # f({'O2_power': 4., 'O2_A': 4.e-5, 'O2_omega': np.pi * 0.003, 'O2_alpha': np.pi, 'O2_bias': 7.e-5,
-    #    'CO_power': 1.4, 'CO_A': 4.e-5, 'CO_omega': np.pi * 0.01, 'CO_alpha': np.pi / 4, 'CO_bias': 3.e-5},
-    #   DEBUG=True, folder='PC_plots/test_func_for_any_policy/sin_power_policy')
-
-    # f = func_to_optimize_policy(PC_L2001, ConstantPolicy(dict()), 500, 1.)
-    # f({'O2_value': 9.5e-5,
-    #    'CO_value': 4.4e-5},
-    #   DEBUG=True, folder='PC_plots/test_func_for_any_policy/constant_policy')
-
-
 # def try_policy(PC_obj: ProcessController, time_seq: np.ndarray, policy_funcs, path: str) -> float:
 #     def create_f_consider_bounds(func, ind_in_model):
 #
@@ -608,8 +566,8 @@ def transition_speed_test():
     pass
 
 
-def SBP_constant_ratio(PC: ProcessController, inputs_start, inputs_end, period_bounds, resolutions: Union[int, list] = 10,
-                       DEBUG=False, **kwargs):
+def SBP_constant_ratio_and_max_ret(PC: ProcessController, inputs_start, inputs_end, period_bounds, resolutions: Union[int, list] = 10,
+                                   DEBUG=False, **kwargs):
     # TODO: Note - current implementation works exclusively for a model with two inputs
     assert len(PC.controlled_names) == 2
 
@@ -638,15 +596,6 @@ def SBP_constant_ratio(PC: ProcessController, inputs_start, inputs_end, period_b
             PC.get_and_plot(f'{debug_folder}/constant_{p:.2f}.png')
         constant_returns.append(PC.get_cumulative_target())
 
-    if kwargs.get('plot_both_best', False):
-        best_const_p = np.linspace(0., 1., resol_const)[np.argmax(constant_returns)]
-        inputs = (1 - best_const_p) * inputs_start + best_const_p * inputs_end
-        for i, obj in enumerate(constant_policies):
-            obj.update_policy({'value': inputs[i]})
-        PC.reset()
-        PC.process_by_policy_objs(constant_policies, episode_time, policy_step)
-        PC.get_and_plot(f'{kwargs["folder"]}/best_constant_{kwargs["ind_picture"]}.png')
-
     # SBP
     SBP_policies = [TwoStepPolicy() for _ in PC.controlled_names]
     SBP_returns = []
@@ -654,43 +603,64 @@ def SBP_constant_ratio(PC: ProcessController, inputs_start, inputs_end, period_b
         T = np.exp(log_T)
         for p in np.linspace(0.05, 0.95, resol_frac_T):
             t1, t2 = p * T, (1. - p) * T
-            SBP_policies[0].update_policy({'1': inputs_start[0], '2': inputs_end[0], 't1': t1, 't2': t2, })
-            SBP_policies[1].update_policy({'1': inputs_start[1], '2': inputs_end[1], 't1': t1, 't2': t2, })
+            for i, obj in enumerate(SBP_policies):
+                obj.update_policy({'1': inputs_start[i], '2': inputs_end[i], 't1': t1, 't2': t2, })
             PC.reset()
             PC.process_by_policy_objs(SBP_policies, episode_time, policy_step)
             if DEBUG:
                 PC.get_and_plot(f'{debug_folder}/SBP_{T:.2f}_{p:.2f}.png')
             SBP_returns.append(PC.get_cumulative_target())
 
+    # best const
+    best_const_p = np.linspace(0., 1., resol_const)[np.argmax(constant_returns)]
+
+    # best SBP
+    T_idx, p_idx = divmod(np.argmax(SBP_returns), resol_frac_T)
+    best_SBP = [np.linspace(np.log(period_bounds[0]), np.log(period_bounds[1]), resol_T)[T_idx],
+                np.linspace(0.1, 0.9, resol_frac_T)[p_idx]]
+    T, p = np.exp(best_SBP[0]), best_SBP[1]
+    t1, t2 = p * T, (1. - p) * T
+
     if kwargs.get('plot_both_best', False):
-        T_idx, p_idx = divmod(np.argmax(SBP_returns), resol_frac_T)
-        best_SBP = [np.linspace(np.log(period_bounds[0]), np.log(period_bounds[1]), resol_T)[T_idx],
-                    np.linspace(0.1, 0.9, resol_frac_T)[p_idx]]
-        T, p = np.exp(best_SBP[0]), best_SBP[1]
-        t1, t2 = p * T, (1. - p) * T
+        # plot const
+        inputs = (1 - best_const_p) * inputs_start + best_const_p * inputs_end
+        for i, obj in enumerate(constant_policies):
+            obj.update_policy({'value': inputs[i]})
+        PC.reset()
+        PC.process_by_policy_objs(constant_policies, episode_time, policy_step)
+        PC.get_and_plot(f'{kwargs["folder"]}/best_constant_{kwargs["ind_picture"]}.png')
+        # plot SBP
         SBP_policies[0].update_policy({'1': inputs_start[0], '2': inputs_end[0], 't1': t1, 't2': t2, })
         SBP_policies[1].update_policy({'1': inputs_start[1], '2': inputs_end[1], 't1': t1, 't2': t2, })
         PC.reset()
         PC.process_by_policy_objs(SBP_policies, episode_time, policy_step)
         PC.get_and_plot(f'{kwargs["folder"]}/best_SBP_{kwargs["ind_picture"]}.png')
 
-    R = max(SBP_returns) / max(constant_returns)
+    ratio = max(SBP_returns) / max(constant_returns)
+    max_ret = max(SBP_returns + constant_returns)
+
+    if ratio <= 1.:
+        maximizing_params = {'type': 'const', 'p': best_const_p}
+    else:
+        maximizing_params = {'type': 'SBP', 't1': t1, 't2': t2}
 
     if DEBUG:
         t1 = time.time()
         with open(f'{debug_folder}/results.txt', 'w') as fwrite:
-            fwrite.write(f'best ratio: {R:.5f}\n')
+            fwrite.write(f'best ratio: {ratio:.5f}\n')
+            fwrite.write(f'maximum achieved with: ' + '; '.join(f'{k}: {v}' for k, v in maximizing_params.items()))
+            fwrite.write(f'max return: {ratio:.5f}\n')
             fwrite.write(f'elapsed: {t1 - t0:.5f}')
 
-    return R
+    return ratio, max_ret, maximizing_params
 
 
 def get_to_optimize_SBP_const_ratio(PC_obj, inputs_min, inputs_max, period_bounds, resolutions):
 
     def f_to_optimize(rates_dict, **kwargs):
         PC_obj.process_to_control.set_params(rates_dict)
-        return -SBP_constant_ratio(PC_obj, inputs_min, inputs_max, period_bounds,
-                                   resolutions=resolutions, DEBUG=False, **kwargs)
+        return -1 * SBP_constant_ratio_and_max_ret(PC_obj, inputs_min, inputs_max, period_bounds,
+                                                   resolutions=resolutions, DEBUG=False, **kwargs)[0]
 
     return f_to_optimize
 
@@ -767,7 +737,7 @@ def main():
     #                                       'rate_des_A': 0.05, 'rate_ads_B': 0.05, 'rate_des_B': 0.05,
     #                                       })
     # # PC_obj.process_to_control.set_params({f'rate_{suff}': 1. for suff in ('ads_A', 'des_A', 'ads_B', 'des_B', 'react')})
-    # SBP_constant_ratio(PC_obj, np.array([1., 0.]), np.array([0., 1.]), np.array([2., 200.]), resolutions=[20, 4, 4], DEBUG=True)
+    # SBP_constant_ratio_and_max_ret(PC_obj, np.array([1., 0.]), np.array([0., 1.]), np.array([2., 200.]), resolutions=[20, 4, 4], DEBUG=True)
 
     # ZGB Lopez Albano
     # size = [256, 256]

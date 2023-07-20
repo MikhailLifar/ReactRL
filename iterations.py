@@ -1,5 +1,9 @@
 import os
 import numpy as np
+import pandas as pd
+
+import lib
+from PC_run import SBP_constant_ratio_and_max_ret
 
 
 def get_common_1d_summarize(variable_name, names_to_plot, x_tolerance=1.e-5,
@@ -46,32 +50,6 @@ def get_common_1d_summarize(variable_name, names_to_plot, x_tolerance=1.e-5,
                          twin_params={'ylabel': names_to_plot[0], 'ylim': kwargs.get('twin_ylim', (0, None))})
 
     return common_summarize
-
-
-def get_for_SB2_iteration(episode_time, target_name, names_to_plot: dict, additional_names=('thetaCO', 'thetaO'),):
-
-    def switch_between_two_iteration(PC, params: dict, foldpath, it_arg):
-        if ('t1' in params) and ('t2' in params):
-            t1, t2 = params['t1'], params['t2']
-        else:
-            t1, t2 = params['first_part'] * params['total'], (1 - params['first_part']) * params['total']
-
-        PC.reset()
-        while PC.get_current_time() < episode_time:
-            PC.set_controlled(params['part1'])
-            PC.time_forward(t1)
-            PC.set_controlled(params['part2'])
-            PC.time_forward(t2)
-
-        PC.get_and_plot(f'{foldpath}/SBP_{it_arg}_t1({t1:.4g})_t2({t2:.4g}).png',
-                        plot_params={'time_segment': [0, None], 'additional_plot': additional_names,
-                                     'plot_mode': 'separately',
-                                     'input_names': names_to_plot['input'], 'out_names': names_to_plot['output']})
-        R = PC.integrate_along_history(out_name=target_name)
-
-        return {target_name: R}
-
-    return {'iteration_function': switch_between_two_iteration}
 
 
 def get_for_SB2_iteration_flexible(periods_number, target: dict, names_to_plot: dict, calc_analyser_dt=None, additional_names=('thetaCO', 'thetaO'), ):
@@ -196,6 +174,45 @@ def get_for_common_variations(policies_dict,
             'summarize_function': get_common_1d_summarize(name_to_variate, names_to_sum_plot, 1.e-5,
                                                           filename='common_var_summary_1d.png',
                                                           **kwargs_to_sum_plot)}
+
+
+def get_for_opt_policy_search(rate_name_out, rate_name_inner, rates_inner, **inner_params):
+
+    def _iteration(PC, params: dict, foldpath, it_arg):
+        df = pd.DataFrame(columns=[rate_name_out, rate_name_inner, 'ratio', 'max_return', 'p', 't1', 't2'])
+        for i, rate_value in enumerate(rates_inner):
+            params.update({rate_name_inner: rate_value})
+            PC.process_to_control.set_params(params)
+            ratio, max_ret, max_at = SBP_constant_ratio_and_max_ret(PC, **inner_params, DEBUG=False, plot_both_best=False)
+            df.loc[i, [rate_name_out, rate_name_inner, 'ratio', 'max_return']] = params[rate_name_out], rate_value, ratio, max_ret
+            if max_at['type'] == 'const':
+                df.loc[i, 'p'] = max_at['p']
+            else:
+                df.loc[i, ['t1', 't2']] = max_at['t1'], max_at['t2']
+        df.to_csv(f'{foldpath}/iter{it_arg}.txt', index=False)
+        return {}
+
+    def _summarize(foldapth):
+        df = pd.DataFrame()
+        for fname in filter(lambda name: name.startswith('iter'), os.listdir(foldapth)):
+            temp_df = pd.read_csv(f'{foldapth}/{fname}', index_col=None)
+            df = pd.concat((df, temp_df), axis=0)
+            os.remove(f'{foldapth}/{fname}')
+        df.to_csv(f'{foldapth}/all_points.txt', index=False)
+
+        ratio_matr = np.vstack([df.loc[df[rate_name_out] == r, 'ratio'] for r in df[rate_name_out].unique()])
+        max_ret_matr = np.vstack([df.loc[df[rate_name_out] == r, 'max_return'] for r in df[rate_name_out].unique()])
+
+        lib.plot_show_save_map(ratio_matr, (min(rates_inner), max(rates_inner)), (min(df[rate_name_out]), max(df[rate_name_out])),
+                               filepath=f'{foldapth}/ratio_map.png',
+                               xlabel=rate_name_inner, ylabel=rate_name_out, color_ax_label='ratio',
+                               cbounds=[0.3, 1.1])
+        lib.plot_show_save_map(max_ret_matr, (min(rates_inner), max(rates_inner)), (min(df[rate_name_out]), max(df[rate_name_out])),
+                               filepath=f'{foldapth}/max_return_map.png',
+                               xlabel=rate_name_inner, ylabel=rate_name_out, color_ax_label='max return',
+                               cbounds=[-1., None])
+
+    return {'iteration_function': _iteration, 'summarize_function': _summarize, 'separate_folds': False}
 
 
 def get_for_Ziff_iterations(pressure_unit: float, episode_time, CO2_output_column=3,

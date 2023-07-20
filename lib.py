@@ -2,9 +2,13 @@ import copy
 import os
 import matplotlib
 matplotlib.use('Agg')
+import matplotlib.ticker as ticker
+
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+
+import seaborn as sns
 
 matplotlib.rcParams.update(
     {'mathtext.default': 'regular'}
@@ -152,20 +156,16 @@ def save_to_file(*p,  fileName=None,):
             save(f, p[i * 3 + 1])
 
 
-def plot_to_file(*p, fileName=None, save_csv=True,
-                 title='', xlabel='', ylabel='',
+def plot_in_axis(*p, ax, title='', xlabel='', ylabel='',
                  xlim=None, ylim=None,
                  twin_params: dict = None,
-                 plotMoreFunction=None, ploMoreTwinFunction=None, yscale=None, tight_layout=True, grid=False):
+                 plotMoreFunction=None, ploMoreTwinFunction=None, yscale=None, grid=False):
     """
     Simple plot multiple graphs to file
     :param twin_params:
     :param grid:
     :param yscale:
-    :param tight_layout:
     :param p: sequence of triads x1,y1,label1,x2,y2,label2,....
-    :param fileName:
-    :param save_csv: True/False
     :param title:
     :param xlabel:
     :param ylabel:
@@ -175,8 +175,8 @@ def plot_to_file(*p, fileName=None, save_csv=True,
     :param ploMoreTwinFunction:
     :return:
     """
+
     assert len(p) % 3 == 0, f'Number of parameters {len(p)} is not multiple of 3'
-    fig, ax = createfig()
 
     right_ax = None
     if twin_params is not None:
@@ -215,7 +215,6 @@ def plot_to_file(*p, fileName=None, save_csv=True,
             if 'label' in params:
                 labels[i] = params['label']
     if title != '':
-        # print(title)
         title = wrap(title, 100)
         ax.set_title(title)
     if xlim is not None:
@@ -244,13 +243,31 @@ def plot_to_file(*p, fileName=None, save_csv=True,
     if right_ax is not None:
         right_ax.legend(loc=1, prop={'size': 12})
 
+    if grid:
+        ax.grid()
+
+    return ax, labels  # TODO crutch with labels return
+
+
+def plot_to_file(*p, fileName=None, save_csv=True, tight_layout=True, **plot_in_ax_ops):
+    """
+
+    :param p:
+    :param fileName:
+    :param save_csv:
+    :param tight_layout:
+    :param plot_in_ax_ops:
+    :return:
+    """
+    fig, ax = createfig()
+
+    _, labels = plot_in_axis(*p, ax=ax, **plot_in_ax_ops)
+
     if fileName is None:
         fileName = 'graph.png'
     folder = os.path.split(os.path.expanduser(fileName))[0]
     if folder != '' and not os.path.exists(folder):
         os.makedirs(folder, exist_ok=True)
-    if grid:
-        ax.grid()
     if tight_layout:
         fig.tight_layout()
     savefig(fileName, fig)
@@ -339,6 +356,38 @@ def plot_from_file(*lbls_fmts, csvFileName: str,
     if 'fileName' not in plottof_ops:
         plottof_ops['fileName'] = os.path.splitext(csvFileName)[0] + '.png'
     plot_to_file(*ops, **plottof_ops)
+
+
+def plot_show_save_map(data, xbounds, ybounds, filepath, show: bool = False,
+                       xlabel='?', ylabel='?', cbounds=None, **kwargs):
+
+    if cbounds is None:
+        cbounds = [None, None]
+
+    fig, ax = plt.subplots(figsize=kwargs.get('figsize', None))
+
+    data_to_heatmap = pd.DataFrame(data=data,
+                                   # index=yticks,
+                                   # columns=xticks,
+                                   )
+    fname, ext = os.path.splitext(filepath)
+    data_to_heatmap.to_csv(f'{fname}.csv', index=False)
+
+    sns.heatmap(data_to_heatmap, ax=ax, vmin=cbounds[0], vmax=cbounds[1],
+                cbar_kws={'label': kwargs.get('color_ax_label', None)})
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+
+    xmin, xmax = xbounds
+    ymin, ymax = ybounds
+    ax.xaxis.set_major_locator(ticker.MultipleLocator(data.shape[0] / 10))
+    ax.yaxis.set_major_locator(ticker.MultipleLocator(data.shape[1] / 10))
+    ax.xaxis.set_major_formatter(lambda x, pos: f'{x / data.shape[0] * (xmax - xmin) + xmin:.2f}')
+    ax.yaxis.set_major_formatter(lambda y, pos: f'{y / data.shape[1] * (ymax - ymin) + ymin:.2f}')
+
+    if show:
+        plt.show()
+    fig.savefig(filepath, dpi=400, bbox_inches='tight')
 
 
 """
