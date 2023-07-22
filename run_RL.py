@@ -38,6 +38,10 @@ def run_episode(environment: RL2207_Environment, agent, independent: bool = Fals
                 reset_callback=None):
     # Initialize episode
     state = environment.reset()
+
+    if reset_callback is not None:
+        reset_callback(environment)
+    
     # print(state)
     terminal = False
     while not terminal:
@@ -50,9 +54,6 @@ def run_episode(environment: RL2207_Environment, agent, independent: bool = Fals
         if not independent:
             agent.observe(terminal=terminal, reward=reward)
     print('Episode end')
-
-    if reset_callback is not None:
-        reset_callback(environment)
 
     return environment.cumm_episode_target
 
@@ -110,6 +111,13 @@ def run(environment: RL2207_Environment, agent, out_folder='run_RL_out', n_episo
     # Loop over episodes
     for i in range(n_episodes):
         run_episode(environment, agent, reset_callback=reset_callback)
+
+        if not (i % eval_period) or environment.success:
+            agent_metric_data.append([i, eval_agent(agent, environment)])
+            if agent_metric_data[-1][1] > max_agent_metric:
+                agent.save(directory=dir_path + '/best_agent', format='numpy')
+                max_agent_metric = agent_metric_data[-1][1]
+
         if not (i % plot_period) or (i > n_episodes - 5):
             # env.create_graphs(i, 'run_RL_out/')
             # --DEBUG--
@@ -122,31 +130,24 @@ def run(environment: RL2207_Environment, agent, out_folder='run_RL_out', n_episo
             # --DEBUG--
             environment.controller.plot(f'{dir_path}/{environment.cumm_episode_target:.2f}conversion{i}.png')
             environment.summary_graphs(f'{dir_path}/')
+            if agent_metric_data:
+                arr = np.array(agent_metric_data)
+                lib.plot_to_file(arr[:, 0], arr[:, 1],
+                                 {'label': 'agent metric', 'c': 'b'},
+                                 xlabel='Episode number', ylabel='Agent metric',
+                                 ylim=[-1.e-2, None],
+                                 fileName=f'{dir_path}/agent_metric.png')
             prev_graph_ind = i
 
         if environment.success:
             if (i - prev_graph_ind > 100) or\
                     ((environment.cumm_episode_target - prev_max_integral) / prev_max_integral > 0.07):
                 environment.controller.plot(f'{dir_path}/{environment.cumm_episode_target:.2f}conversion{i}.png')
-                environment.summary_graphs(f'{dir_path}/')
                 prev_graph_ind = i
 
             prev_max_integral = environment.cumm_episode_target
 
-        if not (i % eval_period) or environment.success:
-            agent_metric_data.append([i, eval_agent(agent, environment)])
-            if agent_metric_data[-1][1] > max_agent_metric:
-                agent.save(directory=dir_path + '/best_agent', format='numpy')
-                max_agent_metric = agent_metric_data[-1][1]
-
     # agent.save(directory=dir_path + '/last_agent', format='numpy')
-    
-    agent_metric_data = np.array(agent_metric_data)
-    lib.plot_to_file(agent_metric_data[:, 0], agent_metric_data[:, 1],
-                     {'label': 'agent metric', 'c': 'b'},
-                     xlabel='Episode number', ylabel='Agent metric',
-                     ylim=[-1.e-2, None],
-                     fileName=f'{dir_path}/agent_metric.png')
 
     # # folder renaming
     # new_path = make_subdir_return_path(out_folder, prefix=f'{environment.best_integral / environment.episode_time * 100:.2}_')
@@ -170,9 +171,10 @@ def run(environment: RL2207_Environment, agent, out_folder='run_RL_out', n_episo
 
 
 def test_run(environment: RL2207_Environment, agent, out_folder, n_episodes=None, deterministic=False,
-             reset_mode='bottom_state', reset_callback=None, test_callback=None):
+             reset_callback=None, test_callback=None):
     environment.describe_to_file(f'{out_folder}/info.txt')
-    environment.reset_mode = reset_mode
+    if environment.reset_mode == 'random':
+        environment.reset_mode = 'bottom_state'  # TODO: crutch here
 
     test_it = 0
     if test_callback is not None:

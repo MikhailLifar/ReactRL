@@ -13,8 +13,6 @@ DEFAULT_PARAMS = {
                 'target_func_to_maximize': get_target_func('CO2_value'),
                 'target_func_name': 'CO2_form_rate',
                 'RESOLUTION': 10,
-                'supposed_step_count': 10000,
-                'supposed_exp_time': 10000,
             },
             # 'to_set_plot_params': {
             #     'input_lims': [-1e-5, 1.1e-4],
@@ -42,8 +40,6 @@ DEFAULT_PARAMS = {
                 'target_func_name': 'C production rate',
                 'target_int_or_sum': 'int',
                 'RESOLUTION': 1,
-                'supposed_step_count': 10000,
-                'supposed_exp_time': 2e+4,
             },
             'to_set_plot_params': {
                 'input_lims': [-1e-5, 1 + 1e-5],
@@ -66,8 +62,6 @@ DEFAULT_PARAMS = {
                 'target_func_to_maximize': get_target_func('CO2_value'),
                 'target_func_name': 'CO2_prod_rate',
                 'RESOLUTION': 97,
-                'supposed_step_count': 10000,
-                'supposed_exp_time': 1e+4,
             },
             'to_set_plot_params': {
                 'input_lims': [-1e-5, 1 + 1e-5],
@@ -103,8 +97,6 @@ DEFAULT_PARAMS = {
                 # 'target_int_or_sum': 'sum',
                 'target_int_or_sum': 'int',
                 'RESOLUTION': 1,
-                'supposed_step_count': 100000,
-                'supposed_exp_time': 1e+2,
             },
             'to_set_plot_params': {
                 'input_lims': [-1e-5, None],
@@ -130,8 +122,6 @@ DEFAULT_PARAMS = {
                 'target_func_to_maximize': get_target_func('CO2_value'),
                 'target_func_name': 'CO2_prod_rate',
                 'RESOLUTION': 97,
-                'supposed_step_count': int(5.e+6),
-                'supposed_exp_time': 1e+3,
             },
             'to_set_plot_params': {
                 'input_lims': [-1e-5, 1 + 1e-5],
@@ -251,8 +241,6 @@ DEFAULT_PARAMS['ZGBk'] = copy.deepcopy(DEFAULT_PARAMS['ZGB'])
 DEFAULT_PARAMS['ZGBk']['model_class'] = ZGBkModel
 DEFAULT_PARAMS['ZGBk']['to_model_constructor'].update({'m': 100, 'n': 100, 'k': 0.02})
 DEFAULT_PARAMS['ZGBk']['to_PC_constructor'].update({'analyser_dt': 1.e+3,
-                                                    'supposed_step_count': int(1e+5),
-                                                    'supposed_exp_time': 1e+7,
                                                     })
 
 

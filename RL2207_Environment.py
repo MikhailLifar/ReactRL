@@ -29,8 +29,7 @@ class RL2207_Environment(Environment):
                  reward_spec: [str, callable] = None,
                  episode_time=500, time_step=10,
                  reset_mode='bottom_state',
-                 initial_values: dict = None,
-                 preprocess_time=0,
+                 preprocess: dict = None,
                  log_scaling_dict=None,
                  **kwargs):
 
@@ -66,23 +65,25 @@ class RL2207_Environment(Environment):
         self.input_dt = kwargs.get('input_dt', time_step)
 
         self.time_step = time_step
-        # TODO I don't like this statement
         if self.time_step <= self.controller.analyser_dt:
             self.controller.analyser_dt = self.time_step / 10
+        if self.time_step < self.input_dt:
+            self.input_dt = self.time_step
         self.episode_time = episode_time
 
         self.input_names = self.controller.controlled_names
-        if initial_values is None:
-            self.initial_values = {name: self.model.bottom['input'][name] for name in self.input_names}
-        else:
-            assert isinstance(initial_values, dict)
-            self.initial_values = copy.deepcopy(initial_values)
-        if preprocess_time > 0:
-            self.PC_preprocess = {'in_flows': self.initial_values,
-                                  'process_time': preprocess_time}
-            self.controller.const_preprocess(**self.PC_preprocess)
-        else:
-            self.PC_preprocess = None
+
+        # define how we start an episode
+        if preprocess is None:
+            preprocess = {}
+        self.preprocess = copy.deepcopy(preprocess)
+        if preprocess.get('in_values', None) is None:
+            self.preprocess['in_values'] = {name: self.model.bottom['input'][name] for name in self.input_names}
+        if preprocess.get('time', None) is None:
+            self.preprocess['time'] = self.time_step
+        if preprocess.get('dt', None) is None:
+            self.preprocess['dt'] = self.controller.analyser_dt
+        self.controller.const_preprocess(**self.preprocess)
 
         self.cumm_episode_target = 0.
         self.best_episode_target = -np.inf
@@ -328,19 +329,17 @@ class RL2207_Environment(Environment):
 
         self.controller.reset()
 
-        in_values = None
-        current_measurement = None
-
-        if self.reset_mode == 'normal':
-            in_values = np.array([self.initial_values[name] for name in self.input_names])
-            if self.PC_preprocess is not None:
-                self.controller.const_preprocess(**self.PC_preprocess)
+        if self.reset_mode == 'predefined':
+            current_measurement = self.controller.const_preprocess(**self.preprocess)
         elif self.reset_mode == 'random':
             in_values = np.random.random(len(self.input_names)) * \
                         (self.model.get_bounds('max', 'input') - self.model.get_bounds('min', 'input')) + \
                         self.model.get_bounds('min', 'input')  # unnorm
             to_process_flows = {self.input_names[i]: in_values[i] for i in range(len(self.input_names))}
-            self.controller.const_preprocess(to_process_flows, process_time=np.random.randint(1, 11)*self.episode_time)
+            current_measurement = self.controller.const_preprocess(to_process_flows,
+                                                                   time=np.random.randint(1, 11) * self.episode_time,
+                                                                   dt=self.controller.analyser_dt,
+                                                                   )
         elif self.reset_mode == 'bottom_state':
             current_measurement = np.zeros(len(self.names_to_state))
             i0 = 0
@@ -350,11 +349,6 @@ class RL2207_Environment(Environment):
                     i0 += 1
         else:
             raise ValueError
-
-        if self.reset_mode != 'bottom_state':
-            self.controller.set_controlled(in_values)
-            self.controller.time_forward(dt=self.time_step)
-            current_measurement = self.controller.get_process_output()[1][-1][self.inds_to_state]
 
         self.state_memory[0] = np.array([*current_measurement])
         self.state_memory[1:] = self.state_memory[0]

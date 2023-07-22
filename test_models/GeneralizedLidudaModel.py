@@ -114,7 +114,7 @@ class GeneralizedLibudaModel(BaseModel):
         self.plot = {'thetaA': self.thetaA, 'thetaB': self.thetaB, 'error': 0.}
 
         # self.top['output']['outputC'] = self['rate_react'] * self['thetaA_max'] * self['thetaB_max']
-        self.top['output']['outputC'] = params.get('reaction_rate_top', self['rate_react'])
+        self.top['output']['outputC'] = self.params.get('reaction_rate_top', self['rate_react'])
         self.fill_limits()
 
         self.resample_when_reset = resample_when_reset

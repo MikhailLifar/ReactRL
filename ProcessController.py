@@ -49,7 +49,7 @@ class ProcessController:
                  controlled_names: list = None, output_names: list = None,
                  target_func_to_maximize=None, long_term_target_to_maximize=None, target_func_name='target',
                  real_exp=False,
-                 supposed_step_count: int = None, supposed_exp_time: float = None,
+                 memory_init: int = 1_000, memory_limit: int = 1_000_000,
                  target_int_or_sum: str = 'int'):
         self.rng = np.random.default_rng(seed=0)
 
@@ -57,14 +57,8 @@ class ProcessController:
         self.analyser_dt = analyser_dt
         self.analyser_delay = 0.
 
-        if supposed_exp_time is None:
-            self.max_exp_time = 1000000  # sec
-        else:
-            self.max_exp_time = supposed_exp_time  # sec
-        if supposed_step_count is None:
-            self.max_step_count = 1000000  # depends on available RAM
-        else:
-            self.max_step_count = supposed_step_count  # depends on available RAM
+        self.memory_init = memory_init
+        self.memory_limit = memory_limit  # depends on available RAM
 
         self.RESOLUTION = RESOLUTION
 
@@ -82,9 +76,9 @@ class ProcessController:
         self.controlled = np.zeros(len(self.controlled_names))
         # self.gas_max_values = 100  # percent
         # gas flow values (one for each constant interval)
-        self.controlling_signals_history = np.full((self.max_step_count, len(self.controlled_names)), -1.)
+        self.controlling_signals_history = np.full((self.memory_init, len(self.controlled_names)), -1.)
         # duration of each constant region in gas_flow_history
-        self.controlling_signals_history_dt = np.full(self.max_step_count, -1.)
+        self.controlling_signals_history_dt = np.full(self.memory_init, -1.)
         self.time = 0.
 
         self.step_count = 0  # current step in flow history
@@ -99,12 +93,11 @@ class ProcessController:
             assert output_names and (output_names == process_to_control_obj.names['output'])
             self.output_names = output_names
         self.output_ind = {name: i for i, name in enumerate(self.output_names)}
-        size = np.ceil(self.max_exp_time / self.analyser_dt).astype('int32')
-        self.output_history = np.full((size, len(self.output_names)), -1.)
-        self.output_history_dt = np.full(size, -1.)
+        self.output_history = np.full((self.memory_init, len(self.output_names)), -1.)
+        self.output_history_dt = np.full(self.memory_init, -1.)
         self.target_history = None
         if target_func_to_maximize is not None:
-            self.target_history = np.full(size, np.nan, dtype=np.float)
+            self.target_history = np.full(self.memory_init, np.nan, dtype=np.float)
         self.long_term_target = None
         if long_term_target_to_maximize is not None:
             self.long_term_target = long_term_target_to_maximize
@@ -151,7 +144,13 @@ class ProcessController:
         Makes time step, dt is measured in seconds
         """
         assert dt > 0
-        assert self.step_count < self.max_step_count
+        assert self.step_count < self.memory_limit
+
+        # extend memory if ran out
+        self.controlling_signals_history_dt = lib.extend_arr_ax0(self.controlling_signals_history_dt, target_capacity=self.step_count,
+                                                                 fill=-1.)
+        self.controlling_signals_history = lib.extend_arr_ax0(self.controlling_signals_history, target_capacity=self.step_count)
+
         i = self.step_count
         if i > 0 and np.all(self.controlling_signals_history[i - 1] == self.controlled):
             self.controlling_signals_history_dt[i - 1] += dt
@@ -185,19 +184,22 @@ class ProcessController:
         while self.get_current_time() < episode_time:
             self.time_forward(policy_step)
 
-    def const_preprocess(self, in_values, process_time=300):
+    def const_preprocess(self, in_values, time=300, dt=None):
         """
         Makes updates for the inner process without saving data from this updates in history.
         Method can be used to bring inner process in a desirable state
         before starting experiment/simulation
 
+        :param dt: 
         :param in_values:
-        :param process_time:
-        :param RESOLUTION:
+        :param time:
         :return:
         """
-        dt = self.analyser_dt * self.RESOLUTION
-        count = int(process_time / dt)
+
+        if dt is None:
+            dt = self.analyser_dt * self.RESOLUTION
+        dt = min(time, dt)
+        count = int(time / dt)
         if isinstance(in_values, dict):
             in_values_arr = np.array([in_values[name] for name in self.controlled_names])
         else:
@@ -210,6 +212,9 @@ class ProcessController:
         self.time = np.sum(self.controlling_signals_history_dt[:self.step_count])
         return self.time
 
+    def get_current_state(self):
+        return self.process_to_control.model_output
+
     def get_process_output(self):
         """
         Calculates new and returns list of ALL output values from analyzer!
@@ -217,7 +222,17 @@ class ProcessController:
         # t0 = time.time()
         current_time = self.get_current_time()
         measurements_count = int(np.floor(current_time / self.analyser_dt))
-        last_ind = np.where(self.output_history == -1)[0][0]
+
+        # extend memory if ran out of it
+        if measurements_count >= self.output_history_dt.size:
+            assert measurements_count < self.memory_limit
+            self.output_history_dt = lib.extend_arr_ax0(self.output_history_dt, measurements_count, fill=-1)
+            self.output_history = lib.extend_arr_ax0(self.output_history, measurements_count)
+            for name, arr in self.additional_graph.items():
+                self.additional_graph[name] = lib.extend_arr_ax0(arr, measurements_count, fill=0)
+            self.target_history = lib.extend_arr_ax0(self.target_history, measurements_count, fill=np.nan)
+
+        last_ind = np.where(self.output_history_dt == -1)[0][0]
         # last_time = max(0, last_ind-2) * self.analyser_dt
         time_history = np.cumsum(self.controlling_signals_history_dt[:self.step_count])
         # time_history = np.insert(time_history, 0, 0)
@@ -241,16 +256,6 @@ class ProcessController:
 
         # t1 = time.time()
         RESOLUTION = self.RESOLUTION
-
-        # extend the memory 10 times if we run out of it
-        # print(self.output_history_dt.size)
-        while measurements_count > self.output_history_dt.size - 1:
-            self.output_history_dt = np.hstack((self.output_history_dt,
-                                                np.tile(np.full_like(self.output_history_dt, -1), 9)))
-            self.output_history = np.vstack((self.output_history,
-                                             np.tile(np.empty_like(self.output_history), (9, 1))))
-            for name, arr in self.additional_graph.items():
-                self.additional_graph[name] = np.hstack((arr, np.tile(np.empty_like(arr), 9)))
 
         if not self.real_exp:
             for i in range(last_ind, measurements_count):
@@ -328,15 +333,18 @@ class ProcessController:
             assert self.target_int_or_sum == 'sum'
             return np.sum(output[inds])
 
-    def get_long_term_target(self):
+    def get_long_term_target(self, time_segment=None):
         output_dt, output = self.get_process_output()
-        return self.long_term_target(output_dt, output)
+        if time_segment is None:
+            return self.long_term_target(output_dt, output)
+        inds = (time_segment[0] <= output_dt) & (output_dt <= time_segment[1])
+        return self.long_term_target(output_dt[inds], output[inds])
 
-    def get_cumulative_target(self):
+    def get_cumulative_target(self, time_segment=None):
         if self.target_func is not None:
-            return self.integrate_along_history(target_mode=True)
+            return self.integrate_along_history(time_segment, target_mode=True)
         elif self.long_term_target is not None:
-            return self.get_long_term_target()
+            return self.get_long_term_target(time_segment)
 
     # def _initialize_plot_lims(self):
     #     for kind in ('input', 'output'):
@@ -669,9 +677,9 @@ class ProcessController:
 
         self.controlled = np.zeros(len(self.controlled_names))
         # gas flow values (one for each constant interval)
-        self.controlling_signals_history = np.full((self.max_step_count, len(self.controlled_names)), -1.)
+        self.controlling_signals_history = np.full((self.memory_init, len(self.controlled_names)), -1.)
         # duration of each constant region in gas_flow_history
-        self.controlling_signals_history_dt = np.full(self.max_step_count, -1.)
+        self.controlling_signals_history_dt = np.full(self.memory_init, -1.)
         self.step_count = 0  # current step in flow history
         self.time = 0.
 

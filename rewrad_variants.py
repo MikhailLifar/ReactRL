@@ -12,7 +12,7 @@ def get_reward_func(params: dict):
             integral_target_last_step = lib.integral(time_history[-count_step_measurements:], target_history[-count_step_measurements:])
             # mean_integral_part = np.mean(target_history[:-1]) * count_step_measurements  # this didn't work well
             # rew = (target_history[-1] - mean_integral_part * part) / mean_integral_part / part
-            rew = integral_target_last_step * env_obj.normalize_coef -\
+            rew = integral_target_last_step * env_obj.normalize_coef / env_obj.episode_time -\
                   bias * env_obj.time_step / env_obj.episode_time
             return rew
 
@@ -23,7 +23,7 @@ def get_reward_func(params: dict):
 
         def full_ep_base(env_obj) -> float:
             if env_obj.end_episode:
-                return env_obj.cumm_episode_target * env_obj.normalize_coef - bias
+                return env_obj.cumm_episode_target * env_obj.normalize_coef / env_obj.episode_time - bias
             return 0.
 
         out_func = full_ep_base

@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 
 import lib
-from PC_run import SBP_constant_ratio_and_max_ret
+from PC_run import SBP_constant_ratio_and_max_rate
 
 
 def get_common_1d_summarize(variable_name, names_to_plot, x_tolerance=1.e-5,
@@ -176,14 +176,25 @@ def get_for_common_variations(policies_dict,
                                                           **kwargs_to_sum_plot)}
 
 
-def get_for_opt_policy_search(rate_name_out, rate_name_inner, rates_inner, **inner_params):
+def get_for_opt_policy_search(rate_name_out, rate_name_inner, rates_inner, map_grid_resolutions=None, **inner_params):
+    """
+
+    :param rate_name_out:
+    :param rate_name_inner:
+    :param rates_inner:
+    :param map_grid_resolutions:
+    :param inner_params:
+    :return:
+    """
+
+    rates_inner.sort()
 
     def _iteration(PC, params: dict, foldpath, it_arg):
         df = pd.DataFrame(columns=[rate_name_out, rate_name_inner, 'ratio', 'max_return', 'p', 't1', 't2'])
         for i, rate_value in enumerate(rates_inner):
             params.update({rate_name_inner: rate_value})
             PC.process_to_control.set_params(params)
-            ratio, max_ret, max_at = SBP_constant_ratio_and_max_ret(PC, **inner_params, DEBUG=False, plot_both_best=False)
+            ratio, max_ret, max_at = SBP_constant_ratio_and_max_rate(PC, **inner_params, DEBUG=False, plot_both_best=False)
             df.loc[i, [rate_name_out, rate_name_inner, 'ratio', 'max_return']] = params[rate_name_out], rate_value, ratio, max_ret
             if max_at['type'] == 'const':
                 df.loc[i, 'p'] = max_at['p']
@@ -193,22 +204,46 @@ def get_for_opt_policy_search(rate_name_out, rate_name_inner, rates_inner, **inn
         return {}
 
     def _summarize(foldapth):
-        df = pd.DataFrame()
-        for fname in filter(lambda name: name.startswith('iter'), os.listdir(foldapth)):
-            temp_df = pd.read_csv(f'{foldapth}/{fname}', index_col=None)
-            df = pd.concat((df, temp_df), axis=0)
-            os.remove(f'{foldapth}/{fname}')
-        df.to_csv(f'{foldapth}/all_points.txt', index=False)
+        from scipy.interpolate import RegularGridInterpolator
 
-        ratio_matr = np.vstack([df.loc[df[rate_name_out] == r, 'ratio'] for r in df[rate_name_out].unique()])
-        max_ret_matr = np.vstack([df.loc[df[rate_name_out] == r, 'max_return'] for r in df[rate_name_out].unique()])
+        all_points_path = f'{foldapth}/all_points.txt'
+        if os.path.exists(all_points_path):
+            df = pd.read_csv(all_points_path, index_col=None)
+        else:
+            df = pd.DataFrame()
+            for fname in filter(lambda name: name.startswith('iter'), os.listdir(foldapth)):
+                temp_df = pd.read_csv(f'{foldapth}/{fname}', index_col=None)
+                df = pd.concat((df, temp_df), axis=0)
+                os.remove(f'{foldapth}/{fname}')
+            df.to_csv(all_points_path, index=False)
 
-        lib.plot_show_save_map(ratio_matr, (min(rates_inner), max(rates_inner)), (min(df[rate_name_out]), max(df[rate_name_out])),
-                               filepath=f'{foldapth}/ratio_map.png',
+        rates_outer = df.loc[df[rate_name_inner] == rates_inner[0], rate_name_out].to_numpy()
+        rates_outer.sort()
+
+        ratio_matr = np.vstack([df.loc[df[rate_name_out] == r, 'ratio'] for r in rates_outer])
+        max_ret_matr = np.vstack([df.loc[df[rate_name_out] == r, 'max_return'] for r in rates_outer])
+
+        ratio_to_map = ratio_matr
+        max_ret_to_map = max_ret_matr
+        if map_grid_resolutions is not None:
+            interp_ratio = RegularGridInterpolator((rates_inner, rates_outer), ratio_matr, method='linear')
+            interp_max_ret = RegularGridInterpolator((rates_inner, rates_outer), max_ret_matr, method='linear')
+            grid = np.meshgrid(
+                np.linspace(min(rates_outer), max(rates_outer), map_grid_resolutions[1]),
+                np.linspace(min(rates_inner), max(rates_inner), map_grid_resolutions[0]),
+                                )
+
+            grid_to_interp = np.squeeze(np.array(list(zip(map(lambda arr: arr.flatten(), grid))))).transpose()
+
+            ratio_to_map = interp_ratio(grid_to_interp).reshape(*map_grid_resolutions).transpose()
+            max_ret_to_map = interp_max_ret(grid_to_interp).reshape(*map_grid_resolutions).transpose()
+
+        lib.plot_show_save_map(ratio_to_map, (min(rates_inner), max(rates_inner)), (min(rates_outer), max(rates_outer)),
+                               filepath=f'{foldapth}/ratio_map.png', save_data=False,
                                xlabel=rate_name_inner, ylabel=rate_name_out, color_ax_label='ratio',
                                cbounds=[0.3, 1.1])
-        lib.plot_show_save_map(max_ret_matr, (min(rates_inner), max(rates_inner)), (min(df[rate_name_out]), max(df[rate_name_out])),
-                               filepath=f'{foldapth}/max_return_map.png',
+        lib.plot_show_save_map(max_ret_to_map, (min(rates_inner), max(rates_inner)), (min(rates_outer), max(rates_outer)),
+                               filepath=f'{foldapth}/max_return_map.png', save_data=False,
                                xlabel=rate_name_inner, ylabel=rate_name_out, color_ax_label='max return',
                                cbounds=[-1., None])
 

@@ -3,6 +3,7 @@ import sys
 import os
 import itertools
 from time import sleep
+import logging
 
 import numpy as np
 import pandas as pd
@@ -100,6 +101,10 @@ def run_jobs_list(
     #                     help='starting position in the list of parameters\nDo not touch it (only internal usage)!')
     args = parser.parse_args()
 
+    # logger setup
+    logger = logging.getLogger(f'multiple_jobs_log')
+    logger.setLevel(logging.ERROR)
+
     # expanding the list to repeat iterations
     if repeat > 1:
         assert isinstance(params_variants, list), f'params_variants should be list,' \
@@ -173,8 +178,16 @@ def run_jobs_list(
             try:
                 summarize_function(out_fold_path)
             except Exception as e:
-                with open(f'{out_fold_path}/summary_failed.txt', 'w') as fwrite:
-                    fwrite.write(str(e))
+                # write error to file, with full trace
+                fh = logging.FileHandler(f'{out_fold_path}/summary_failed.txt')
+                fh.setLevel(logging.ERROR)
+
+                fmt = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+                fh.setFormatter(fmt)
+
+                logger.addHandler(fh)
+
+                logger.exception(e)
 
         # The results of different iterations should be collected
         df = pd.DataFrame(index=np.arange(iterations_number))
@@ -216,6 +229,17 @@ def run_jobs_list(
                                      iter_folder, iter_arg)
             error_indicator = ''
         except Exception as e:
+            # write error to file, with full trace
+            fh = logging.FileHandler(f'{iter_folder}/log_err_{iter_arg}.txt')
+            fh.setLevel(logging.ERROR)
+
+            fmt = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+            fh.setFormatter(fmt)
+
+            logger.addHandler(fh)
+
+            logger.exception(e)
+
             ret['Error'] = str(type(e))
             raise e
         finally:

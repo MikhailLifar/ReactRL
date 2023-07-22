@@ -275,6 +275,7 @@ def plot_to_file(*p, fileName=None, save_csv=True, tight_layout=True, **plot_in_
     # plt.clf()
     # plt.close(fig)
 
+    n = len(p)//3
     if save_csv:
         def save(file, obj):
             if not isinstance(obj, np.ndarray):
@@ -318,12 +319,12 @@ def read_plottof_csv(datapath, ret_ops=False, ret_df=False, create_standard: boo
 
 
 def plot_from_file(*lbls_fmts, csvFileName: str,
-                   chose_labels=None,
+                   chose_labels: list = None,
                    transforms=None, x_transform=None,
                    **plottof_ops):
     ops, _ = read_plottof_csv(csvFileName, True, False, False)
 
-    # filter срщыут щзы
+    # filter chosen ops
     if chose_labels is not None:
         new_ops = []
         for i, l in enumerate(ops[2::3]):
@@ -358,7 +359,7 @@ def plot_from_file(*lbls_fmts, csvFileName: str,
     plot_to_file(*ops, **plottof_ops)
 
 
-def plot_show_save_map(data, xbounds, ybounds, filepath, show: bool = False,
+def plot_show_save_map(data, xbounds, ybounds, filepath, show: bool = False, save_data=True,
                        xlabel='?', ylabel='?', cbounds=None, **kwargs):
 
     if cbounds is None:
@@ -371,7 +372,8 @@ def plot_show_save_map(data, xbounds, ybounds, filepath, show: bool = False,
                                    # columns=xticks,
                                    )
     fname, ext = os.path.splitext(filepath)
-    data_to_heatmap.to_csv(f'{fname}.csv', index=False)
+    if save_data:
+        data_to_heatmap.to_csv(f'{fname}.csv', index=False)
 
     sns.heatmap(data_to_heatmap, ax=ax, vmin=cbounds[0], vmax=cbounds[1],
                 cbar_kws={'label': kwargs.get('color_ax_label', None)})
@@ -380,10 +382,10 @@ def plot_show_save_map(data, xbounds, ybounds, filepath, show: bool = False,
 
     xmin, xmax = xbounds
     ymin, ymax = ybounds
-    ax.xaxis.set_major_locator(ticker.MultipleLocator(data.shape[0] / 10))
-    ax.yaxis.set_major_locator(ticker.MultipleLocator(data.shape[1] / 10))
-    ax.xaxis.set_major_formatter(lambda x, pos: f'{x / data.shape[0] * (xmax - xmin) + xmin:.2f}')
-    ax.yaxis.set_major_formatter(lambda y, pos: f'{y / data.shape[1] * (ymax - ymin) + ymin:.2f}')
+    ax.xaxis.set_major_locator(ticker.MultipleLocator(data.shape[1] / 10))
+    ax.yaxis.set_major_locator(ticker.MultipleLocator(data.shape[0] / 10))
+    ax.xaxis.set_major_formatter(lambda x, pos: f'{x / data.shape[1] * (xmax - xmin) + xmin:.2f}')
+    ax.yaxis.set_major_formatter(lambda y, pos: f'{y / data.shape[0] * (ymax - ymin) + ymin:.2f}')
 
     if show:
         plt.show()
@@ -420,6 +422,29 @@ def integral(x, y):
         # one spectrum - one row
         my = (y[:, 1:] + y[:, :-1]) / 2
     return np.dot(my, dx)
+
+
+def extend_arr_ax0(x: np.ndarray, target_capacity: int, fill='NO'):
+    # early return if no need to extend
+    if target_capacity < x.shape[0]:
+        return x
+
+    # default new space filling
+    if fill == 'NO':
+        fill_new = lambda arr: np.empty_like(arr)
+    else:
+        fill_new = lambda arr: np.full_like(arr, fill)
+
+    if len(x.shape) == 1:
+        while target_capacity >= x.shape[0]:
+            x = np.hstack((x, np.tile(fill_new(x), 9)))
+    elif len(x.shape) == 2:
+        while target_capacity >= x.shape[0]:
+            x = np.vstack((x, np.tile(fill_new(x), (9, 1))))
+    else:
+        raise ValueError('Implemented only for 1d, 2d arrays')
+
+    return x
 
 
 """
