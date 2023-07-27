@@ -111,7 +111,7 @@ def get_target_func(func_name, **kwargs):
         return CO2xCOConversion_I
 
     elif func_name == 'CO2_plus_CO_conv_I':
-        eps, alpha = kwargs['eps'], kwargs['alpha']
+        eps, alpha, beta = kwargs['eps'], kwargs['alpha'], kwargs.get('beta', 1.)
 
         def CO2_plus_CO_conv_I(output_history_dt, output_history):
             # x = [CO2(k4 * thetaCO * thetaO), O2(k3), CO(k1)]
@@ -119,7 +119,8 @@ def get_target_func(func_name, **kwargs):
             # alpha = 0 <=> consider conversion only; alpha = 1 <=> consider integral (rate) only
             I_CO2 = integral(output_history_dt, output_history[:, 0])
             I_CO = integral(output_history_dt, output_history[:, 2])
-            return alpha * I_CO2 / (I_CO + eps) + (1 - alpha) * I_CO2
+            episode_time = integral(output_history_dt, np.ones_like(output_history_dt))  # needed for normalization
+            return alpha * I_CO2 / (I_CO + eps) * episode_time + (1 - alpha) * beta * I_CO2
 
         return CO2_plus_CO_conv_I
 

@@ -51,6 +51,8 @@ class ProcessController:
                  real_exp=False,
                  memory_init: int = 1_000, memory_limit: int = 1_000_000,
                  target_int_or_sum: str = 'int'):
+        assert (target_func_to_maximize is not None) + (long_term_target_to_maximize is not None) < 2, 'Can specify target or long_term_target, not both'
+
         self.rng = np.random.default_rng(seed=0)
 
         # self.analyser_dt = min(analyzer_dt, 0.25 * supposed_exp_time)  # analyser period, seconds
@@ -98,9 +100,7 @@ class ProcessController:
         self.target_history = None
         if target_func_to_maximize is not None:
             self.target_history = np.full(self.memory_init, np.nan, dtype=np.float)
-        self.long_term_target = None
-        if long_term_target_to_maximize is not None:
-            self.long_term_target = long_term_target_to_maximize
+        self.long_term_target = long_term_target_to_maximize
 
         self.controlling_signals_history[0] = self.controlled
 
@@ -230,7 +230,8 @@ class ProcessController:
             self.output_history = lib.extend_arr_ax0(self.output_history, measurements_count)
             for name, arr in self.additional_graph.items():
                 self.additional_graph[name] = lib.extend_arr_ax0(arr, measurements_count, fill=0)
-            self.target_history = lib.extend_arr_ax0(self.target_history, measurements_count, fill=np.nan)
+            if self.target_history is not None:
+                self.target_history = lib.extend_arr_ax0(self.target_history, measurements_count, fill=np.nan)
 
         last_ind = np.where(self.output_history_dt == -1)[0][0]
         # last_time = max(0, last_ind-2) * self.analyser_dt

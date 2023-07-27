@@ -8,11 +8,26 @@ import logging
 import numpy as np
 import pandas as pd
 
+from typing import Dict, List
+
 # from lib import *
 from usable_functions import make_subdir_return_path
 
 
-def fill_dict(values: list, values_names: tuple, values_groups: tuple = ()):
+def fill_dict(values: list, values_names: tuple, values_groups: tuple = (),
+              exclude_sign='#exclude'):
+    """
+
+    :param values:
+    :param values_names:
+    :param values_groups:
+    :param exclude_sign: Helps to delete parameters that cannot be passed in one iteration,
+                         but are needed to be passed in other iteration
+                         removing is performed with usage of 'exclude_sign' - special parameter value
+    :return:
+    """
+
+    # TODO implement for more complex group hierarchies
     variable_dict = dict()
     # for name in (val_name[:val_name.find(':')]
     #              for val_name in values_names if ':' in val_name):
@@ -22,12 +37,12 @@ def fill_dict(values: list, values_names: tuple, values_groups: tuple = ()):
     for i, name in enumerate(values_names):
         find = False
         for subset_name in values_groups:
-            if f'{subset_name}:' in name:
+            if (f'{subset_name}:' in name) and (values[i] != exclude_sign):
                 find = True
                 sub_name = name[name.find(':') + 1:]
                 variable_dict[subset_name][sub_name] = values[i]
         # assert find, f'Error! Invalid name: {name}'
-        if not find:
+        if not find and (values[i] != exclude_sign):
             variable_dict[name] = values[i]
 
     return variable_dict
@@ -284,6 +299,34 @@ def jobs_list_from_grid(*value_sets,
                 new_names.append(it)
         names = tuple(new_names)
     return {'params_variants': params_variants, 'names': names}
+
+
+def merge_job_lists(*job_lists):
+    if len(job_lists) > 2:
+        return merge_job_lists(job_lists[0], merge_job_lists(job_lists[1:]))
+
+    if len(job_lists) == 2:
+        list0, list1 = job_lists[0], job_lists[1]
+
+        names0 = [name for name in list0['names'] if name not in list1['names']]
+        names1 = [name for name in list1['names'] if name not in list0['names']]
+        names10 = [name for name in list1['names'] if name in list0['names']]
+        assert (names0 + names10 == list(list0['names'])) and (names10 + names1 == list(list1['names'])), 'Names order control is not yet implemented,' \
+                                                                                                          ' so, make sure shared names are at the end of the first list' \
+                                                                                                          ' and at the beginning of the second, in the same order'
+
+        new_variants = []
+        for v in list0['params_variants']:
+            new_variants.append(list(v) + ['#exclude'] * len(names1))
+        for v in list1['params_variants']:
+            new_variants.append(['#exclude'] * len(names0) + list(v))
+
+        new_names = names0 + names10 + names1
+
+        return {'params_variants': new_variants, 'names': new_names}
+
+    else:
+        raise ValueError(f'Incorrect number of lists to merge: {len(job_lists)}')
 
 
 def O2_CO_from_CO_x(x):

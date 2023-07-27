@@ -223,7 +223,7 @@ def optimize_list_cluster(params_variants: list,
 def get_for_repeated_opt_iterations(func_for_optimize, optimize_bounds, constrains=lambda d: None,
                                     cut_left=True, cut_right=True,
                                     method=None, try_num=30,
-                                    optimize_options=None, debug_params=None):
+                                    optimize_options=None, call_after_opt_params=None):
     """
 
     :param func_for_optimize:
@@ -234,7 +234,7 @@ def get_for_repeated_opt_iterations(func_for_optimize, optimize_bounds, constrai
     :param method:
     :param try_num:
     :param optimize_options:
-    :param debug_params:
+    :param call_after_opt_params:
     :return:
     """
 
@@ -282,12 +282,12 @@ def get_for_repeated_opt_iterations(func_for_optimize, optimize_bounds, constrai
         with open(f'{foldpath}/_optim_result_{try_ind}.txt', 'w') as fout:
             fout.write(s)
             fout.flush()
-        if debug_params is not None:
-            local_debug = dict()
-            local_debug['ind_picture'] = str(try_ind)
-            if ('folder' in debug_params) and (debug_params['folder'] == 'auto'):
-                local_debug['folder'] = foldpath
-            func_for_optimize(convert_to_dict(res.x), **{**debug_params, **local_debug})
+        if call_after_opt_params is not None:
+            local_params = dict()
+            local_params['ind_picture'] = str(try_ind)
+            if ('folder' in call_after_opt_params) and (call_after_opt_params['folder'] == 'auto'):
+                local_params['folder'] = foldpath
+            func_for_optimize(convert_to_dict(res.x), **{**call_after_opt_params, **local_params})
 
         return {'fvalue': res.fun, 'value_at': convert_to_dict(res.x)}
 

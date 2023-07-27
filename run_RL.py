@@ -19,6 +19,10 @@ import lib
 
 from usable_functions import make_subdir_return_path, make_unique_filename
 
+import PC_setup
+import PC_run
+import predefined_policies as policies
+
 
 def create_tforce_agent(environment: RL2207_Environment, agent_name, **params):
     if 'memory' not in params:
@@ -129,7 +133,7 @@ def run(environment: RL2207_Environment, agent, out_folder='run_RL_out', n_episo
             # plt.close(fig)
             # --DEBUG--
             environment.controller.plot(f'{dir_path}/{environment.cumm_episode_target:.2f}conversion{i}.png')
-            environment.summary_graphs(f'{dir_path}/')
+            environment.plot_learning_curve(f'{dir_path}')
             if agent_metric_data:
                 arr = np.array(agent_metric_data)
                 lib.plot_to_file(arr[:, 0], arr[:, 1],
@@ -173,7 +177,8 @@ def run(environment: RL2207_Environment, agent, out_folder='run_RL_out', n_episo
 def test_run(environment: RL2207_Environment, agent, out_folder, n_episodes=None, deterministic=False,
              reset_callback=None, test_callback=None):
     environment.describe_to_file(f'{out_folder}/info.txt')
-    if environment.reset_mode == 'random':
+    reset_mode = environment.reset_mode
+    if isinstance(reset_mode, dict) and (reset_mode['kind'] == 'random'):
         environment.reset_mode = 'bottom_state'  # TODO: crutch here
 
     test_it = 0
@@ -222,6 +227,155 @@ def examine_agent_vs_different_curves(environment, agent, curves, outfolder, **k
         return True
 
     test_run(environment, agent, out_folder=outfolder, test_callback=callback_, **kwargs)
+
+
+def agent_test_x_co_control_problem(agent_path, outfolder):
+    vary_x_co = {'type': 'continuous',
+                 'transform_action': lambda x: np.array([x[0], 1. - x[0]]),
+                 'shape': 1,
+                 'info': 'control x_co'}
+    PC_obj = PC_setup.general_PC_setup('LibudaG')
+    my_env = RL2207_Environment(
+        PC_obj,
+        state_spec={'rows': 1, 'use_differences': False},
+        action_spec=vary_x_co,
+        names_to_state=['B', 'A', 'outputC'],
+        reward_spec='each_step_base',
+        target_type='one_row',
+        episode_time=50.,
+        time_step=5.,
+        normalize_coef=1.,
+        input_dt=0.1,
+    )
+    my_env = Environment.create(environment=my_env, max_episode_timesteps=6000)
+    my_env.actions()
+    agent = Agent.load(agent_path, format='numpy', environment=my_env)
+    test_run(my_env, agent, out_folder=outfolder, n_episodes=5, deterministic=True)
+
+
+def agent_test_both_control_problem(agent_path, outfolder):
+    PC_obj = PC_setup.general_PC_setup('LibudaG')
+    my_env = RL2207_Environment(
+        PC_obj,
+        state_spec={'rows': 1, 'use_differences': False},
+        names_to_state=['B', 'A', 'outputC'],
+        reward_spec='each_step_base',
+        target_type='one_row',
+        episode_time=50.,
+        time_step=5.,
+        normalize_coef=1.,
+        input_dt=0.1,
+    )
+    my_env = Environment.create(environment=my_env, max_episode_timesteps=6000)
+    my_env.actions()
+    agent = Agent.load(agent_path, format='numpy', environment=my_env)
+    test_run(my_env, agent, out_folder=outfolder, n_episodes=5, deterministic=True)
+
+
+def agent_test_both_control_unseen_rates(agent_path, outfolder, ):
+    PC_obj = PC_setup.general_PC_setup('LibudaG')
+    model = PC_obj.process_to_control
+
+    rates = [
+        {'rate_ads_A': 10., 'rate_ads_B': 1., },
+        {'rate_ads_A': 2., 'rate_ads_B': 1., },
+        {'rate_ads_A': 1., 'rate_ads_B': 1., },
+        {'rate_ads_A': 0.5, 'rate_ads_B': 1., },
+        {'rate_ads_A': 0.1, 'rate_ads_B': 1., },
+        {'rate_ads_A': 1., 'rate_ads_B': 10., },
+        {'rate_ads_A': 1., 'rate_ads_B': 2., },
+        {'rate_ads_A': 1., 'rate_ads_B': 1., },
+        {'rate_ads_A': 1., 'rate_ads_B': 0.5, },
+        {'rate_ads_A': 1., 'rate_ads_B': 0.1, },
+    ]
+
+    cache = {f'rate_{suff}': model[f'rate_{suff}'] for suff in ('ads_A', 'des_A', 'ads_B', 'des_B', 'react')}
+    for i, params in enumerate(rates):
+        model.set_params(params)
+        my_env = RL2207_Environment(
+            PC_obj,
+            state_spec={'rows': 3, 'use_differences': False},
+            names_to_state=['B', 'A', 'outputC'],
+            reward_spec='each_step_base',
+            target_type='one_row',
+            episode_time=50.,
+            time_step=5.,
+            normalize_coef=1.,
+            input_dt=0.1,
+            init_callback=PC_run.estimate_rate_callback,
+        )
+        my_env = Environment.create(environment=my_env, max_episode_timesteps=6000)
+        my_env.actions()
+        agent = Agent.load(agent_path, format='numpy', environment=my_env, )
+        run_episode(my_env, agent, independent=True, deterministic=True)
+        my_env.controller.plot(f'{outfolder}/{my_env.cumm_episode_target:.2f}_try{i}.png')
+
+    model.set_params(cache)
+
+
+def agent_test_arbitrary_co_problem(agent_path, outfolder):
+    curves = [
+        policies.ConstantPolicy({'value': 0.75}),
+        policies.ConstantPolicy({'value': 0.5}),
+        policies.ConstantPolicy({'value': 0.25}),
+        policies.TwoStepPolicy({'1': 0., '2': 1., 't1': 5., 't2': 5., }),
+        policies.TwoStepPolicy({'1': 0., '2': 1., 't1': 10., 't2': 10., }),
+        policies.TwoStepPolicy({'1': 0.1, '2': 0.6, 't1': 5., 't2': 5., }),
+        policies.TwoStepPolicy({'1': 0.1, '2': 0.6, 't1': 10., 't2': 10., }),
+        policies.TwoStepPolicy({'1': 0.6, '2': 1., 't1': 5., 't2': 5., }),
+        policies.TwoStepPolicy({'1': 0.6, '2': 1., 't1': 10., 't2': 10., }),
+
+        # special, test only curves
+        # TRIANGLE
+        policies.TrianglePolicy({'1': 0., '2': 1., 't1': 5., 't2': 5., }),
+        policies.TrianglePolicy({'1': 0., '2': 1., 't1': 10., 't2': 10., }),
+        policies.TrianglePolicy({'1': 0.2, '2': 0.8, 't1': 5., 't2': 5., }),
+        policies.TrianglePolicy({'1': 0.2, '2': 0.8, 't1': 10., 't2': 10., }),
+
+        # SAW
+        policies.TrianglePolicy({'1': 1., '2': 0., 't1': 0., 't2': 10., }),
+        policies.TrianglePolicy({'1': 0., '2': 1., 't1': 0., 't2': 10., }),
+        policies.TrianglePolicy({'1': 1., '2': 0., 't1': 0., 't2': 5., }),
+        policies.TrianglePolicy({'1': 0., '2': 1., 't1': 0., 't2': 5., }),
+
+        # SIN
+        policies.SinPolicy({'A': 0.5, 'T': 5., 'alpha': 0., 'bias': 0.5, }),
+        policies.SinPolicy({'A': 0.5, 'T': 10., 'alpha': 0., 'bias': 0.5, }),
+        policies.SinPolicy({'A': 0.3, 'T': 5., 'alpha': 0., 'bias': 0.7, }),
+        policies.SinPolicy({'A': 0.3, 'T': 10., 'alpha': 0., 'bias': 0.7, }),
+        policies.SinPolicy({'A': 0.3, 'T': 5., 'alpha': 0., 'bias': 0.3, }),
+        policies.SinPolicy({'A': 0.3, 'T': 10., 'alpha': 0., 'bias': 0.3, }),
+    ]
+
+    for co_curve in curves:
+        co_curve.update_policy({'t_init': -0.2})
+
+    PC_obj = PC_setup.general_PC_setup('LibudaG')
+    PC_obj.process_to_control.set_params({'C_A_inhibit_B': 1., 'C_B_inhibit_A': 1.,
+                                          'thetaA_init': 0., 'thetaB_init': 0.,
+                                          'thetaA_max': 0.5, 'thetaB_max': 0.5,
+                                          'rate_ads_A': 0.14895, 'rate_ads_B': 0.06594 * 4})
+    vary_o2_co_is_arbitrary = {'type': 'continuous',
+                               'transform_action': lambda x: x,
+                               'shape': 1,
+                               'info': 'control O2, CO(t) is random'}
+    my_env = RL2207_Environment(
+        PC_obj,
+        state_spec={'rows': 1, 'use_differences': False},
+        names_to_state=['B', 'A', 'outputC'],
+        action_spec=vary_o2_co_is_arbitrary,
+        reward_spec='each_step_base',
+        target_type='one_row',
+        episode_time=30.,
+        time_step=1.,
+        normalize_coef=1.,
+        input_dt=0.1,
+    )
+    my_env = Environment.create(environment=my_env, max_episode_timesteps=6000)
+    agent = Agent.load(agent_path, format='numpy', environment=my_env)
+    my_env.actions()
+    examine_agent_vs_different_curves(my_env, agent, curves, outfolder=outfolder,
+                                      deterministic=True)
 
 
 def main():
@@ -292,71 +446,14 @@ def main():
     # # test_run(my_env, rl_agent, 'temp/for_english/LD_test_run', 5, deterministic=True)
     # print(rl_agent.get_architecture())
 
-    # EXAMINE agent against curves
-    import predefined_policies as policies
+    # agent_test_both_control_problem('ARTICLE/best_stationary_agent/agent', 'ARTICLE/best_stationary_agent/agent_test')
+    # agent_test_both_control_unseen_rates('run_RL_out/agent_test/best_stationary_agent/agent_rows1',
+    #                                      'run_RL_out/agent_test/best_stationary_agent/agent_test_unseen_rates')
+    agent_test_both_control_unseen_rates('run_RL_out/agent_test/best_stationary_agent/agent_rows3',
+                                         'run_RL_out/agent_test/best_stationary_agent/agent_test_unseen_rates')
+    # agent_test_x_co_control_problem('ARTICLE/best_x_co_agent/agent', 'ARTICLE/best_x_co_agent/agent_test')
 
-    curves = [
-        policies.ConstantPolicy({'value': 0.75}),
-        policies.ConstantPolicy({'value': 0.5}),
-        policies.ConstantPolicy({'value': 0.25}),
-        policies.TwoStepPolicy({'1': 0., '2': 1., 't1': 5., 't2': 5., }),
-        policies.TwoStepPolicy({'1': 0., '2': 1., 't1': 10., 't2': 10., }),
-        policies.TwoStepPolicy({'1': 0.1, '2': 0.6, 't1': 5., 't2': 5., }),
-        policies.TwoStepPolicy({'1': 0.1, '2': 0.6, 't1': 10., 't2': 10., }),
-        policies.TwoStepPolicy({'1': 0.6, '2': 1., 't1': 5., 't2': 5., }),
-        policies.TwoStepPolicy({'1': 0.6, '2': 1., 't1': 10., 't2': 10., }),
-
-        # special, test only curves
-        # TRIANGLE
-        policies.TrianglePolicy({'1': 0., '2': 1., 't1': 5., 't2': 5., }),
-        policies.TrianglePolicy({'1': 0., '2': 1., 't1': 10., 't2': 10., }),
-        policies.TrianglePolicy({'1': 0.2, '2': 0.8, 't1': 5., 't2': 5., }),
-        policies.TrianglePolicy({'1': 0.2, '2': 0.8, 't1': 10., 't2': 10., }),
-
-        # SAW
-        policies.TrianglePolicy({'1': 1., '2': 0., 't1': 0., 't2': 10., }),
-        policies.TrianglePolicy({'1': 0., '2': 1., 't1': 0., 't2': 10., }),
-        policies.TrianglePolicy({'1': 1., '2': 0., 't1': 0., 't2': 5., }),
-        policies.TrianglePolicy({'1': 0., '2': 1., 't1': 0., 't2': 5., }),
-
-        # SIN
-        policies.SinPolicy({'A': 0.5, 'T': 5., 'alpha': 0., 'bias': 0.5, }),
-        policies.SinPolicy({'A': 0.5, 'T': 10., 'alpha': 0., 'bias': 0.5, }),
-        policies.SinPolicy({'A': 0.3, 'T': 5., 'alpha': 0., 'bias': 0.7, }),
-        policies.SinPolicy({'A': 0.3, 'T': 10., 'alpha': 0., 'bias': 0.7, }),
-        policies.SinPolicy({'A': 0.3, 'T': 5., 'alpha': 0., 'bias': 0.3, }),
-        policies.SinPolicy({'A': 0.3, 'T': 10., 'alpha': 0., 'bias': 0.3, }),
-    ]
-
-    for co_curve in curves:
-        co_curve.update_policy({'t_init': -0.2})
-
-    PC_obj = PC_setup.general_PC_setup('LibudaG', ('to_model_constructor', {'params': {}}))
-    PC_obj.process_to_control.set_params({'C_A_inhibit_B': 1., 'C_B_inhibit_A': 1.,
-                                          'thetaA_init': 0., 'thetaB_init': 0.,
-                                          'thetaA_max': 0.5, 'thetaB_max': 0.5,
-                                          'rate_ads_A': 0.14895, 'rate_ads_B': 0.06594 * 4})
-    vary_o2_co_is_arbitrary = {'type': 'continuous',
-                               'transform_action': lambda x: x,
-                               'shape': 1,
-                               'info': 'control O2, CO(t) is random'}
-    my_env = RL2207_Environment(
-        PC_obj,
-        state_spec={'rows': 1, 'use_differences': False},
-        names_to_state=['B', 'A', 'outputC'],
-        action_spec=vary_o2_co_is_arbitrary,
-        reward_spec='each_step_base',
-        target_type='one_row',
-        episode_time=30.,
-        time_step=1.,
-        normalize_coef=1.,
-        input_dt=0.1,
-    )
-    my_env = Environment.create(environment=my_env, max_episode_timesteps=6000)
-    agent = Agent.load('ARTICLE/bestCORTPagent/agent', format='numpy', environment=my_env)
-    my_env.actions()
-    examine_agent_vs_different_curves(my_env, agent, curves, outfolder='ARTICLE/bestCORTPagent/agent_test',
-                                      deterministic=True)
+    # agent_test_arbitrary_co_problem('ARTICLE/bestCORTPagent/agent', 'ARTICLE/bestCORTPagent/agent_test')
 
     pass
 

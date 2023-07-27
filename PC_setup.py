@@ -192,14 +192,22 @@ DEFAULT_PLOT_SPECS = {
              'ylim': [-5.e-2, 1. + 5.e-2],
              'save_csv': True,
          }},
-        # target
-        {'names': ('reaction rate', ), 'groups': ('target', ), 'styles': None,
-         'to_fname': '_target',
+        # output
+        {'names': ('outputC', ), 'groups': ('output', ), 'styles': None,
+         'to_fname': '_output',
          'to_plot_to_f': {
              'xlabel': 'Time, s', 'ylabel': 'reaction rate',
              'ylim': [-5.e-3, None],
              'save_csv': True,
                      }},
+        # target
+        # {'names': ('reaction rate', ), 'groups': ('target', ), 'styles': None,
+        #  'to_fname': '_target',
+        #  'to_plot_to_f': {
+        #      'xlabel': 'Time, s', 'ylabel': 'reaction rate',
+        #      'ylim': [-5.e-3, None],
+        #      'save_csv': True,
+        #              }},
     ]
 }
 

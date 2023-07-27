@@ -162,6 +162,7 @@ def plot_in_axis(*p, ax, title='', xlabel='', ylabel='',
                  plotMoreFunction=None, ploMoreTwinFunction=None, yscale=None, grid=False):
     """
     Simple plot multiple graphs to file
+    :param ax:
     :param twin_params:
     :param grid:
     :param yscale:
@@ -181,14 +182,8 @@ def plot_in_axis(*p, ax, title='', xlabel='', ylabel='',
     right_ax = None
     if twin_params is not None:
         right_ax = ax.twinx()
-        if 'ylabel' in twin_params:
-            right_ax.set_ylabel(twin_params['ylabel'])
-        if twin_params.get('ylim', None) is not None:
-            y0, y1 = twin_params['ylim']
-            if y1 is not None:
-                right_ax.set_ylim(y0, y1)
-            else:
-                right_ax.set_ylim(y0)
+    else:
+        twin_params = {}
 
     n = len(p)//3
     labels = {}
@@ -217,6 +212,7 @@ def plot_in_axis(*p, ax, title='', xlabel='', ylabel='',
     if title != '':
         title = wrap(title, 100)
         ax.set_title(title)
+
     if xlim is not None:
         ax.set_xlim(xlim[0], xlim[1])
         if ylim is None:
@@ -229,11 +225,20 @@ def plot_in_axis(*p, ax, title='', xlabel='', ylabel='',
         if ylim[1] is not None:
             ax.set_ylim(ylim[0], ylim[1])
         else:
-            ax.set_ylim(ylim[0])
+            ax.set_ylim(bottom=ylim[0])
+    if twin_params.get('ylim', None) is not None:
+        y0, y1 = twin_params['ylim']
+        if y1 is not None:
+            right_ax.set_ylim(y0, y1)
+        else:
+            right_ax.set_ylim(y0)
+
     if xlabel != '':
         ax.set_xlabel(xlabel)
     if ylabel != '':
         ax.set_ylabel(ylabel)
+    if 'ylabel' in twin_params:
+        right_ax.set_ylabel(twin_params['ylabel'])
     if plotMoreFunction is not None:
         plotMoreFunction(ax)
     if ploMoreTwinFunction is not None:
@@ -376,7 +381,8 @@ def plot_show_save_map(data, xbounds, ybounds, filepath, show: bool = False, sav
         data_to_heatmap.to_csv(f'{fname}.csv', index=False)
 
     sns.heatmap(data_to_heatmap, ax=ax, vmin=cbounds[0], vmax=cbounds[1],
-                cbar_kws={'label': kwargs.get('color_ax_label', None)})
+                cmap=kwargs.get('cmap', 'magma'),
+                cbar_kws={'label': kwargs.get('color_ax_label', None)},)
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
 

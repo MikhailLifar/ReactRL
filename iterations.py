@@ -241,11 +241,11 @@ def get_for_opt_policy_search(rate_name_out, rate_name_inner, rates_inner, map_g
         lib.plot_show_save_map(ratio_to_map, (min(rates_inner), max(rates_inner)), (min(rates_outer), max(rates_outer)),
                                filepath=f'{foldapth}/ratio_map.png', save_data=False,
                                xlabel=rate_name_inner, ylabel=rate_name_out, color_ax_label='ratio',
-                               cbounds=[0.3, 1.1])
+                               cbounds=[0.3, 1.1], cmap='plasma')
         lib.plot_show_save_map(max_ret_to_map, (min(rates_inner), max(rates_inner)), (min(rates_outer), max(rates_outer)),
                                filepath=f'{foldapth}/max_return_map.png', save_data=False,
                                xlabel=rate_name_inner, ylabel=rate_name_out, color_ax_label='max return',
-                               cbounds=[-1., None])
+                               cbounds=[-0.01, None], cmap='plasma')
 
     return {'iteration_function': _iteration, 'summarize_function': _summarize, 'separate_folds': False}
 

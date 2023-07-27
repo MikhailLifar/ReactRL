@@ -16,38 +16,40 @@ from lib import plot_to_file
 import PC_setup
 
 
-# def try_policy(PC_obj: ProcessController, time_seq: np.ndarray, policy_funcs, path: str) -> float:
-#     def create_f_consider_bounds(func, ind_in_model):
-#
-#         def f(t):
-#             res = func(t)
-#             lower_bound = PC_obj.process_to_control.limits['input'][ind_in_model][0]
-#             upper_bound = PC_obj.process_to_control.limits['input'][ind_in_model][1]
-#             res[res < lower_bound] = lower_bound
-#             res[res > upper_bound] = upper_bound
-#             return res
-#
-#         return f
-#
-#     new_policy_funcs = [create_f_consider_bounds(f, i) for i, f in enumerate(policy_funcs)]
-#
-#     controlled_to_pass = np.array([func(time_seq) for func in new_policy_funcs])
-#     controlled_to_pass = controlled_to_pass.transpose()
-#
-#     PC_obj.reset()
-#     for i, dt in enumerate(time_seq):
-#         PC_obj.set_controlled(controlled_to_pass[i])
-#         PC_obj.time_forward(dt)
-#     R = PC_obj.integrate_along_history(target_mode=True, time_segment=[0., np.sum(time_seq)])
-#
-#     def ax_func(ax):
-#         ax.set_title(f'integral: {R:.4g}')
-#
-#     PC_obj.plot(path,
-#                 plot_more_function=ax_func, plot_mode='separately',
-#                 time_segment=[0., np.sum(time_seq)])
-#
-#     return R
+def estimate_max_rate_libuda_like(PC: ProcessController, state1=(1, 0), state2=(0, 1), turn_time=100.,
+                                  return_col=0, plotpath=None):
+    input_bounds = [
+        PC.process_to_control.get_bounds('min', kind='input', out='array'),
+        PC.process_to_control.get_bounds('max', kind='input', out='array')
+    ]
+
+    inputs1 = input_bounds[0] + np.array(state1) * (input_bounds[1] - input_bounds[0])
+    inputs2 = input_bounds[0] + np.array(state2) * (input_bounds[1] - input_bounds[0])
+
+    PC.reset()
+    PC.set_controlled(inputs1)
+    PC.time_forward(turn_time)
+    PC.set_controlled(inputs2)
+    PC.time_forward(turn_time)
+    PC.set_controlled(inputs1)
+    PC.time_forward(turn_time)
+
+    _, out = PC.get_process_output()
+
+    if plotpath is not None:
+        PC.plot(plotpath)
+
+    return np.max(out[:, return_col])
+
+
+def get_estimate_rate_callback(**kwargs):
+
+    def callback(env):
+        top_rate_estim = estimate_max_rate_libuda_like(env.controller, **kwargs)
+        env.normalize_coef = 2. / top_rate_estim
+        env.model.assign_and_eval_values(reaction_rate_top=1.3 * top_rate_estim)
+
+    return callback
 
 
 def run_constant_policies_bunch(PC: ProcessController,
@@ -710,16 +712,29 @@ def main():
 
     # transition_speed_test()
 
-    # SBP_constant_ratio
+    # # SBP_constant_ratio
+    # PC_obj = PC_setup.general_PC_setup('LibudaG')
+    # PC_obj.process_to_control.set_params({'C_A_inhibit_B': 1., 'C_B_inhibit_A': 1.,
+    #                                       'thetaA_init': 0., 'thetaB_init': 0.,
+    #                                       'thetaA_max': 0.5, 'thetaB_max': 0.5,
+    #                                       # 'rate_ads_A': 1., 'rate_react': 1.,
+    #                                       # 'rate_des_A': 0.05, 'rate_ads_B': 0.05, 'rate_des_B': 0.05,
+    #                                       })
+    # # PC_obj.process_to_control.set_params({f'rate_{suff}': 1. for suff in ('ads_A', 'des_A', 'ads_B', 'des_B', 'react')})
+    # SBP_constant_ratio_and_max_rate(PC_obj, np.array([1., 0.]), np.array([0., 1.]), np.array([2., 200.]), resolutions=[4, 4, 4], DEBUG=True)
+
+    # estimate max rate
     PC_obj = PC_setup.general_PC_setup('LibudaG')
-    PC_obj.process_to_control.set_params({'C_A_inhibit_B': 1., 'C_B_inhibit_A': 1.,
-                                          'thetaA_init': 0., 'thetaB_init': 0.,
-                                          'thetaA_max': 0.5, 'thetaB_max': 0.5,
-                                          # 'rate_ads_A': 1., 'rate_react': 1.,
-                                          # 'rate_des_A': 0.05, 'rate_ads_B': 0.05, 'rate_des_B': 0.05,
-                                          })
-    # PC_obj.process_to_control.set_params({f'rate_{suff}': 1. for suff in ('ads_A', 'des_A', 'ads_B', 'des_B', 'react')})
-    SBP_constant_ratio_and_max_rate(PC_obj, np.array([1., 0.]), np.array([0., 1.]), np.array([2., 200.]), resolutions=[4, 4, 4], DEBUG=True)
+    # model = PC_obj.process_to_control
+    # model.set_params({'C_A_inhibit_B': 1., 'C_B_inhibit_A': 1.,
+    #                   'thetaA_init': 0., 'thetaB_init': 0.,
+    #                   'thetaA_max': 0.5, 'thetaB_max': 0.5,
+    #                   'rate_ads_A': 1., 'rate_react': 1.,
+    #                   'rate_des_A': 0.05, 'rate_ads_B': 0.05, 'rate_des_B': 0.05,
+    #                   })
+    # model.set_params({f'rate_{suff}': 10. * model[f'rate_{suff}'] for suff in ('ads_A', 'des_A', 'ads_B', 'des_B', 'react')})
+    max_rate = estimate_max_rate_libuda_like(PC_obj, plotpath='./PC_plots/LibudaG/DEBUG/max_rate_estim.png')
+    print(max_rate)
 
     # ZGB Lopez Albano
     # size = [256, 256]

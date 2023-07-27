@@ -14,7 +14,7 @@ from tensorforce.environments import Environment
 
 from ProcessController import ProcessController
 
-from lib import simpleSmooth
+import lib
 
 from rewrad_variants import *
 
@@ -29,8 +29,8 @@ class RL2207_Environment(Environment):
                  reward_spec: [str, callable] = None,
                  episode_time=500, time_step=10,
                  reset_mode='bottom_state',
-                 preprocess: dict = None,
                  log_scaling_dict=None,
+                 init_callback=None,
                  **kwargs):
 
         """
@@ -73,18 +73,6 @@ class RL2207_Environment(Environment):
 
         self.input_names = self.controller.controlled_names
 
-        # define how we start an episode
-        if preprocess is None:
-            preprocess = {}
-        self.preprocess = copy.deepcopy(preprocess)
-        if preprocess.get('in_values', None) is None:
-            self.preprocess['in_values'] = {name: self.model.bottom['input'][name] for name in self.input_names}
-        if preprocess.get('time', None) is None:
-            self.preprocess['time'] = self.time_step
-        if preprocess.get('dt', None) is None:
-            self.preprocess['dt'] = self.controller.analyser_dt
-        self.controller.const_preprocess(**self.preprocess)
-
         self.cumm_episode_target = 0.
         self.best_episode_target = -np.inf
 
@@ -117,7 +105,7 @@ class RL2207_Environment(Environment):
 
         self.state_memory = np.zeros((2 * self.state_spec['rows'] + 2, one_state_row_len))
 
-        self.reset_mode = reset_mode
+        self.reset_mode = copy.deepcopy(reset_mode)
 
         # self.reward_type = 'each_step'
         self.reward_name = ''
@@ -133,7 +121,6 @@ class RL2207_Environment(Environment):
             self.normalize_coef = kwargs['normalize_coef']
         else:
             self.normalize_coef = normalize_coef(self)
-        assert self.normalize_coef >= 0
 
         # Log preprocessing parameters.
         # Log preprocessing may be used when output values of the process
@@ -157,6 +144,9 @@ class RL2207_Environment(Environment):
         # self.save_policy = False
         # self.policy_df = pd.DataFrame(columns=[*self.in_gas_names, 'time_steps'])
 
+        if init_callback is not None:
+            init_callback(self)
+
         # info
         self.env_info = f'model_type: {self.model_type}\n' \
                         f'names to state: {self.names_to_state}\n' \
@@ -168,11 +158,7 @@ class RL2207_Environment(Environment):
                         f'episode_time: {self.episode_time}\n' \
                         f'time_step: {self.time_step}\n'
 
-        self.names_to_plot = None
-        if 'names_to_plot' in kwargs:
-            self.names_to_plot = kwargs['names_to_plot']
-        else:
-            self.names_to_plot = ['target']
+        assert self.normalize_coef >= 0
 
     def assign_reward(self, reward_spec: [str, callable]):
         if reward_spec is None:
@@ -329,27 +315,35 @@ class RL2207_Environment(Environment):
 
         self.controller.reset()
 
-        if self.reset_mode == 'predefined':
-            current_measurement = self.controller.const_preprocess(**self.preprocess)
-        elif self.reset_mode == 'random':
-            in_values = np.random.random(len(self.input_names)) * \
-                        (self.model.get_bounds('max', 'input') - self.model.get_bounds('min', 'input')) + \
-                        self.model.get_bounds('min', 'input')  # unnorm
-            to_process_flows = {self.input_names[i]: in_values[i] for i in range(len(self.input_names))}
-            current_measurement = self.controller.const_preprocess(to_process_flows,
-                                                                   time=np.random.randint(1, 11) * self.episode_time,
-                                                                   dt=self.controller.analyser_dt,
-                                                                   )
+        if isinstance(self.reset_mode, dict):
+            if self.reset_mode['kind'] == 'predefined':
+                preprocess = {k: v for k, v in self.reset_mode if k != 'kind'}
+                current_measurement = self.controller.const_preprocess(**preprocess)
+            elif self.reset_mode['kind'] == 'random':
+
+                bottom = self.reset_mode.get('bottom', None)
+                if bottom is None:
+                    bottom = self.model.get_bounds('min', 'input')
+
+                top = self.reset_mode.get('top', None)
+                if top is None:
+                    top = self.model.get_bounds('max', 'input')
+
+                in_values = np.random.random(len(self.input_names)) * (top - bottom) + bottom
+
+                to_process_flows = {self.input_names[i]: in_values[i] for i in range(len(self.input_names))}
+                current_measurement = self.controller.const_preprocess(to_process_flows,
+                                                                       time=self.reset_mode.get('time', np.random.randint(1, 4) * self.time_step),
+                                                                       dt=self.reset_mode.get('dt', self.controller.analyser_dt),
+                                                                       )
+            else:
+                raise ValueError
         elif self.reset_mode == 'bottom_state':
-            current_measurement = np.zeros(len(self.names_to_state))
-            i0 = 0
-            for i, name in enumerate(self.model.names['output']):
-                if name in self.names_to_state:
-                    current_measurement[i0] = self.model.limits['output'][i][0]
-                    i0 += 1
+            current_measurement = self.model.get_bounds('min', 'output')
         else:
             raise ValueError
 
+        current_measurement = current_measurement[[name in self.names_to_state for name in self.model.names['output']]]
         self.state_memory[0] = np.array([*current_measurement])
         self.state_memory[1:] = self.state_memory[0]
         rows_num = self.state_spec['rows']
@@ -372,30 +366,28 @@ class RL2207_Environment(Environment):
             fout.write('-----Model-----\n')
             fout.write(self.model.get_model_info() + '\n')
 
-    def summary_graphs(self, folder=''):
-        fig, ax = plt.subplots(1, figsize=(15, 8))
+    def plot_learning_curve(self, folder):
         normalized_integral_arr = self.stored_integral_data['integral'][:self.count_episodes] / self.episode_time
         x_vector = np.arange(normalized_integral_arr.size)
-        self.stored_integral_data['smooth_50_step'] = simpleSmooth(x_vector[::20],
-                                                                   normalized_integral_arr[::20],
-                                                                   50, kernel='Gauss',
-                                                                   expandParams={'stableReflMeanCount': 10})
-        self.stored_integral_data['smooth_1000_step'] = simpleSmooth(x_vector[::20],
-                                                                     normalized_integral_arr[::20],
-                                                                     1000, kernel='Gauss',
-                                                                     expandParams={'stableReflMeanCount': 10})
+        self.stored_integral_data['smooth_50_step'] = lib.simpleSmooth(x_vector[::20],
+                                                                       normalized_integral_arr[::20],
+                                                                       50, kernel='Gauss',
+                                                                       expandParams={'stableReflMeanCount': 10})
+        self.stored_integral_data['smooth_1000_step'] = lib.simpleSmooth(x_vector[::20],
+                                                                         normalized_integral_arr[::20],
+                                                                         1000, kernel='Gauss',
+                                                                         expandParams={'stableReflMeanCount': 10})
 
         df = pd.DataFrame(columns=('n_integral', 'smooth_50_step', 'smooth_1000_step'), index=x_vector)
         df['n_integral'] = normalized_integral_arr
         df.loc[:self.stored_integral_data['smooth_50_step'].size - 1, 'smooth_50_step'] = self.stored_integral_data['smooth_50_step']
         df.loc[:self.stored_integral_data['smooth_1000_step'].size - 1, 'smooth_1000_step'] = self.stored_integral_data['smooth_1000_step']
-        df.to_csv(f'{folder}integral_by_step.csv', sep=';', index=False)
-        ax.plot(x_vector, normalized_integral_arr, label='integral/episode_time')
-        ax.plot(x_vector[::20], self.stored_integral_data['smooth_50_step'], label='short_smooth')
-        ax.plot(x_vector[::20], self.stored_integral_data['smooth_1000_step'], label='long_smooth')
-        ax.legend()
-        plt.savefig(f'{folder}output_by_step.png')
-        plt.close(fig)
+        df.to_csv(f'{folder}/integral_by_step.csv', sep=';', index=False)
+
+        lib.plot_to_file(x_vector, normalized_integral_arr, 'integral/episode_time',
+                         x_vector[::20], self.stored_integral_data['smooth_50_step'], 'short_smooth',
+                         x_vector[::20], self.stored_integral_data['smooth_1000_step'], 'long_smooth',
+                         ylim=[0., None], fileName=f'{folder}/output_by_step.png', save_csv=False)
 
 
 def normalize_coef(env_obj):

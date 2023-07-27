@@ -8,6 +8,8 @@ import PC_setup
 
 from multiple_jobs_functions import run_jobs_list
 
+from PC_run import get_to_optimize_SBP_const_ratio
+
 
 def main_cluster_function():
     # # EXPERIMENTAL DATA READING
@@ -110,7 +112,22 @@ def main_cluster_function():
 
     # PC_obj = PC_setup.default_PC_setup('Pd_monte_coffee')
     # PC_obj = PC_setup.default_PC_setup('Ziff')
-    PC_obj = PC_setup.general_PC_setup('Ziff', ('to_PC_constructor', 'analyser_dt', 5.e+1))
+    # PC_obj = PC_setup.general_PC_setup('Ziff', ('to_PC_constructor', 'analyser_dt', 5.e+1))
+    # PC_obj = PC_setup.general_PC_setup('Libuda2001', ('to_PC_constructor',
+    #                                                   {'target_func_to_maximize': None,
+    #                                                    'long_term_target_to_maximize': get_target_func('CO2_plus_CO_conv_I', eps=1.e-5, alpha=1.),
+    #                                                    'target_func_name': 'CO2_plus_CO_conv_I', }))
+    PC_obj = PC_setup.general_PC_setup('LibudaG',
+                                       ('to_PC_constructor', {'long_term_target_to_maximize': get_target_func('CO2_plus_CO_conv_I', eps=1.e-3, alpha=1., beta=1/0.02),
+                                                              'target_func_to_maximize': None
+                                                              }),
+                                       )
+
+    # PC_obj.process_to_control.set_params({'C_A_inhibit_B': 1., 'C_B_inhibit_A': 1.,
+    #                                       'thetaA_init': 0., 'thetaB_init': 0.,
+    #                                       'thetaA_max': 0.5, 'thetaB_max': 0.5, })
+    # PC_obj.process_to_control.set_Libuda()
+    PC_obj.process_to_control.set_params({'thetaA_init': 0., 'thetaB_init': 0., })
 
     # gauss_target_1 = get_target_func('Gauss(CO_sub_default)xConv_I', default=1e-4, sigma=1e-5 * episode_time, eps=1e-4)
     # gauss_target_2 = get_target_func('Gauss(CO_sub_default)xConvSum_I', default=1e-4, sigma=1e-5 * episode_time, eps=1e-4)
@@ -175,21 +192,16 @@ def main_cluster_function():
     #
     #     return complicated_ext
 
-    # def get_switch_between_pure_ext(max_dict, first_turned):
-    #     second_turned = ('O2' if first_turned == 'CO' else 'CO')
+    # def get_switch_between_2_ext(regimes_dict, steps):
     #
     #     def switch_between_pure(d):
-    #         d[f'{first_turned}_1'] = max_dict[first_turned]
-    #         d[f'{second_turned}_1'] = 0.
-    #
-    #         d[f'{second_turned}_2'] = max_dict[second_turned]
-    #         d[f'{first_turned}_2'] = 0.
-    #
     #         if ('total' in d) and ('first_part' in d):
     #             d['t1'], d['t2'] = d['first_part'] * d['total'], (1 - d['first_part']) * d['total']
     #
-    #         d['O2_t1'] = d['CO_t1'] = d['t1']
-    #         d['O2_t2'] = d['CO_t2'] = d['t2']
+    #         for i in range(1, steps + 1):
+    #             d[f'O2_t{i}'] = d[f'CO_t{i}'] = d[f't{i}']
+    #
+    #         d.update(regimes_dict)
     #
     #     return switch_between_pure
 
@@ -206,15 +218,15 @@ def main_cluster_function():
     #
     #     return switch_between_pure
 
-    def get_SBPOverlap_ext_Ziff():
-        # for 4 step policy
-        # output x1..x4, x_t1..x_t4
-
-        def complicated_ext(d):
-            d['x_1'], d['x_3'] = 0., 1.
-            d['x_2'] = d['x_4'] = 0.5
-
-        return complicated_ext
+    # def get_SBPOverlap_ext_Ziff():
+    #     # for 4 step policy
+    #     # output x1..x4, x_t1..x_t4
+    #
+    #     def complicated_ext(d):
+    #         d['x_1'], d['x_3'] = 0., 1.
+    #         d['x_2'] = d['x_4'] = 0.5
+    #
+    #     return complicated_ext
 
     # def get_O2_CO_from_x_co_ext(pressures_sum):
     #     def new_ext(d):
@@ -224,6 +236,91 @@ def main_cluster_function():
     #     return new_ext
 
     # OPTIMIZER CALL
+
+    # LibudaG
+    # rates optimization
+    def log10_space_constrains(d):
+        for k, v in d.items():
+            d[k] = pow(10, v)
+
+    run_jobs_list(**get_for_repeated_opt_iterations(get_to_optimize_SBP_const_ratio(
+                                                        PC_obj,
+                                                        np.array([1., 0.]), np.array([0., 1.]), np.array([2., 200.]),
+                                                        resolutions=[3, 3, 3]),
+                                                    optimize_bounds={f'rate_{suff}': (-2., 1.) for suff in ('ads_A', 'des_A', 'ads_B', 'des_B', 'react')},
+                                                    constrains=log10_space_constrains,
+                                                    cut_left=False, cut_right=False,
+                                                    method='Nelder-Mead', try_num=50,
+                                                    call_after_opt_params={'plot_both_best': True, 'folder': 'auto'},
+                                                    optimize_options={'maxiter': 3}),
+
+                  const_params={},
+                  PC=PC_obj,
+                  repeat=1,
+                  sort_iterations_by='fvalue',
+                  cluster_command_ops=False,
+                  python_interpreter='../RL_10_21/venv/bin/python',
+                  out_fold_path='./optimize_out/LibudaG/230726_ratio_if_conversion_alpha1',
+                  separate_folds=False,
+                  at_same_time=30,
+                  )
+
+    # vanilla x_co control
+    # def x_co_constrain(d):
+    #     d['inputB_value'] = 1 - d['x_A']
+    #     d['inputA_value'] = d['x_A']
+    #
+    # episode_time = 50
+    # run_jobs_list(**get_for_repeated_opt_iterations(func_to_optimize_policy(
+    #                                                     PC_obj,
+    #                                                     # AnyStepPolicy(cyclesteps, dict()),
+    #                                                     ConstantPolicy(),
+    #                                                     episode_time, episode_time / 1000,
+    #                                                     t_start_count_from=30.),
+    #                                                 # optimize_bounds={'inputB_value': (0., 1.), 'inputA_value': (0., 1.)},
+    #                                                 optimize_bounds={'x_A': (0., 1.)},
+    #                                                 constrains=x_co_constrain,
+    #                                                 cut_left=False, cut_right=False,
+    #                                                 method='Nelder-Mead', try_num=10,
+    #                                                 debug_params={'DEBUG': True, 'folder': 'auto'},
+    #                                                 optimize_options={'maxiter': 500}),
+    #
+    #               const_params={},
+    #               PC=PC_obj,
+    #               repeat=1,
+    #               sort_iterations_by='fvalue',
+    #               cluster_command_ops=False,
+    #               python_interpreter='../RL_10_21/venv/bin/python',
+    #               out_fold_path='./optimize_out/LibudaG/230721_libuda_x_co_opt',
+    #               separate_folds=False,
+    #               at_same_time=30,
+    #               )
+
+    # L2001
+    # CO2_plus_CO_conv_reward
+    # cyclesteps = 2
+    # episode_time = 500
+    # run_jobs_list(**get_for_repeated_opt_iterations(func_to_optimize_policy(
+    #                                                     PC_obj,
+    #                                                     AnyStepPolicy(cyclesteps, dict()),
+    #                                                     episode_time, episode_time / 1000,
+    #                                                     expand_description=get_switch_between_2_ext({'O2_1': 0., 'CO_1': 1.e-4, 'O2_2': 1.e-4, 'CO_2': 0.}, 2),),
+    #                                                 optimize_bounds={'t1': (2., 100.), 't2': (2., 100.)},
+    #                                                 cut_left=False, cut_right=False,
+    #                                                 method='Nelder-Mead', try_num=30,
+    #                                                 debug_params={'DEBUG': True, 'folder': 'auto'},
+    #                                                 optimize_options={'maxiter': 3}),
+    #
+    #               const_params={},
+    #               PC=PC_obj,
+    #               repeat=1,
+    #               sort_iterations_by='fvalue',
+    #               cluster_command_ops=False,
+    #               python_interpreter='../RL_10_21/venv/bin/python',
+    #               out_fold_path='./optimize_out/230706_L2001_CO2_plus_CO_conv_I',
+    #               separate_folds=False,
+    #               at_same_time=30,
+    #               )
 
     # SBP
 
@@ -237,36 +334,36 @@ def main_cluster_function():
 
     # Ziff
     # cyclesteps = 2
-    cyclesteps = 4
-    episode_time = 2.e+5
-    # ext = get_SBP_ext_for_Ziff(first_turned='O2')
-    ext = get_SBPOverlap_ext_Ziff()
-
-    run_jobs_list(**get_for_repeated_opt_iterations(func_to_optimize_policy(
-                                                        PC_obj,
-                                                        AnyStepPolicy(cyclesteps, dict()),
-                                                        episode_time, episode_time / 1000,
-                                                        expand_description=ext,
-                                                        to_plot={'out_names': ['CO2_count'], 'additional_plot': ['thetaCO', 'thetaO']}),
-                                                    # optimize_bounds={'t1': (1.e-8, 1.5e-8), 't2': (1.5e-7, 2.e-7)},
-                                                    # optimize_bounds={'total': (0.5e-7, 1.e-7), 'first_part': (0.6, 0.8)},  # first good PdMCoffee SBP point
-                                                    # optimize_bounds={'total': (1e+3, 3.e+3), 'first_part': (0.4, 0.6)},  # first good Ziff SBP point
-                                                    optimize_bounds={'x_t1': (800, 1200), 'x_t3': (800, 1200), 'x_t2': (0, 1200), 'x_t4': (0, 1200), },  # SBP with overlap, near good SBP point
-                                                    cut_left=False, cut_right=False,
-                                                    method='Nelder-Mead', try_num=30,
-                                                    debug_params={'DEBUG': True, 'folder': 'auto'},
-                                                    optimize_options={'maxiter': 3}),
-
-                  const_params={},
-                  PC=PC_obj,
-                  repeat=1,
-                  sort_iterations_by='fvalue',
-                  cluster_command_ops=False,
-                  python_interpreter='../RL_10_21/venv/bin/python',
-                  out_fold_path='./optimize_out/230420_Ziff_SBPOverlap_2000_0.5_good_point',
-                  separate_folds=False,
-                  at_same_time=30,
-                  )
+    # cyclesteps = 4
+    # episode_time = 2.e+5
+    # # ext = get_SBP_ext_for_Ziff(first_turned='O2')
+    # ext = get_SBPOverlap_ext_Ziff()
+    #
+    # run_jobs_list(**get_for_repeated_opt_iterations(func_to_optimize_policy(
+    #                                                     PC_obj,
+    #                                                     AnyStepPolicy(cyclesteps, dict()),
+    #                                                     episode_time, episode_time / 1000,
+    #                                                     expand_description=ext,
+    #                                                     to_plot={'out_names': ['CO2_count'], 'additional_plot': ['thetaCO', 'thetaO']}),
+    #                                                 # optimize_bounds={'t1': (1.e-8, 1.5e-8), 't2': (1.5e-7, 2.e-7)},
+    #                                                 # optimize_bounds={'total': (0.5e-7, 1.e-7), 'first_part': (0.6, 0.8)},  # first good PdMCoffee SBP point
+    #                                                 # optimize_bounds={'total': (1e+3, 3.e+3), 'first_part': (0.4, 0.6)},  # first good Ziff SBP point
+    #                                                 optimize_bounds={'x_t1': (800, 1200), 'x_t3': (800, 1200), 'x_t2': (0, 1200), 'x_t4': (0, 1200), },  # SBP with overlap, near good SBP point
+    #                                                 cut_left=False, cut_right=False,
+    #                                                 method='Nelder-Mead', try_num=30,
+    #                                                 debug_params={'DEBUG': True, 'folder': 'auto'},
+    #                                                 optimize_options={'maxiter': 3}),
+    #
+    #               const_params={},
+    #               PC=PC_obj,
+    #               repeat=1,
+    #               sort_iterations_by='fvalue',
+    #               cluster_command_ops=False,
+    #               python_interpreter='../RL_10_21/venv/bin/python',
+    #               out_fold_path='./optimize_out/230420_Ziff_SBPOverlap_2000_0.5_good_point',
+    #               separate_folds=False,
+    #               at_same_time=30,
+    #               )
 
     # Ziff
 

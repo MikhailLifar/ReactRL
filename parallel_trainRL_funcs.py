@@ -11,14 +11,6 @@ def get_for_RL_iterations():
     def RL_iteration(PC, params: dict, foldpath, it_arg):
         model_obj = PC.process_to_control
 
-        # delete parameters that cannot be passed in one iteration,
-        # byt need to be passed in other iteration
-        # discarding is performing with usage of '#exclude' - special parameter value
-        for name in ('env', 'model', 'agent'):
-            for sub_name in list(params[name].keys()):
-                if params[name][sub_name] == '#exclude':
-                    del params[name][sub_name]
-
         model_obj.reset()
         if len(params['model']):
             model_obj.assign_and_eval_values(**(params['model']),)
