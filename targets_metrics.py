@@ -11,7 +11,7 @@ def get_target_func(func_name, **kwargs):
 
     :param func_name:
     Valid names:
-         'CO2_value', 'CO2xConversion', 'CO2_sub_outs',
+         'coordinate', 'CO2xConversion', 'CO2_sub_outs',
          'CO2_value_I', 'CO2_sub_outs_I', 'CO2xConversion_I',
          'CO2xExpOuts_I', 'CO2xCOConversion_I',
     :param kwargs:
@@ -19,13 +19,14 @@ def get_target_func(func_name, **kwargs):
     """
 
     # SHORT TERM (ONE-ROW) TARGETS
-    if func_name == 'CO2_value':
+    if func_name == 'coordinate':
+        idx = kwargs.get('idx', 0)
 
-        def CO2_value(x):
+        def coordinate(x):
             # x = [CO2(k4 * thetaCO * thetaO)]
-            return x[0]
+            return x[idx]
 
-        return CO2_value
+        return coordinate
 
     elif func_name == 'CO2xConversion':
         eps = kwargs['eps']

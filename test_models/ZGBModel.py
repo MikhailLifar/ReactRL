@@ -166,3 +166,29 @@ class ZGBkModel(ZGBModel):
             ZGBModel.step(self, x)
 
 
+class ZGBTwoInputsModel(ZGBModel):
+
+    model_name = 'ZGBTwo_model'
+
+    names = {'input': ['O2', 'CO'], 'output': ['CO2_prod_rate', 'O2', 'CO', 'CO2_count']}
+    bottom = {'input': dict(), 'output': dict(), }
+    top = {'input': dict(), 'output': dict(), }
+
+    bottom['input']['O2'] = bottom['input']['CO'] = 0.
+    top['input']['O2'] = top['input']['CO'] = 1.
+
+    bottom['output']['O2'] = bottom['output']['CO'] = 0.
+    top['output']['O2'] = top['output']['CO'] = 1.
+    bottom['output']['CO2_count'] = 0
+    bottom['output']['CO2_prod_rate'], top['output']['CO2_prod_rate'] = 0., 1.
+
+    def update(self, data_slice, delta_t, save_for_plot=False):
+        O2 = data_slice[0] * self['rate_ads_O']
+        CO = data_slice[1] * self['rate_ads_CO']
+        if O2 + CO == 0.:
+            x = 0.
+        else:
+            x = CO / (O2 + CO)
+        ret = ZGBModel.update(self, np.array([x]), delta_t, save_for_plot)
+        self.model_output = np.array([ret[0], *data_slice, ret[2]])
+        return self.model_output

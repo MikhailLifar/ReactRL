@@ -244,9 +244,10 @@ def plot_in_axis(*p, ax, title='', xlabel='', ylabel='',
     if ploMoreTwinFunction is not None:
         ploMoreTwinFunction(right_ax)
 
-    ax.legend(loc=2, prop={'size': 12})
-    if right_ax is not None:
-        right_ax.legend(loc=1, prop={'size': 12})
+    if any(labels[op] and labels[op] is not None for op in labels):
+        ax.legend(loc=2, prop={'size': 12})
+        if right_ax is not None:
+            right_ax.legend(loc=1, prop={'size': 12})
 
     if grid:
         ax.grid()

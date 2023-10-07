@@ -2,7 +2,6 @@ import copy
 import itertools
 import os
 import warnings
-from time import sleep
 
 import numpy as np
 import scipy.optimize as optimize
@@ -11,7 +10,7 @@ from usable_functions import make_subdir_return_path
 from ProcessController import ProcessController, func_to_optimize_policy
 
 
-def iter_optimize(func_for_optimize, optimize_bounds, try_num=10, method=None, optimize_options=None, debug_params=None,
+def iter_optimize(func_for_optimize, optimize_bounds, try_num=10, method=None, optimize_options=None, call_after_opt_params=None,
                   out_folder='.', unique_folder=True,
                   cut_left=True, cut_right=True):
     """
@@ -25,7 +24,7 @@ def iter_optimize(func_for_optimize, optimize_bounds, try_num=10, method=None, o
     :param try_num:
     :param method: method в функции minimize (None - использовать по умолчанию)
     :param optimize_options: опции minimize
-    :param debug_params: если не None, тогда после каждой оптимизации будет вызвана func_for_optimize(min, **debug_params)
+    :param call_after_opt_params: если не None, тогда после каждой оптимизации будет вызвана func_for_optimize(min, **call_after_opt_params)
     :param out_folder:
     :return:
     """
@@ -34,10 +33,10 @@ def iter_optimize(func_for_optimize, optimize_bounds, try_num=10, method=None, o
 
     if unique_folder:
         out_folder = make_subdir_return_path(out_folder)
-    if debug_params is not None:
-        if 'folder' in debug_params:
-            if debug_params['folder'] == 'auto':
-                debug_params['folder'] = out_folder
+    if call_after_opt_params is not None:
+        if 'folder' in call_after_opt_params:
+            if call_after_opt_params['folder'] == 'auto':
+                call_after_opt_params['folder'] = out_folder
     rng = np.random.default_rng(0)
     dim = len(optimize_bounds)
     param_names = sorted(list(optimize_bounds.keys()))
@@ -80,10 +79,10 @@ def iter_optimize(func_for_optimize, optimize_bounds, try_num=10, method=None, o
             print(s)
             fout.write(s)
             fout.flush()
-            if debug_params is not None:
-                if 'ind_picture' in debug_params:
-                    debug_params['ind_picture'] = try_ind
-                func_for_optimize(convert_to_dict(res.x), **debug_params)
+            if call_after_opt_params is not None:
+                if 'ind_picture' in call_after_opt_params:
+                    call_after_opt_params['ind_picture'] = try_ind
+                func_for_optimize(convert_to_dict(res.x), **call_after_opt_params)
 
 
 def optimize_different_methods(func_for_optimize, optimize_bounds,
@@ -106,7 +105,7 @@ def optimize_different_methods(func_for_optimize, optimize_bounds,
         try:
             iter_optimize(func_for_optimize, optimize_bounds, try_num=try_num,
                           method=method_name, optimize_options=optimize_options,
-                          debug_params=copy.deepcopy(debug_params),
+                          call_after_opt_params=copy.deepcopy(debug_params),
                           out_folder=method_out_folder,
                           unique_folder=False,
                           cut_left=cut_ends[0], cut_right=cut_ends[1])
@@ -115,109 +114,6 @@ def optimize_different_methods(func_for_optimize, optimize_bounds,
             print(f'{method_name} is working incorrectly!')
         # except NotImplementedError as e:  # DEBUG statement
         #     pass
-
-
-def optimize_list_cluster(params_variants: list,
-                          names: tuple,
-                          # repeat: int = 1,
-                          policy_type,
-                          optimize_bounds: dict,
-                          out_path: str,
-                          PC_obj: ProcessController,
-                          const_params: dict = None,
-                          unique_folder=False,
-                          python_interpreter='venv/bin/python',
-                          file_to_execute_path='repos/parallel_optimize.py',
-                          on_cluster=False,
-                          at_same_time: int = 40):
-
-    assert len(names) == len(params_variants[0]), 'Error: lengths mismatch'
-
-    if unique_folder:
-        out_path = make_subdir_return_path(out_path, with_date=True, unique=True)
-
-    # get arguments from the command line
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument('iter', type=int, help='optimize conditions from conditions list')
-    args = parser.parse_args()
-
-    iter_num = len(params_variants)
-    iter_arg = args.iter
-    if iter_arg == -1:
-        assert iter_num <= at_same_time  # TODO TODO TODO
-        for i in range(iter_num):
-            # ../RL_10_21/venv/bin/python
-            if on_cluster:
-                os.system(f'run-cluster -m 3000 -n 1 "{python_interpreter} {file_to_execute_path} {i}"')
-            else:
-                os.system(f'{python_interpreter} {file_to_execute_path} {i}')  # just put here path to the script
-        if on_cluster:
-            os.system(f'run-cluster -m 2000 -n 1 "{python_interpreter} {file_to_execute_path} -2"')
-        else:
-            os.system(f'{python_interpreter} {file_to_execute_path} -2')
-    elif iter_arg == -2:
-        # wait for results of each iteration
-        # collect results together
-        # currently not needed
-        pass
-    elif iter_arg >= 0:
-        set_values = params_variants[iter_arg]
-        variable_dict = fill_dict(set_values, names)
-        if const_params is None:
-            const_params = dict()
-        for name in ('model', 'iter_optimize'):
-            if name not in const_params:
-                const_params[name] = dict()
-
-        for name in optimize_bounds:
-            if optimize_bounds[name] == 'model_lims':
-                warnings.warn('CRUTCH HERE!')
-                prefix = name[:name.find('_')]
-                dict_with_lims = None
-                if f'{prefix}_top' in variable_dict['model']:
-                    dict_with_lims = variable_dict['model']
-                elif f'{prefix}_top' in const_params:
-                    dict_with_lims = const_params['model']
-                if f'{prefix}_bottom' in dict_with_lims:
-                    optimize_bounds[name] = [dict_with_lims[f'{prefix}_bottom'], dict_with_lims[f'{prefix}_top']]
-                else:
-                    optimize_bounds[name] = [0., dict_with_lims[f'{prefix}_top']]
-
-        model_obj = PC_obj.process_to_control
-        model_obj.reset()
-        model_obj.assign_and_eval_values(**(variable_dict['model']), **(const_params['model']))
-
-        limit_names = [name for name in variable_dict['model'] if '_top' in name]
-        max_top = max([variable_dict['model'][name] for name in limit_names])
-        limit_names = [name for name in const_params['model'] if '_top' in name]
-        max_top = max([const_params['model'][name] for name in limit_names] + [max_top])
-        if max_top > 0:
-            PC_obj.set_plot_params(input_lims=[-1.e-1 * max_top, 1.1 * max_top])
-        else:
-            # PC_obj.set_plot_params(input_lims=None)
-            raise NotImplementedError
-
-        for d in [variable_dict, const_params]:
-            for attr_name in ['target_func', 'long_term_target']:
-                if attr_name in d:
-                    setattr(PC_obj, attr_name, d[attr_name])
-                    PC_obj.target_func_name = d['target_func_name']
-
-        to_func_to_optimize = dict()
-        for name in ('episode_len', 'time_step', 'to_plot', 'expand_description'):
-            if name in variable_dict:
-                to_func_to_optimize[name] = variable_dict[name]
-            elif name in const_params:
-                to_func_to_optimize[name] = const_params[name]
-            else:
-                raise RuntimeError
-
-        iter_optimize(func_to_optimize_policy(PC_obj, policy_type(dict()), **to_func_to_optimize),
-                      optimize_bounds=optimize_bounds,
-                      **(variable_dict['iter_optimize']), **(const_params['iter_optimize']),
-                      out_folder=make_subdir_return_path(out_path, name=f'_{iter_arg}', with_date=False, unique=False),
-                      unique_folder=False)
 
 
 def get_for_repeated_opt_iterations(func_for_optimize, optimize_bounds, constrains=lambda d: None,
@@ -306,7 +202,7 @@ def get_for_repeated_opt_iterations(func_for_optimize, optimize_bounds, constrai
             }
 
 
-def get_for_param_opt_iterations(policy_type, optimize_bounds):
+def get_for_param_opt_iterations(func_to_optimize, optimize_bounds):
 
     def parametric_optimization_iteration(PC, params: dict, foldpath, it_arg):
         for name in optimize_bounds:
@@ -323,15 +219,7 @@ def get_for_param_opt_iterations(policy_type, optimize_bounds):
 
         model_obj = PC.process_to_control
         model_obj.reset()
-        model_obj.assign_and_eval_values(params['model'])
-
-        limit_names = [name for name in params['model'] if '_top' in name]
-        max_top = max([params['model'][name] for name in limit_names])
-        if max_top > 0:
-            PC.set_plot_params(input_lims=[-1.e-1 * max_top, 1.1 * max_top])
-        else:
-            # PC_obj.set_plot_params(input_lims=None)
-            raise NotImplementedError
+        model_obj.assign_and_eval_values(**params['model'])
 
         for d in params:
             for attr_name in ['target_func', 'long_term_target']:
@@ -339,18 +227,14 @@ def get_for_param_opt_iterations(policy_type, optimize_bounds):
                     setattr(PC, attr_name, d[attr_name])
                     PC.target_func_name = d['target_func_name']
 
-        to_func_to_optimize = dict()
-        for name in ('episode_len', 'time_step', 'to_plot', 'expand_description'):
-            if name in params:
-                to_func_to_optimize[name] = params[name]
-            else:
-                raise RuntimeError
-
-        iter_optimize(func_to_optimize_policy(PC, policy_type(dict()), **to_func_to_optimize),
+        iter_optimize(func_to_optimize(**(params['to_func_to_optimize'])),
                       optimize_bounds=optimize_bounds,
-                      **(params['iter_optimize']),
-                      out_folder=make_subdir_return_path(foldpath, name=f'_{it_arg}', with_date=False, unique=False),
+                      **(params['to_iter_optimize']),
+                      out_folder=foldpath,
                       unique_folder=False)
-        pass
 
-    return {'iteration_function': parametric_optimization_iteration}
+        return {}
+
+    return {'iteration_function': parametric_optimization_iteration,
+            'names_groups': ('model', 'to_func_to_optimize', 'to_iter_optimize'),
+            'separate_folds': True}

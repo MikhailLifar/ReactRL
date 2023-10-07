@@ -38,8 +38,7 @@ def create_tforce_agent(environment: RL2207_Environment, agent_name, **params):
     return agent
 
 
-def run_episode(environment: RL2207_Environment, agent, independent: bool = False, deterministic: bool = False,
-                reset_callback=None):
+def run_episode(environment: RL2207_Environment, agent, deterministic: bool = False, reset_callback=None):
     # Initialize episode
     state = environment.reset()
 
@@ -48,6 +47,7 @@ def run_episode(environment: RL2207_Environment, agent, independent: bool = Fals
     
     # print(state)
     terminal = False
+    independent = deterministic
     while not terminal:
         # Run episode
         actions = agent.act(states=state, independent=independent, deterministic=deterministic)
@@ -177,6 +177,7 @@ def run(environment: RL2207_Environment, agent, out_folder='run_RL_out', n_episo
 def test_run(environment: RL2207_Environment, agent, out_folder, n_episodes=None, deterministic=False,
              reset_callback=None, test_callback=None):
     environment.describe_to_file(f'{out_folder}/info.txt')
+
     reset_mode = environment.reset_mode
     if isinstance(reset_mode, dict) and (reset_mode['kind'] == 'random'):
         environment.reset_mode = 'bottom_state'  # TODO: crutch here
@@ -185,7 +186,7 @@ def test_run(environment: RL2207_Environment, agent, out_folder, n_episodes=None
     if test_callback is not None:
         cumm_rewards = []
         while test_callback(environment, test_it):
-            cumm_rewards.append(run_episode(environment, agent, independent=True, deterministic=deterministic, reset_callback=reset_callback))
+            cumm_rewards.append(run_episode(environment, agent, deterministic=deterministic, reset_callback=reset_callback))
             environment.controller.plot(f'{out_folder}/{environment.cumm_episode_target:.2f}conversion{test_it}.png')
             test_it += 1
         cumm_rewards = np.array(cumm_rewards)
@@ -195,12 +196,65 @@ def test_run(environment: RL2207_Environment, agent, out_folder, n_episodes=None
             n_episodes = 10
         cumm_rewards = np.zeros(n_episodes)
         for i in range(n_episodes):
-            cumm_rewards[i] = run_episode(environment, agent, independent=True, deterministic=deterministic, reset_callback=reset_callback)
+            cumm_rewards[i] = run_episode(environment, agent, deterministic=deterministic, reset_callback=reset_callback)
             environment.controller.plot(f'{out_folder}/{environment.cumm_episode_target:.2f}conversion{i}.png')
 
     agent.save(directory=out_folder + '/agent', format='numpy')
 
     return {'mean_on_test': np.mean(cumm_rewards), 'max_on_test': np.max(cumm_rewards)}
+
+
+def run_agents_test(PC: ProcessController, agents_paths, env_params, model_params,
+                    **test_run_ops):
+    model = PC.process_to_control
+    if isinstance(env_params, dict):
+        env_params = [env_params] * len(agents_paths)
+    if isinstance(model_params, dict):
+        model_params = [model_params] * len(agents_paths)
+    for path, env_p, model_p in zip(agents_paths, env_params, model_params):
+        PC.reset()
+        model.assign_and_eval_values(**model_p)
+        env = Environment.create(
+            environment=RL2207_Environment(PC, **env_p),
+            max_episode_timesteps=6000)
+        env.actions()
+        agent = Agent.load(path, format='numpy', environment=env)
+        parent_fold, agent_name = os.path.split(path)
+        agent_name = agent_name[agent_name.find('_') + 1:]  # assuming agent folders are like 'agent_/id/'
+        test_fold = f'{parent_fold}/test_{agent_name}'
+        os.makedirs(test_fold, exist_ok=False)
+        test_run(env, agent, test_fold, **test_run_ops)
+
+
+def get_eval_test_agent_on_fixed_t_dependencies(t_dependencies):
+    def eval_agent(agent, env):
+        original_dependence = env.time_input_dependence
+        original_reset = env.reset_mode
+        if isinstance(original_reset, dict) and (original_reset['kind'] == 'random'):
+            env.reset_mode = 'bottom_state'
+
+        rews = np.empty(len(t_dependencies))
+        for i, dependence in enumerate(t_dependencies):
+            env.time_input_dependence = dependence
+            rews[i] = run_episode(env, agent, deterministic=True, reset_callback=None)
+            # env.controller.plot(f'./DEBUG/curve_{i}.png')  # DEBUG only !!!
+
+        env.time_input_dependence = original_dependence
+        env.reset_mode = original_reset
+        return np.mean(rews)
+
+    test_cache = []
+
+    def test_callback(env, iteration):
+        if iteration >= len(t_dependencies):
+            env.time_input_dependence = test_cache.pop()
+            return False
+        if not test_cache:
+            test_cache.append(env.time_input_dependence)
+        env.time_input_dependence = t_dependencies[iteration]
+        return True
+
+    return eval_agent, test_callback
 
 
 def examine_agent_vs_different_curves(environment, agent, curves, outfolder, **kwargs):
@@ -294,20 +348,19 @@ def agent_test_both_control_unseen_rates(agent_path, outfolder, ):
         model.set_params(params)
         my_env = RL2207_Environment(
             PC_obj,
-            state_spec={'rows': 3, 'use_differences': False},
+            state_spec={'rows': 1, 'use_differences': False},
             names_to_state=['B', 'A', 'outputC'],
             reward_spec='each_step_base',
             target_type='one_row',
             episode_time=50.,
             time_step=5.,
-            normalize_coef=1.,
             input_dt=0.1,
-            init_callback=PC_run.estimate_rate_callback,
+            init_callback=PC_run.get_estimate_rate_callback(),
         )
         my_env = Environment.create(environment=my_env, max_episode_timesteps=6000)
         my_env.actions()
         agent = Agent.load(agent_path, format='numpy', environment=my_env, )
-        run_episode(my_env, agent, independent=True, deterministic=True)
+        run_episode(my_env, agent, deterministic=True)
         my_env.controller.plot(f'{outfolder}/{my_env.cumm_episode_target:.2f}_try{i}.png')
 
     model.set_params(cache)
@@ -449,11 +502,42 @@ def main():
     # agent_test_both_control_problem('ARTICLE/best_stationary_agent/agent', 'ARTICLE/best_stationary_agent/agent_test')
     # agent_test_both_control_unseen_rates('run_RL_out/agent_test/best_stationary_agent/agent_rows1',
     #                                      'run_RL_out/agent_test/best_stationary_agent/agent_test_unseen_rates')
-    agent_test_both_control_unseen_rates('run_RL_out/agent_test/best_stationary_agent/agent_rows3',
-                                         'run_RL_out/agent_test/best_stationary_agent/agent_test_unseen_rates')
+    # agent_test_both_control_unseen_rates('run_RL_out/agent_test/best_stationary_agent/agent_rows3',
+    #                                      'run_RL_out/agent_test/best_stationary_agent/agent_test_unseen_rates')
+    # agent_test_both_control_unseen_rates('run_RL_out/agent_test/best_both_control_random_start/agent_rows1',
+    #                                      'run_RL_out/agent_test/best_both_control_random_start/test_unseen_rates_rows1')
+    # agent_test_both_control_unseen_rates('run_RL_out/agent_test/best_both_control_random_start/agent_rows3',
+    #                                      'run_RL_out/agent_test/best_both_control_random_start/test_unseen_rates_rows3')
     # agent_test_x_co_control_problem('ARTICLE/best_x_co_agent/agent', 'ARTICLE/best_x_co_agent/agent_test')
 
     # agent_test_arbitrary_co_problem('ARTICLE/bestCORTPagent/agent', 'ARTICLE/bestCORTPagent/agent_test')
+
+    run_agents_test(PC_setup.general_PC_setup('LibudaG'),
+                    agents_paths=[
+                        # 'ARTICLE/agents/diff_rates_both_control/agent_it_20',
+                        # 'ARTICLE/agents/diff_rates_both_control/agent_it_40',
+                        # 'ARTICLE/agents/diff_rates_both_control/agent_it_94',
+                        'ARTICLE/agents/diff_rates_both_control/agent_libuda',
+                    ],
+                    env_params={
+                        'episode_time': 100.,
+                        'time_step': 5.,
+                        'names_to_state': ['B', 'A', 'outputC'],
+                        'state_spec': {'rows': 1, 'use_differences': False},
+                        'reward_spec': 'each_step_base',
+                        'input_dt': 0.1,
+                        'target_type': 'one_row',
+                        'reset_mode': {'kind': 'predefined_step', 'step': np.zeros(2)},
+                        'normalize_coef': 1 / 0.03,
+                    },
+                    model_params=[
+                        # {'rate_ads_A': 0.1, 'rate_ads_B': 1.0, 'rate_des_A': 0.07162, 'rate_react': 5.98734, },
+                        # {'rate_ads_A': 10., 'rate_ads_B': 0.1, 'rate_des_A': 0.07162, 'rate_react': 5.98734, },
+                        # {'rate_ads_A': 0.14895, 'rate_ads_B': 0.06594, 'rate_des_A': 10.0, 'rate_react': 10.0, },
+                        {'rate_ads_A': 0.14895, 'rate_ads_B': 0.06594, 'rate_des_A': 0.07162, 'rate_react': 5.98734, },
+                    ],
+                    n_episodes=5, deterministic=True,
+                    )
 
     pass
 

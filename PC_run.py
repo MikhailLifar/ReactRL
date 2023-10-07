@@ -36,27 +36,34 @@ def estimate_max_rate_libuda_like(PC: ProcessController, state1=(1, 0), state2=(
 
     _, out = PC.get_process_output()
 
+    # plotpath = './DEBUG/estimate_for_LibudaG.png'  # DEBUG only!!!
     if plotpath is not None:
         PC.plot(plotpath)
 
     return np.max(out[:, return_col])
 
 
+# def estimate_max_rate_hard_way():
+#     raise NotImplementedError
+
+
 def get_estimate_rate_callback(**kwargs):
 
     def callback(env):
-        top_rate_estim = estimate_max_rate_libuda_like(env.controller, **kwargs)
+        if 'top_rate_estim' in kwargs:
+            top_rate_estim = kwargs['top_rate_estim']
+        else:
+            top_rate_estim = estimate_max_rate_libuda_like(env.controller, **kwargs)
         env.normalize_coef = 2. / top_rate_estim
-        env.model.assign_and_eval_values(reaction_rate_top=1.3 * top_rate_estim)
+        env.model.assign_and_eval_values(reaction_rate_top=1.6*top_rate_estim)
 
     return callback
 
 
 def run_constant_policies_bunch(PC: ProcessController,
-                                episode_time, resolution,
+                                episode_time, time_step,
                                 out_foldpath: str,
-                                input_limits=None, variants=None,
-                                plot_params: dict = None):
+                                input_limits=None, variants=None,):
     if input_limits is None:
         input_limits = PC.process_to_control.limits['input']
     else:
@@ -67,14 +74,13 @@ def run_constant_policies_bunch(PC: ProcessController,
     if variants is None:
         assert len(input_limits) == 2
         variants = np.array([(i * 0.1, (10 - i) * 0.1) for i in range(1, 10)])
-    assert plot_params is not None
     for v in variants:
         PC.reset()
         for i, p in enumerate(policies):
             p.update_policy({'value': v[i] * input_limits[i][1]})
-        PC.process_by_policy_objs(policies, episode_time, resolution)
+        PC.process_by_policy_objs(policies, episode_time, time_step)
         run_id = '_'.join(map(lambda pair: f'{pair[0]}:{pair[1]:.2f}', zip(PC.controlled_names, v)))
-        PC.get_and_plot(f'{out_foldpath}/{run_id}.png', plot_params)
+        PC.get_and_plot(f'{out_foldpath}/{run_id}.png')
 
 
 def test_new_k1k3_model_new_targets():
@@ -446,59 +452,31 @@ def KMC_simple_tests():
 
 
 def Ziff_model_poisoning_speed_test():
-    size = [80, 25]
-    PC_Ziff = ProcessController(ZGBModel(*size,
-                                         # log_on=True,
-                                         # O2_top=1.1e5, CO_top=1.1e5,
-                                         # CO2_rate_top=3.e5,
-                                         CO2_count_top=1.e4,
-                                         # T=373.,
-                                         ),
-                                analyser_dt=2e+2,
-                                target_func_to_maximize=get_target_func('CO2_value'),
-                                target_func_name='CO2_count',
-                                target_int_or_sum='sum',
-                                RESOLUTION=1,  # ATTENTION! Always should be 1 if we use KMC, otherwise we will get wrong results!
-                                supposed_step_count=200,  # memory controlling parameters
-                                supposed_exp_time=2e+6)
-    PC_obj = PC_Ziff
-    PC_obj.set_metrics(
-                       # ('integral CO2', CO2_integral),
-                       # ('CO2 count', CO2_count),
-                       ('CO2 count', lambda time_arr, arr: np.sum(arr[:, 0])),
-                       # ('O2 conversion', overall_O2_conversion),
-                       # ('CO conversion', overall_CO_conversion)
-    )
-
-    PC_obj.set_plot_params(input_lims=[-1e-5, None], input_ax_name='Pressure, Pa',
-                           output_lims=[-1e-2, None],
-                           additional_lims=[-1e-2, 1. + 1.e-2],
-                           # output_ax_name='CO2 formation rate, $(Pt atom * sec)^{-1}$',
-                           output_ax_name='CO x O events count')
+    # size = [80, 25]
+    # PC_obj = PC_setup.general_PC_setup('ZGB')
+    PC_obj = PC_setup.general_PC_setup('ZGBTwo')
 
     time_step = 2e+3
 
     PC_obj.reset()
-    PC_obj.set_controlled({'x': 1.})
+    # PC_obj.set_controlled({'x': 1.})
+    PC_obj.set_controlled({'O2': 0., 'CO': 1.})
     CO_cov = 0.
     while CO_cov < 0.96:
         PC_obj.time_forward(time_step)
         time_history, _ = PC_obj.get_process_output()
         CO_cov = PC_obj.additional_graph['thetaCO'][time_history.size - 1]
-    PC_obj.plot('PC_plots/Ziff_poisoning_speed_test/Ziff_CO_poisoning_speed.png',
-                **{'time_segment': [0, None], 'additional_plot': ['thetaCO', 'thetaO'],
-                   'plot_mode': 'separately', 'out_names': ['CO2_count']})
+    PC_obj.plot('PC_plots/ZGB/230918_dynamics_speed_test/ZGBTwo_CO_rich_speed_test.png')
 
     PC_obj.reset()
-    PC_obj.set_controlled({'x': 0.})
+    # PC_obj.set_controlled({'x': 0.01})
+    PC_obj.set_controlled({'O2': 0.99, 'CO': 0.01})
     O_cov = 0.
-    while O_cov < 0.9:
+    while O_cov < 0.95:
         PC_obj.time_forward(time_step)
         time_history, _ = PC_obj.get_process_output()
         O_cov = PC_obj.additional_graph['thetaO'][time_history.size - 1]
-    PC_obj.plot('PC_plots/Ziff_poisoning_speed_test/Ziff_O_poisoning_speed.png',
-                **{'time_segment': [0, None], 'additional_plot': ['thetaCO', 'thetaO'],
-                   'plot_mode': 'separately', 'out_names': ['CO2_count']})
+    PC_obj.plot('PC_plots/ZGB/230918_dynamics_speed_test/ZGBTwo_O2_rich_speed_test.png')
 
 
 def transition_speed_test():
@@ -540,6 +518,34 @@ def transition_speed_test():
     transition_test([1., 0.], [0., 1.], 10, f'{folder}/all_rates_1.png')
 
     pass
+
+
+def temperature_dependence_analysis():
+    PC_obj = PC_setup.general_PC_setup('LibudaGWithT')
+    PC_obj.process_to_control.set_params({'thetaA_init': 0., 'thetaB_init': 0., })
+    optimal_440 = {'inputB': 1., 'inputA': 0.55}
+    policies = [ConstantPolicy({'value': optimal_440['inputB']}),
+                ConstantPolicy({'value': optimal_440['inputA']}),
+                ConstantPolicy(dict())]
+    episode_time, time_step = 30., 0.1
+
+    # for T in range(400, 440, 5):
+    #     policies[-1].update_policy({'value': T})
+    #     PC_obj.reset()
+    #     PC_obj.process_by_policy_objs(policies, episode_time, time_step)
+    #     PC_obj.get_and_plot(f'./PC_plots/LibudaGWithT/230925_temperature_effect/T{T}K.png')
+    #
+    # for T in range(445, 500, 5):
+    #     policies[-1].update_policy({'value': T})
+    #     PC_obj.reset()
+    #     PC_obj.process_by_policy_objs(policies, episode_time, time_step)
+    #     PC_obj.get_and_plot(f'./PC_plots/LibudaGWithT/230925_temperature_effect/T{T}K.png')
+
+    for T in range(500, 650, 10):
+        policies[-1].update_policy({'value': T})
+        PC_obj.reset()
+        PC_obj.process_by_policy_objs(policies, episode_time, time_step)
+        PC_obj.get_and_plot(f'./PC_plots/LibudaGWithT/230925_temperature_effect/T{T}K.png')
 
 
 def SBP_constant_ratio_and_max_rate(PC: ProcessController, inputs_start, inputs_end, period_bounds, resolutions: Union[int, list] = 10,
@@ -649,6 +655,39 @@ def get_to_optimize_SBP_const_ratio(PC_obj, inputs_min, inputs_max, period_bound
     return f_to_optimize
 
 
+def reproduce_Bassett():
+    PC_obj = PC_setup.general_PC_setup('Bassett')
+
+    PC_obj.reset()
+    PC_obj.process_by_policy_objs([ConstantPolicy({'value': 0.4}), ConstantPolicy({'value': 0.1})], 50, 0.1)
+    PC_obj.get_and_plot('./PC_plots/Bassett/reproduce_paper/reproduce_paper.png')
+
+
+def low_desorp_react_try():
+    PC_obj = PC_setup.general_PC_setup('LibudaG')
+    PC_obj.process_to_control.set_params({'thetaA_init': 0., 'thetaB_init': 0.,
+                                          'rate_des_A': 0.1, 'rate_react': 0.1,
+                                          })
+
+    PC_obj.reset()
+    PC_obj.process_by_policy_objs([
+        TwoStepPolicy({'1': 1., '2': 0., 't1': 30, 't2': 30}),
+        TwoStepPolicy({'1': 0., '2': 1., 't1': 30, 't2': 30}),
+    ], episode_time=3000., policy_step=5.)
+    PC_obj.get_and_plot('./PC_plots/LibudaG/low_des_react_guessing/try.png')
+
+
+def integral_from_csv(datapath, feature_name, xlim=None):
+
+    _, df = lib.read_plottof_csv(datapath, ret_df=True)
+    X = df[f'{feature_name} x'].to_numpy()
+    Y = df[f'{feature_name} y'].to_numpy()
+    if xlim is None:
+        xlim = [X.min(), X.max()]
+    idx = (X >= xlim[0]) & (X <= xlim[1])
+    return lib.integral(X[idx], Y[idx])
+
+
 def main():
     # custom_experiment()
 
@@ -673,6 +712,25 @@ def main():
     # KMC_simple_tests()
 
     # Ziff_model_poisoning_speed_test()
+
+    # PC_obj = PC_setup.general_PC_setup('ZGBTwo', ('to_model_constructor', {'rate_ads_O': 3., 'rate_ads_CO': 1.}))
+    # run_constant_policies_bunch(PC_obj, 60_000, 2_000, 'PC_plots/ZGB/ZGBTwo_rates_work_test/O2_3_CO_1')
+
+    # temperature_dependence_analysis()
+
+    # reproduce_Bassett()
+
+    # low_desorp_react_try()
+
+    folder = './231002_sudden_discovery'
+    int_period = 120.
+    NM_int = integral_from_csv(f'{folder}/nelder_mead_sol.csv', 'outputC', xlim=[240.-int_period, 240.])
+    NM_rate = NM_int / int_period
+    RL_int = integral_from_csv(f'{folder}/rl_agent_sol.csv', 'outputC', xlim=[240.-int_period, 240.])
+    RL_rate = RL_int / int_period
+    with open(f'{folder}/rates.txt', 'w') as fwrite:
+        fwrite.write(f'Max stationary rate: {NM_rate}\n')
+        fwrite.write(f'RL achieved rate: {RL_rate}\n')
 
     # run_constant_policies_bunch(PC_setup.default_PC_setup('LibudaG'), 500, 1,
     #                             out_foldpath='PC_plots/LibudaGeneralized/DEBUG/',
@@ -724,17 +782,17 @@ def main():
     # SBP_constant_ratio_and_max_rate(PC_obj, np.array([1., 0.]), np.array([0., 1.]), np.array([2., 200.]), resolutions=[4, 4, 4], DEBUG=True)
 
     # estimate max rate
-    PC_obj = PC_setup.general_PC_setup('LibudaG')
-    # model = PC_obj.process_to_control
-    # model.set_params({'C_A_inhibit_B': 1., 'C_B_inhibit_A': 1.,
-    #                   'thetaA_init': 0., 'thetaB_init': 0.,
-    #                   'thetaA_max': 0.5, 'thetaB_max': 0.5,
-    #                   'rate_ads_A': 1., 'rate_react': 1.,
-    #                   'rate_des_A': 0.05, 'rate_ads_B': 0.05, 'rate_des_B': 0.05,
-    #                   })
-    # model.set_params({f'rate_{suff}': 10. * model[f'rate_{suff}'] for suff in ('ads_A', 'des_A', 'ads_B', 'des_B', 'react')})
-    max_rate = estimate_max_rate_libuda_like(PC_obj, plotpath='./PC_plots/LibudaG/DEBUG/max_rate_estim.png')
-    print(max_rate)
+    # PC_obj = PC_setup.general_PC_setup('LibudaG')
+    # # model = PC_obj.process_to_control
+    # # model.set_params({'C_A_inhibit_B': 1., 'C_B_inhibit_A': 1.,
+    # #                   'thetaA_init': 0., 'thetaB_init': 0.,
+    # #                   'thetaA_max': 0.5, 'thetaB_max': 0.5,
+    # #                   'rate_ads_A': 1., 'rate_react': 1.,
+    # #                   'rate_des_A': 0.05, 'rate_ads_B': 0.05, 'rate_des_B': 0.05,
+    # #                   })
+    # # model.set_params({f'rate_{suff}': 10. * model[f'rate_{suff}'] for suff in ('ads_A', 'des_A', 'ads_B', 'des_B', 'react')})
+    # max_rate = estimate_max_rate_libuda_like(PC_obj, plotpath='./PC_plots/LibudaG/DEBUG/max_rate_estim.png')
+    # print(max_rate)
 
     # ZGB Lopez Albano
     # size = [256, 256]

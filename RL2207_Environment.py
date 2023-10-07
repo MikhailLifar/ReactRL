@@ -336,6 +336,10 @@ class RL2207_Environment(Environment):
                                                                        time=self.reset_mode.get('time', np.random.randint(1, 4) * self.time_step),
                                                                        dt=self.reset_mode.get('dt', self.controller.analyser_dt),
                                                                        )
+            elif self.reset_mode['kind'] == 'predefined_step':
+                self.controller.set_controlled(self.reset_mode['step'])
+                self.controller.time_forward(self.time_step)
+                current_measurement = self.controller.get_process_output()[1][-1]
             else:
                 raise ValueError
         elif self.reset_mode == 'bottom_state':
@@ -343,7 +347,7 @@ class RL2207_Environment(Environment):
         else:
             raise ValueError
 
-        current_measurement = current_measurement[[name in self.names_to_state for name in self.model.names['output']]]
+        current_measurement = current_measurement[self.inds_to_state]
         self.state_memory[0] = np.array([*current_measurement])
         self.state_memory[1:] = self.state_memory[0]
         rows_num = self.state_spec['rows']

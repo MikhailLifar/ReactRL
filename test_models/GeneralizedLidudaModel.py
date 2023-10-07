@@ -288,12 +288,12 @@ class LibudaGWithTemperature(GeneralizedLibudaModel):
                     'rate_ads_A_0': 1.,
                     'rate_des_A_0': 1.,
                     'rate_ads_B_0': 1.,
-                    'rate_des_B_0': 0.,
+                    'rate_des_B_0': 0.,  # 0 because in the original Libuda model there is no oxygen desorption
                     'rate_react_0': 1.,
-                    'E_ads_A': 100.,  # chosen randomly, actual parameters should be find later
+                    'E_ads_A': 0.,  # 0 because there is no adsorption temperature dependence in the article
                     'E_des_A': 136.,
-                    'E_ads_B': 120.,
-                    'E_des_B': 0.,  # zero because in the original Libuda model there is no oxygen adsorption
+                    'E_ads_B': 0.,
+                    'E_des_B': 0.,
                     'E_react': 60.,
                     'C_B_inhibit_A': 0.3,
                     'C_A_inhibit_B': 1.,
