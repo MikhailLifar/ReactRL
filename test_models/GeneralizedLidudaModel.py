@@ -1,7 +1,9 @@
 import copy
+from collections.abc import Iterable
 
 import numpy as np
 from scipy.integrate import solve_ivp
+import sympy
 
 from .BaseModel import BaseModel
 
@@ -119,6 +121,8 @@ class GeneralizedLibudaModel(BaseModel):
 
         self.resample_when_reset = resample_when_reset
 
+        self.to_calc_steady_state = None
+
     def _check_params(self, params_dict):
         for name in self.params_names:
             assert name in params_dict, f'Error! Parameter {name} is not defined'
@@ -157,46 +161,6 @@ class GeneralizedLibudaModel(BaseModel):
     def update(self, data_slice, delta_t, save_for_plot=False):
 
         inputB, inputA = data_slice
-
-        # ORIGINAL
-
-        # k_1 = self['rate_ads_A']
-        # k_des1 = self['rate_des_A']
-        # k_2 = self['rate_ads_B']
-        # k_des2 = self['rate_des_B']
-        # k_3 = self['rate_react']
-
-        # def step(thetaB, thetaA, dt):
-        #     reaction_term = k_3 * thetaB * thetaA
-        #
-        #     StickA = 1 - thetaA / self['thetaA_max'] - self['C_B_inhibit_A'] * thetaB / self['thetaB_max']
-        #     # StickA = max(StickA, 0)  # optional statement. Doesn't accord Libuda2001 article
-        #     StickB = 1 - thetaB / self['thetaB_max'] - self['C_A_inhibit_B'] * thetaA / self['thetaA_max']
-        #     StickB = (StickB * StickB) if StickB > 0. else 0.
-        #
-        #     thetaB_new = thetaB + (2 * k_2 * inputB * StickB - 2 * k_des2 * thetaB * thetaB - reaction_term) * dt
-        #     thetaA_new = thetaA + (k_1 * inputA * StickA - k_des1 * thetaA - reaction_term) * dt
-        #
-        #     return thetaB_new, thetaA_new
-
-        # def do_steps(thetaB, thetaA, dt, n_steps):
-        #     for i in range(n_steps):
-        #         thetaB, thetaA = step(thetaB, thetaA, dt / n_steps)
-        #     return thetaB, thetaA
-
-        # # coefs estimation print
-        # print(f'k1: {self["rate_ads_A"]}; k2: {self["rate_des_A"]}; k3: {self["rate_ads_B"]}; k4: {self["rate_react"]}')
-
-        # print(self.thetaB)
-        # print(self.thetaA)
-        # exit(0)
-
-        # theta_B_1step, theta_A_1step = do_steps(self.thetaB, self.thetaA, delta_t, 1)
-        # theta_B_2step, theta_A_2step = do_steps(self.thetaB, self.thetaA, delta_t, 2)
-        # error = max(abs(theta_A_1step - theta_A_2step), abs(theta_B_1step - theta_B_2step))
-
-        # self.thetaB = theta_B_2step
-        # self.thetaA = theta_A_2step
 
         ks = np.array([self.params['rate_ads_A'], self['rate_des_A'],
                        self.params['rate_ads_B'], self['rate_des_B'],
@@ -242,6 +206,91 @@ class GeneralizedLibudaModel(BaseModel):
         return {'k1': self['rate_ads_A'], 'k1_des': self['rate_des_A'],
                 'k2': self['rate_ads_B'], 'k2_des': self['rate_des_B'],
                 'k3': self['rate_react']}
+
+    @staticmethod
+    def sym_part_calc_steady_state():
+        pA, pB = sympy.symbols('pA, pB')
+        thetaB, thetaA = sympy.symbols('thetaB, thetaA')
+        thB_max, thA_max, c_b_a, c_a_b = sympy.symbols('thB_max, thA_max, c_b_a, c_a_b')
+        r_a_ads, r_a_des, r_b_ads, r_b_des, r_react = sympy.symbols('r_a_ads, r_a_des, r_b_ads, r_b_des, r_react')
+
+        StickA = 1 - thetaA / thA_max - c_b_a * thetaB / thB_max
+        StickB = (1 - c_a_b * thetaA / thA_max - thetaB / thB_max)
+        StickB = StickB * StickB
+        react_term = r_react * thetaA * thetaB
+
+        eq1 = r_a_ads * pA * StickA - r_a_des * thetaA - react_term
+        eq2 = r_b_ads * pB * StickB - r_b_des * thetaB - react_term
+
+        thA_through_thB = sympy.solve(eq1, thetaA)[0]
+        eq2 = sympy.simplify(eq2.subs(thetaA, thA_through_thB) * (thB_max*(pA*r_a_ads + r_a_des*thA_max + r_react*thA_max*thetaB) ** 2))
+        poly = sympy.Poly(eq2, thetaB)
+        return poly, thA_through_thB
+
+    def steady_state_sol(self, pB, pA):
+        if self.to_calc_steady_state is None:
+            self.to_calc_steady_state = self.sym_part_calc_steady_state()
+
+        poly, thA_through_thB = self.to_calc_steady_state
+        to_subs = {'thB_max': self['thetaB_max'], 'thA_max': self['thetaA_max'],
+                   'c_b_a': self['C_B_inhibit_A'], 'c_a_b': self['C_A_inhibit_B'],
+                   'r_a_ads': self['rate_ads_A'], 'r_a_des': self['rate_des_A'],
+                   'r_b_ads': self['rate_ads_B'], 'r_b_des': self['rate_des_B'],
+                   'r_react': self['rate_react'],
+                   }
+        thetaB = sympy.symbols('thetaB')
+        this_poly = poly.subs(to_subs)
+        thA_through_thB = thA_through_thB.subs(to_subs)
+
+        if not isinstance(pB, Iterable):
+            pB, pA = [pB], [pA]
+        res = np.full(len(pB), np.nan)
+
+        for i, pb, pa in zip(range(len(res)), pB, pA):
+            poly_it = sympy.Poly(this_poly.subs({'pB': pb, 'pA': pa}), thetaB)
+            thA_through_thB_it = thA_through_thB.subs({'pB': pb, 'pA': pa})
+            all_coeffs = np.array(poly_it.all_coeffs(), dtype='float')
+            if not np.any(all_coeffs):
+                # solution may be undefined if there is no desorption
+                res[i] = float(thA_through_thB_it.subs('thetaB', 0.))
+            else:
+                roots_debug = np.roots(all_coeffs)
+                roots = [r for r in np.roots(all_coeffs) if (r > -1.e-10) and (r < self['thetaB_max'] + 1.e-10)]
+                if len(roots) == 2:
+                    # two complex roots with tiny Im part case
+                    roots = [float((roots[0] + roots[1]) / 2)]
+                # assert len(roots) == 1  # release
+
+                # DEBUG
+                if len(roots) < 1:
+                    print('Something went wrong!')
+                if len(roots) > 1:
+                    print('Matters are even worse!!!')
+
+                thetaB_sol = min(max(roots[0], 0.), self['thetaB_max'])
+                thetaA_sol = float(thA_through_thB_it.subs('thetaB', thetaB_sol))
+                res[i] = self['rate_react'] * thetaB_sol * thetaA_sol
+
+        return res
+
+    def reverse_steady_state_problem(self, thetaB, thetaA):
+        if not isinstance(thetaB, Iterable):
+            thetaB = np.full((1, 1), thetaB, dtype='float')
+            thetaA = np.full((1, 1), thetaA, dtype='float')
+
+        precision = 1.e-10
+        assert np.all(-precision <= thetaB) and np.all(thetaB <= self['thetaB_max'] + precision)
+        assert np.all(-precision <= thetaA) and np.all(thetaA <= self['thetaA_max'] + precision)
+
+        StickA = 1 - thetaA / self['thetaA_max'] - self['C_B_inhibit_A'] * thetaB / self['thetaB_max']
+        StickB = (1 - self['C_A_inhibit_B'] * thetaA / self['thetaA_max'] - thetaB / self['thetaB_max'])
+        StickB = StickB * StickB * (StickB > 0)
+        react_term = self['rate_react'] * thetaA * thetaB
+
+        pB = (2 * self['rate_des_B'] * thetaB * thetaB + react_term) / (2 * StickB * self['rate_ads_B'])
+        pA = (self['rate_des_A'] * thetaA + react_term) / (StickA * self['rate_ads_A'])
+
+        return pB, pA
 
     @staticmethod
     def co_flow_part_to_pressure_part(x_co):

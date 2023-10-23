@@ -247,8 +247,7 @@ def Libuda2001_CO_cutoff_policy(PC_obj: ProcessController, program, dest_dir='./
                                 p_total=1e-4,
                                 transform_x_co_on=None,
                                 transform_x_co_off=None,
-                                output_name_to_plot='CO2',
-                                add_names=('thetaO', 'thetaCO')):
+                                plot=True, ret_idxs=None):
 
     # default transforms (as in Libuda article)
     def p_co(x_co):
@@ -269,51 +268,40 @@ def Libuda2001_CO_cutoff_policy(PC_obj: ProcessController, program, dest_dir='./
     def _one_co_on(x_co):
         # CO_p = p_total * x_co  # simple formula
         PC_obj.set_controlled(transform_x_co_on(x_co))
-        PC_obj.time_forward(150)
+        PC_obj.time_forward(100)
         PC_obj.set_controlled(transform_x_co_off(x_co))
-        PC_obj.time_forward(50)
-
-    def plot_one_co_on(x_co):
-        PC_obj.reset()
-        _one_co_on(x_co)
-        PC_obj.get_and_plot(f'{dest_dir}/x_co_{x_co:.2f}.png',
-                            plot_params={'time_segment': [0, 200], 'additional_plot': list(add_names),
-                                         'plot_mode': 'separately', 'out_names': [output_name_to_plot]})
+        PC_obj.time_forward(75)
 
     def run_full_cutoff_series():
-        PC_obj.reset()
         x_co = 0.05
         while x_co < 0.96:
             _one_co_on(x_co)
             x_co += 0.05
-        PC_obj.get_and_plot(f'{dest_dir}/full_series.png',
-                            plot_params={'time_segment': [0, None], 'additional_plot': list(add_names),
-                                         'plot_mode': 'separately', 'out_names': [output_name_to_plot]})
 
+    if ret_idxs is not None:
+        assert len(program) == 1, 'Can return data only for a one step program'
+
+    ret = None
     for arg in program:
+        PC_obj.reset()
+        fname = None
         if isinstance(arg, tuple):
-            PC_obj.reset()
             for v in arg:
                 _one_co_on(v)
-            PC_obj.get_and_plot(f'{dest_dir}/series.png',
-                                plot_params={'time_segment': [0, None], 'additional_plot': list(add_names),
-                                         'plot_mode': 'separately', 'out_names': [output_name_to_plot]})
+            fname = 'series.png'
         elif isinstance(arg, float):
-            plot_one_co_on(arg)
+            _one_co_on(arg)
+            fname = f'x_co_{arg:.2f}.png'
         elif isinstance(arg, str) and (arg == 'full'):
             run_full_cutoff_series()
+            fname = 'full_series.png'
+        output = PC_obj.get_process_output()
+        if ret_idxs is not None:
+            ret = output[0], output[1][:, ret_idxs]
+        if plot:
+            PC_obj.plot(f'{dest_dir}/{fname}')
 
-    # plot_one_co_on(0.75)
-    # plot_one_co_on(0.5)
-    # plot_one_co_on(0.25)
-    # run_full_cutoff_series()
-
-
-def Libuda2001_original_simulation():
-    PC_obj = ProcessController(LibudaModel(init_cond={'thetaCO': 0., 'thetaO': 0.25}, Ts=440.),
-                               target_func_to_maximize=get_target_func('CO2_value'))
-    # PC_obj.set_plot_params(output_lims=[-1.e-3, 0.05], output_ax_name='CO2 formation rate')
-    Libuda2001_CO_cutoff_policy(PC_obj, ['full'])
+    return ret
 
 
 def Pt_exp(path: str):
@@ -688,6 +676,101 @@ def integral_from_csv(datapath, feature_name, xlim=None):
     return lib.integral(X[idx], Y[idx])
 
 
+def steady_state_map_data(PC_obj: ProcessController, p1_lim, p2_lim, grid_resolution,
+                          savepath):
+    # TODO not very general
+    model = PC_obj.process_to_control
+    p1 = np.linspace(*p1_lim, grid_resolution)
+    p2 = np.linspace(*p2_lim, grid_resolution)
+    p1, p2 = np.meshgrid(p1, p2)
+    steady_state = model.steady_state_sol(p1.ravel(), p2.ravel())
+    steady_state = steady_state.reshape(grid_resolution, grid_resolution)
+    np.save(savepath, steady_state)
+    return steady_state
+
+
+def covs_reverse_map_data(PC_obj: ProcessController, covsB_lim, covsA_lim, grid_resolution, savepath):
+    model = PC_obj.process_to_control
+    covsB = np.linspace(*covsB_lim, grid_resolution)
+    covsA = np.linspace(*covsA_lim, grid_resolution)
+    covsB, covsA = np.meshgrid(covsB, covsA)
+    pB, pA = model.reverse_steady_state_problem(covsB.ravel(), covsA.ravel())
+    pB = pB.reshape(grid_resolution, grid_resolution)
+    pA = pA.reshape(grid_resolution, grid_resolution)
+    filename, ext = os.path.splitext(savepath)
+    np.save(f'{filename}_pB{ext}', pB)
+    np.save(f'{filename}_pA{ext}', pA)
+    return pB
+
+
+def check_L2001_coincidence(PC_obj, check_folder='./check', plot=True, rate_idx=None, verbose=True):
+    original_data_path = './check/L2001_graph_data.csv'
+    get_co_part = GeneralizedLibudaModel.co_flow_part_to_pressure_part
+    if rate_idx is not None:
+        rate_idx = [rate_idx]
+    gen_data = Libuda2001_CO_cutoff_policy(PC_obj,
+                                        ['full'],
+                                        check_folder,
+                                        transform_x_co_on=lambda x: {
+                                                                     # 'O2': (1. - get_co_part(x)) * 1.e-4, 'CO': get_co_part(x) * 1.e-4,
+                                                                     'inputB': 1. - get_co_part(x), 'inputA': get_co_part(x),
+                                                                     # 'T': 440.
+                                                                     # 'T': 440.
+                                                                     },
+                                        transform_x_co_off=lambda x: {
+                                                                      # 'O2': (1. - get_co_part(x)) * 1.e-4, 'CO': 0.,
+                                                                      'inputB': 1. - get_co_part(x), 'inputA': 0.,
+                                                                      # 'inputB': 1., 'inputA': 0.,
+                                                                      # 'inputB': 1., 'inputA': 0.,
+                                                                      # 'T': 440.
+                                                                      # 'T': 440.
+                                                                      },
+                                        plot=plot,
+                                        ret_idxs=rate_idx,
+                                        )
+
+    if gen_data is None:
+        assert plot
+        _, df = lib.read_plottof_csv(f'{check_folder}/full_series_all_data.csv', ret_df=True)
+        sim_t = df['outputC x'].to_numpy()
+        sim_rate = df['outputC y'].to_numpy()
+        # sim_t = df['CO2 x'].to_numpy()
+        # sim_rate = df['CO2 y'].to_numpy()
+    else:
+        sim_t, sim_rate = gen_data[0], np.squeeze(gen_data[1])
+
+    original_data = pd.read_csv(original_data_path, index_col=None)
+    mape_data = np.zeros((original_data.shape[0], 2))
+    mape_data[:, 0] = original_data['rate']
+    for i, t in enumerate(original_data['t']):
+        idx = np.argmin(np.abs(sim_t - t))
+        mape_data[i, 1] = sim_rate[idx]
+    mape = np.mean(np.abs((mape_data[:, 0] - mape_data[:, 1]) / mape_data[:, 0])) * 100.
+
+    if verbose:
+        res_str = f'MAPE wrt Libuda data {mape}'
+        with open(f'{check_folder}/check.txt', 'w') as fwrite:
+            fwrite.write(res_str)
+        print(res_str)
+
+    return mape
+
+
+def get_to_fit_L2001_by_LG():
+    PC_obj = PC_setup.general_PC_setup('LibudaG')
+    model = PC_obj.process_to_control
+
+    def f_to_opt(rates, mode='silent'):
+        model.set_params(rates)
+        args = {'plot': False, 'rate_idx': 0, 'verbose': False}
+        if mode != 'silent':
+            args.update({'plot': True, 'verbose': True})
+        mape = check_L2001_coincidence(PC_obj, check_folder='./check/fit', **args)
+        return mape
+
+    return f_to_opt
+
+
 def main():
     # custom_experiment()
 
@@ -722,15 +805,27 @@ def main():
 
     # low_desorp_react_try()
 
-    folder = './231002_sudden_discovery'
-    int_period = 120.
-    NM_int = integral_from_csv(f'{folder}/nelder_mead_sol.csv', 'outputC', xlim=[240.-int_period, 240.])
-    NM_rate = NM_int / int_period
-    RL_int = integral_from_csv(f'{folder}/rl_agent_sol.csv', 'outputC', xlim=[240.-int_period, 240.])
-    RL_rate = RL_int / int_period
-    with open(f'{folder}/rates.txt', 'w') as fwrite:
-        fwrite.write(f'Max stationary rate: {NM_rate}\n')
-        fwrite.write(f'RL achieved rate: {RL_rate}\n')
+    # # sudden discovery, rates measurement
+    # folder = './231002_sudden_discovery'
+    # int_period = 120.
+    # NM_int = integral_from_csv(f'{folder}/nelder_mead_sol.csv', 'outputC', xlim=[240.-int_period, 240.])
+    # NM_rate = NM_int / int_period
+    # RL_int = integral_from_csv(f'{folder}/rl_agent_sol.csv', 'outputC', xlim=[240.-int_period, 240.])
+    # RL_rate = RL_int / int_period
+    # with open(f'{folder}/rates.txt', 'w') as fwrite:
+    #     fwrite.write(f'Max stationary rate: {NM_rate}\n')
+    #     fwrite.write(f'RL achieved rate: {RL_rate}\n')
+
+    # PC_obj = PC_setup.general_PC_setup('LibudaG')
+    # PC_obj.process_to_control.set_params({'thetaA_init': 0., 'thetaB_init': 0.,
+    #                                       'rate_des_A': 0.1, 'rate_react': 0.1,
+    #                                       })
+    # steady_state_map_data(PC_setup.general_PC_setup('LibudaG'),
+    #                       [0., 1.], [0., 1.], 100,
+    #                       savepath='./PC_plots/LibudaG/analytic_steady_state.npy')
+    # covs_reverse_map_data(PC_obj,
+    #                       [0., 0.25], [0., 0.5], 100,
+    #                       savepath='./PC_plots/LibudaG/press_from_covs.npy')
 
     # run_constant_policies_bunch(PC_setup.default_PC_setup('LibudaG'), 500, 1,
     #                             out_foldpath='PC_plots/LibudaGeneralized/DEBUG/',
@@ -738,35 +833,36 @@ def main():
     #                                          'plot_mode': 'separately', 'out_names': ['outputC']})
 
     # PC_obj = PC_setup.general_PC_setup('Libuda2001', ('to_PC_constructor', {'analyser_dt': 0.1}))
-    # # PC_obj = PC_setup.general_PC_setup('LibudaG', ('to_model_constructor', {'params': {}}))
-    # # PC_obj.process_to_control.set_params({'C_B_inhibit_A': 1.,
-    # #                                       'thetaA_init': 0., 'thetaB_init': 0.,
-    # #                                       'thetaA_max': 0.5, 'thetaB_max': 0.5, })
-    # # PC_obj = PC_setup.general_PC_setup('LibudaGWithT', ('to_model_constructor', {'T': 440., 'params': {}}))
-    # # PC_obj = PC_setup.general_PC_setup('LibudaGWithTEs', ('to_model_constructor', {'T': 440., 'params': {}}))
-    # # get_co_part = PC_obj.process_to_control.co_flow_part_to_pressure_part
+    PC_obj = PC_setup.general_PC_setup('LibudaG', ('to_model_constructor', {'params': {}}))
+    # PC_obj.process_to_control.set_params({'C_B_inhibit_A': 1.,
+    #                                       'thetaA_init': 0., 'thetaB_init': 0.,
+    #                                       'thetaA_max': 0.5, 'thetaB_max': 0.5, })
+    # PC_obj = PC_setup.general_PC_setup('LibudaGWithT', ('to_model_constructor', {'T': 440., 'params': {}}))
+    # PC_obj = PC_setup.general_PC_setup('LibudaGWithTEs', ('to_model_constructor', {'T': 440., 'params': {}}))
+    # get_co_part = PC_obj.process_to_control.co_flow_part_to_pressure_part
     # get_co_part = GeneralizedLibudaModel.co_flow_part_to_pressure_part
     # Libuda2001_CO_cutoff_policy(PC_obj,
     #                             ['full'],
-    #                             'PC_plots/Libuda/DEBUG/Libuda_regime',
+    #                             'PC_plots/LibudaG/DEBUG/Libuda_regime',
     #                             transform_x_co_on=lambda x: {
-    #                                                          'O2': (1. - get_co_part(x)) * 1.e-4, 'CO': get_co_part(x) * 1.e-4,
-    #                                                          # 'inputB': 1. - get_co_part(x), 'inputA': get_co_part(x),
+    #                                                          # 'O2': (1. - get_co_part(x)) * 1.e-4, 'CO': get_co_part(x) * 1.e-4,
+    #                                                          'inputB': 1. - get_co_part(x), 'inputA': get_co_part(x),
     #                                                          # 'T': 440.
     #                                                          # 'T': 440.
     #                                                          },
     #                             transform_x_co_off=lambda x: {
-    #                                                           'O2': (1. - get_co_part(x)) * 1.e-4, 'CO': 0.,
-    #                                                           # 'inputB': 1. - get_co_part(x), 'inputA': 0.,
+    #                                                           # 'O2': (1. - get_co_part(x)) * 1.e-4, 'CO': 0.,
+    #                                                           'inputB': 1. - get_co_part(x), 'inputA': 0.,
     #                                                           # 'inputB': 1., 'inputA': 0.,
     #                                                           # 'T': 440.
     #                                                           # 'T': 440.
     #                                                           },
-    #                             # output_name_to_plot='outputC',
-    #                             output_name_to_plot='CO2',
-    #                             # add_names=('thetaB', 'thetaA', 'error'),
-    #                             add_names=('thetaO', 'thetaCO')
+    #                             output_name_to_plot='outputC',
+    #                             # output_name_to_plot='CO2',
+    #                             add_names=('thetaB', 'thetaA', 'error'),
+    #                             # add_names=('thetaO', 'thetaCO')
     #                             )
+    check_L2001_coincidence(PC_obj)
 
     # transition_speed_test()
 
