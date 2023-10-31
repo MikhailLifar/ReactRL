@@ -30,10 +30,10 @@ class LibudaModel(BaseModel):
         # constants['F_O2_coef'] = (2 * 3.1415926 * 32e-26 / 6.02 * 1.38e-23 * constants['Ts']) ** (-0.5)  # current
         # (2 * 3.14 * 32e-23 / 6.02 * 1.38e-23 * constants['Ts']) ** (-0.5) others
 
-        constants['v2'] = 1e+15
+        constants['v2'] = 1e+15 * (10 ** (-0.1))  # 1.e+15, 1e+15 * (10 ** (-0.1)), 1e+15 * (10 ** (-0.6))
         constants['v4'] = 1e+8 * (10 ** (-0.1))  # 1e+7, 1e+8, !1e+8 * (10 ** (-0.1)) others
         constants['E2'] = 136  # 134, !136
-        constants['E4'] = 60  # 62, !60, 59 others
+        constants['E4'] = 59  # 62, !60, 59 others
         constants['k_B'] = 0.008314463
 
         # in exp is always met: p_CO + p_O2 == p_lim

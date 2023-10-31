@@ -1,3 +1,5 @@
+import \
+    copy
 import os
 import numpy as np
 import pandas as pd
@@ -11,10 +13,10 @@ def get_common_1d_summarize(variable_name, names_to_plot, x_tolerance=1.e-5,
     import json
     import lib
 
-    def common_summarize(foldapth):
+    def common_summarize(foldpath):
         x_arr, data = [], []
-        for fname in filter(lambda name: name.endswith('.json'), sorted(os.listdir(foldapth))):
-            with open(f'{foldapth}/{fname}', 'r') as fread:
+        for fname in filter(lambda name: name.endswith('.json'), sorted(os.listdir(foldpath))):
+            with open(f'{foldpath}/{fname}', 'r') as fread:
                 d = json.load(fread)
                 ret_d = d['return']
                 # complicated lists expansion due to possible duplicates of x values
@@ -44,7 +46,7 @@ def get_common_1d_summarize(variable_name, names_to_plot, x_tolerance=1.e-5,
             to_plot += [x_arr, data[:, i], styles[i]]
 
         lib.plot_to_file(*to_plot,
-                         fileName=f'{foldapth}/{kwargs.get("filename", "summarize.png")}',
+                         fileName=f'{foldpath}/{kwargs.get("filename", "summarize.png")}',
                          xlabel=f'{variable_name}', ylabel=kwargs.get('ylabel', '?'), title=kwargs.get('title', 'summary'),
                          ylim=kwargs.get('ylim', (0, None)),
                          twin_params={'ylabel': names_to_plot[0], 'ylim': kwargs.get('twin_ylim', (0, None))})
@@ -146,7 +148,11 @@ def get_for_common_variations(policies_dict,
         else:
             policy_step = params['policy_step']
 
+        preprocess_dict = params.get('preprocess', dict())
+
         PC.reset()
+        if len(preprocess_dict):
+            PC.const_preprocess(**preprocess_dict)
         PC.process_by_policy_objs([policies_dict[name] for name in PC.controlled_names],
                                   episode_time, policy_step)
         PC.get_and_plot(f'{foldpath}/common_variations_{name_to_variate}({params[name_to_variate]:.2f})_{it_arg}.png')

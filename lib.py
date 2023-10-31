@@ -252,10 +252,12 @@ def plot_in_axis(*p, ax, title='', xlabel='', ylabel='',
     if grid:
         ax.grid()
 
-    return ax, labels  # TODO crutch with labels return
+    return ax, right_ax, labels  # TODO crutch with labels return
 
 
-def plot_to_file(*p, fileName=None, save_csv=True, tight_layout=True, **plot_in_ax_ops):
+def plot_to_file(*p, fileName=None, save_csv=True, tight_layout=True,
+                 figsize=None,
+                 **plot_in_ax_ops):
     """
 
     :param p:
@@ -265,9 +267,9 @@ def plot_to_file(*p, fileName=None, save_csv=True, tight_layout=True, **plot_in_
     :param plot_in_ax_ops:
     :return:
     """
-    fig, ax = createfig()
+    fig, ax = createfig(figsize=figsize)
 
-    _, labels = plot_in_axis(*p, ax=ax, **plot_in_ax_ops)
+    _, _, labels = plot_in_axis(*p, ax=ax, **plot_in_ax_ops)
 
     if fileName is None:
         fileName = 'graph.png'

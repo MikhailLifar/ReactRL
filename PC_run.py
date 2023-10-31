@@ -1,7 +1,10 @@
+import \
+    lib2to3.pgen2.token
 import os
 import time
 from typing import Union
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
@@ -81,47 +84,6 @@ def run_constant_policies_bunch(PC: ProcessController,
         PC.process_by_policy_objs(policies, episode_time, time_step)
         run_id = '_'.join(map(lambda pair: f'{pair[0]}:{pair[1]:.2f}', zip(PC.controlled_names, v)))
         PC.get_and_plot(f'{out_foldpath}/{run_id}.png')
-
-
-def test_new_k1k3_model_new_targets():
-    episode_time = 500.
-    resolution = 1.
-
-    PC_obj = ProcessController(LibudaModelReturnK3K1AndPressures(init_cond={'thetaCO': 0., 'thetaO': 0., }, Ts=440),
-                               supposed_step_count=2 * round(episode_time / resolution),  # memory controlling parameters
-                               supposed_exp_time=2 * episode_time,
-                               # target_func_to_maximize=get_target_func('CO2_sub_outs', alpha=0.1),
-                               long_term_target_to_maximize=get_target_func('CO2_sub_outs_I', alpha=0.1),
-                               )
-    PC_obj.set_plot_params(output_lims=None, output_ax_name='CO2_formation_rate',
-                           input_lims=[0., 10.e-5], input_ax_name='Pressure, Pa')
-    policies = (SinPolicy({'A': 2.e-5, 'omega': 0.05 * np.pi, 'alpha': 0., 'bias': 10.e-5, }),
-                TwoStepPolicy({'1': 2.e-5, '2': 5.e-5, 't1': 30, 't2': 20, }))
-    # policies = (ConstantPolicy({'value': 9.e-5}),
-    #             ConstantPolicy({'value': 4.4e-5}))
-    PC_obj.process_by_policy_objs(policies, episode_time, resolution)
-    # R = PC_obj.integrate_along_history(target_mode=True,
-    #                                    time_segment=[0., episode_time])
-    R = PC_obj.get_long_term_target()
-    print(R)
-
-    # save to csv
-    names = ['CO2', 'O2(k3)', 'CO(k1)']
-    output = PC_obj.output_history
-    df = pd.DataFrame(columns=names)
-    for i, name in enumerate(names):
-        df[name] = output[:, i]
-    df.to_csv(f'PC_plots/test_k3k1_model/CO2_O2_CO.csv', index=False)
-
-    PC_obj.set_metrics(('CO2', CO2_integral),
-                       ('O2 conversion', overall_O2_conversion),
-                       ('CO conversion', overall_CO_conversion))
-    PC_obj.plot(f'PC_plots/test_k3k1_model/return_{R:.3f}.png',
-                plot_mode='separately',
-                time_segment=[0., episode_time],
-                additional_plot=['thetaCO', 'thetaO'],
-                out_names=['CO2', 'long_term_target'],
-                with_metrics=True)
 
 
 def custom_experiment():
@@ -232,17 +194,6 @@ def count_conversion_given_exp(csv_path, L_model: LibudaModel):
     new_df.to_csv(new_path, index=False)
 
 
-# def plot_conv(csv_path):
-#     df = pd.read_csv(csv_path)
-#
-#     plot_file_path, _ = os.path.splitext(csv_path)
-#     plot_file_path = f'{plot_file_path}.png'
-#     lib.plot_to_file(df['Time'], df['CO_conversion'],  'CO conversion',
-#                      df['Time'], df['O2_conversion'], 'O2 conversion',
-#                      title='Conversion',
-#                      ylim=None, save_csv=False, fileName=plot_file_path)
-
-
 def Libuda2001_CO_cutoff_policy(PC_obj: ProcessController, program, dest_dir='./PC_plots/Libuda_orginal',
                                 p_total=1e-4,
                                 transform_x_co_on=None,
@@ -304,34 +255,27 @@ def Libuda2001_CO_cutoff_policy(PC_obj: ProcessController, program, dest_dir='./
     return ret
 
 
-def Pt_exp(path: str):
-
-    # PC_Pt2210 = ProcessController(PtModel(init_cond={'thetaO': 0., 'thetaCO': 0.}),
-    #                               target_func_to_maximize=get_target_func('CO2_value'))
-    PC_Salomons = ProcessController(PtSalomons(init_cond={'thetaO': 0., 'thetaCO': 0., 'thetaOO': 0., }),
-                                  target_func_to_maximize=get_target_func('CO2_value'))
-
-    PC_obj = PC_Salomons
-    PC_obj.set_plot_params(input_ax_name='Pressure', input_lims=None,
-                           output_ax_name='CO2 form. rate', output_lims=None)
-
-    # first experiment
-    low_value = 10  # 4
-    high_value = 50  # 10
-    reps = 10
-    for i in range(reps):
-        PC_obj.set_controlled({'O2': low_value, 'CO': high_value})
-        PC_obj.time_forward(20)
-        PC_obj.set_controlled({'O2': high_value, 'CO': low_value})
-        PC_obj.time_forward(30)
-    R = PC_obj.integrate_along_history(target_mode=True, time_segment=[0., 50 * reps])
-
-    def ax_func(ax):
-        ax.set_title(f'integral: {R:.4g}')
-
-    PC_obj.plot(path,
-                plot_more_function=ax_func, plot_mode='separately',
-                time_segment=[0., 50 * reps], additional_plot=['thetaCO', 'thetaO'])
+# def Pt_exp(path: str):
+#
+#     # PC_Pt2210 = ProcessController(PtModel(init_cond={'thetaO': 0., 'thetaCO': 0.}),
+#     #                               target_func_to_maximize=get_target_func('CO2_value'))
+#     PC_Salomons = ProcessController(PtSalomons(init_cond={'thetaO': 0., 'thetaCO': 0., 'thetaOO': 0., }),
+#                                   target_func_to_maximize=get_target_func('CO2_value'))
+#
+#     PC_obj = PC_Salomons
+#
+#     # first experiment
+#     low_value = 10  # 4
+#     high_value = 50  # 10
+#     reps = 10
+#     for i in range(reps):
+#         PC_obj.set_controlled({'O2': low_value, 'CO': high_value})
+#         PC_obj.time_forward(20)
+#         PC_obj.set_controlled({'O2': high_value, 'CO': low_value})
+#         PC_obj.time_forward(30)
+#     R = PC_obj.integrate_along_history(target_mode=True, time_segment=[0., 50 * reps])
+#
+#     PC_obj.plot(path)
 
 
 def benchmark_runs(PC_obj: ProcessController, out_path: str, rate_or_count: str,
@@ -703,8 +647,9 @@ def covs_reverse_map_data(PC_obj: ProcessController, covsB_lim, covsA_lim, grid_
     return pB
 
 
-def check_L2001_coincidence(PC_obj, check_folder='./check', plot=True, rate_idx=None, verbose=True):
-    original_data_path = './check/L2001_graph_data.csv'
+def check_L2001_coincidence(PC_obj, check_folder='./check', plot=True, rate_idx=None, verbose=True,
+                            original_iloc=None, plot_with_check_points=False):
+    original_data_path = './check/L2001_graph_data_14.csv'
     get_co_part = GeneralizedLibudaModel.co_flow_part_to_pressure_part
     if rate_idx is not None:
         rate_idx = [rate_idx]
@@ -740,11 +685,15 @@ def check_L2001_coincidence(PC_obj, check_folder='./check', plot=True, rate_idx=
         sim_t, sim_rate = gen_data[0], np.squeeze(gen_data[1])
 
     original_data = pd.read_csv(original_data_path, index_col=None)
+    if original_iloc is not None:
+        original_data = original_data.iloc[original_iloc, :]
     mape_data = np.zeros((original_data.shape[0], 2))
     mape_data[:, 0] = original_data['rate']
+    sim_t_points = np.zeros(original_data.shape[0])  # to scatter plot
     for i, t in enumerate(original_data['t']):
         idx = np.argmin(np.abs(sim_t - t))
         mape_data[i, 1] = sim_rate[idx]
+        sim_t_points[i] = sim_t[idx]
     mape = np.mean(np.abs((mape_data[:, 0] - mape_data[:, 1]) / mape_data[:, 0])) * 100.
 
     if verbose:
@@ -752,6 +701,14 @@ def check_L2001_coincidence(PC_obj, check_folder='./check', plot=True, rate_idx=
         with open(f'{check_folder}/check.txt', 'w') as fwrite:
             fwrite.write(res_str)
         print(res_str)
+
+    if plot_with_check_points:
+        fig, ax = plt.subplots(figsize=(16 / 3 * 2, 9 / 3 * 2))
+        ax.plot(sim_t, sim_rate)
+        ax.scatter(original_data['t'], mape_data[:, 0], marker='d', color='r')
+        ax.scatter(sim_t_points, mape_data[:, 1], marker='d', color='y')
+        fig.savefig(f'{check_folder}/with_check_points.png')
+        plt.close(fig)
 
     return mape
 
@@ -769,6 +726,120 @@ def get_to_fit_L2001_by_LG():
         return mape
 
     return f_to_opt
+
+
+def sergeys_check(PC_obj: ProcessController, omega, mean_inputs):
+    assert (omega <= 100.) and (omega > 1 / 10.)
+    model = PC_obj.process_to_control
+    folder = './PC_plots/LibudaG/sergeys_check'
+
+    PC_obj.analyser_dt = 0.1 / 2 / omega
+    PC_obj.reset()
+    PC_obj.process_by_policy_objs(
+        [TwoStepPolicy({'1': 1., '2': 0., 't1': 1. / (2 * omega), 't2': 1. / (2 * omega)}),
+         TwoStepPolicy({'1': 0., '2': 1., 't1': 1. / (2 * omega), 't2': 1. / (2 * omega)})],
+        episode_time=100., policy_step=0.001
+    )
+    PC_obj.get_and_plot(f'{folder}/sergeys_check.png')
+
+    steady_state_sol = model.steady_state_sol(*mean_inputs)[0]
+
+    ops, _ = lib.read_plottof_csv(f'{folder}/sergeys_check_all_data.csv', ret_ops=True)
+    idx_tB = ops.index('thetaB')
+    idx_tA = ops.index('thetaA')
+    idx_rate = ops.index('outputC')
+    ops_cov = ops[idx_tB-2:idx_tB+1] + ops[idx_tA-2:idx_tA+1] + [ops[idx_tB-2], np.full_like(ops[idx_tB-2], steady_state_sol[1]), 'steady_state_tB'] + [ops[idx_tA-2], np.full_like(ops[idx_tA-2], steady_state_sol[2]), 'steady_state_tA']
+    ops_rate = ops[idx_rate-2:idx_rate+1] + [ops[idx_rate-2], np.full_like(ops[0], steady_state_sol[0]), 'steady_state']
+    lib.plot_to_file(*ops_cov, fileName=f'{folder}/sergeys_check_cov.png', save_csv=False)
+    lib.plot_to_file(*ops_rate, fileName=f'{folder}/sergeys_check_rate.png', save_csv=False)
+
+
+def sergeys_check_check():
+    from test_models.GeneralizedLidudaModel import get_dfdt_Libuda, solve_ivp
+    
+    folder = './PC_plots/LibudaG/sergeys_check'
+
+    ks = [0.14895,
+          0.07162,
+          0.06594,
+          0.,
+          5.98734]
+    flows = [0., 1.]
+    theta_max = [0.25, 0.5]
+    Cs = [0.3, 1.]
+    thetas = [0.25, 0.]
+    
+    # N, delta_t = 1000, 0.01
+    T, step, substeps_in_step = 100., 0.1, 10
+    N, delta_t = int(T // step), step / substeps_in_step
+    curves = np.zeros((N * substeps_in_step + 1, 2))
+    curves[0] = thetas
+    idx = 1
+    
+    for _ in range(N):
+        flows = flows[::-1]
+        for __ in range(substeps_in_step):
+            thetas = solve_ivp(get_dfdt_Libuda(flows, ks, theta_max, Cs), [0., delta_t], y0=thetas,
+                               t_eval=[0, delta_t], atol=1.e-6, rtol=1.e-4, first_step=delta_t / 3)
+            thetas = thetas.y[:, -1]
+            curves[idx] = thetas
+            idx += 1
+
+    fig, ax = plt.subplots()
+    x_arr = np.arange(substeps_in_step * N + 1) * delta_t
+    ax.plot(x_arr, np.vstack([curves[:, 0], curves[:, 1], ks[4] * curves[:, 0] * curves[:, 1]]).transpose(),
+            label=['thetaB', 'thetaA', 'rate'])
+    ax.legend()
+    fig.savefig(f'{folder}/sergeys_check_check.png')
+
+
+def steady_state_plot_anltc(PC_obj: ProcessController, start_point, end_point, num_points,
+                            foldpath, check_idxs=None, check_ep_time=None, **kwargs):
+    if not isinstance(start_point, np.ndarray):
+        start_point = np.array(start_point)
+    if not isinstance(end_point, np.ndarray):
+        end_point = np.array(end_point)
+
+    model = PC_obj.process_to_control
+    t = np.linspace(0., 1., num_points).reshape(-1, 1)
+    t = np.tile(t, (1, len(start_point)))
+    vals = start_point + (end_point - start_point) * t
+
+    results = model.steady_state_sol(vals[:, 0], vals[:, 1])
+
+    check_arr = None
+    if check_idxs is not None:
+        policies = [ConstantPolicy() for _ in start_point]
+        check_arr = np.zeros((len(check_idxs), 3))
+        for i, ch_idx in enumerate(check_idxs):
+            ch_vals = vals[ch_idx]
+            for j, p in enumerate(policies):
+                p.update_policy({'value': ch_vals[j]})
+            PC_obj.reset()
+            PC_obj.process_by_policy_objs(policies, check_ep_time, check_ep_time / 1000.)
+            _, output = PC_obj.get_and_plot(f'{foldpath}/check_{ch_idx}.png')
+            check_arr[i] = [output[-1, 0],
+                            PC_obj.additional_graph['thetaB'][output.shape[0] - 1],
+                            PC_obj.additional_graph['thetaA'][output.shape[0] - 1]
+                            ]
+
+    t = t[:, 0]
+    to_plot = [t, results[:, 0], {'label': 'rate', 'twin': True, 'c': 'purple'},
+               t, results[:, 1], 'thetaB',
+               t, results[:, 2], 'thetaA']
+
+    fig, ax = plt.subplots()
+    _, right_ax, _ = lib.plot_in_axis(*to_plot, ax=ax,
+                                      xlabel='pCO', ylabel='coverage', title='steady_state',
+                                      ylim=kwargs.get('ylim', (0, None)),
+                                      twin_params={'ylabel': 'rate', 'ylim': kwargs.get('twin_ylim', (0, None))})
+
+    # if check_idxs is not None:
+    #     right_ax.scatter(t[check_idxs], check_arr[:, 0], marker='d', color='red',
+    #                      label='numerical rates')
+
+    fig.savefig(f'{foldpath}/steady_state.png')
+    plt.close(fig)
 
 
 def main():
@@ -834,6 +905,11 @@ def main():
 
     # PC_obj = PC_setup.general_PC_setup('Libuda2001', ('to_PC_constructor', {'analyser_dt': 0.1}))
     PC_obj = PC_setup.general_PC_setup('LibudaG', ('to_model_constructor', {'params': {}}))
+    rate_react = 0.1  # (0.001, 0.01, 0.1, 1.)
+    PC_obj.process_to_control.set_params({'thetaA_init': 0., 'thetaB_init': 0.,
+                                          'rate_ads_A': 0.1, 'rate_ads_B': 0.1,
+                                          'rate_des_A': 0.1, 'rate_react': rate_react,  # 0.1
+                                          })  # low des, react rates
     # PC_obj.process_to_control.set_params({'C_B_inhibit_A': 1.,
     #                                       'thetaA_init': 0., 'thetaB_init': 0.,
     #                                       'thetaA_max': 0.5, 'thetaB_max': 0.5, })
@@ -862,7 +938,16 @@ def main():
     #                             add_names=('thetaB', 'thetaA', 'error'),
     #                             # add_names=('thetaO', 'thetaCO')
     #                             )
-    check_L2001_coincidence(PC_obj)
+    # check_L2001_coincidence(PC_obj,
+    #                         original_iloc=[i for i in range(14)],
+    #                         plot_with_check_points=True)
+    # sergeys_check(PC_obj, 10., (0.5, 0.5))
+    # sergeys_check_check()
+
+    steady_state_plot_anltc(PC_obj, [1., 0.], [0., 1.], 101,
+                            foldpath=f'./PC_plots/LibudaG/diff_react_rate/231030_r_react({rate_react:.3g})_steady_state',
+                            check_idxs=[i for i in range(0, 100, 15)], check_ep_time=2000., twin_ylim=(0., 0.15 * rate_react),
+                            )
 
     # transition_speed_test()
 

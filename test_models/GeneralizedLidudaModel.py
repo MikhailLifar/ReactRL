@@ -140,14 +140,33 @@ class GeneralizedLibudaModel(BaseModel):
 
     def set_Libuda(self):
         self.set_params(
+            # params={
+            #         'thetaA_max': 0.5, 'thetaB_max': 0.25,
+            #         'thetaA_init': 0., 'thetaB_init': 0.25,
+            #         'rate_ads_A': 0.18135,  # fitted 0.18135, 0.14895
+            #         'rate_des_A': 0.076460,  # fitted 0.076460, 0.07162
+            #         'rate_ads_B': 0.077423,  # fitted 0.077423, 0.06594
+            #         'rate_des_B': 0.,
+            #         'rate_react': 5.83692,  # fitted 5.83692, 5.98734
+            #         'C_B_inhibit_A': 0.3,
+            #         'C_A_inhibit_B': 1.,
+            #         }
             params={
                     'thetaA_max': 0.5, 'thetaB_max': 0.25,
                     'thetaA_init': 0., 'thetaB_init': 0.25,
-                    'rate_ads_A': 0.14895,
-                    'rate_des_A': 0.07162,
-                    'rate_ads_B': 0.06594,
+
+                    # 'rate_ads_A': 0.14895,
+                    # 'rate_des_A': 0.07162,
+                    # 'rate_ads_B': 0.06594,
+                    # 'rate_des_B': 0.,
+                    # 'rate_react': 5.98734,
+
+                    'rate_ads_A': 0.17582,  # fit 3, MAPE 1 % for 14 points
+                    'rate_des_A': 0.06927,
+                    'rate_ads_B': 0.074495,
                     'rate_des_B': 0.,
-                    'rate_react': 5.98734,
+                    'rate_react': 6.288,
+
                     'C_B_inhibit_A': 0.3,
                     'C_A_inhibit_B': 1.,
                     }
@@ -220,7 +239,7 @@ class GeneralizedLibudaModel(BaseModel):
         react_term = r_react * thetaA * thetaB
 
         eq1 = r_a_ads * pA * StickA - r_a_des * thetaA - react_term
-        eq2 = r_b_ads * pB * StickB - r_b_des * thetaB - react_term
+        eq2 = 2 * r_b_ads * pB * StickB - 2 * r_b_des * thetaB * thetaB - react_term
 
         thA_through_thB = sympy.solve(eq1, thetaA)[0]
         eq2 = sympy.simplify(eq2.subs(thetaA, thA_through_thB) * (thB_max*(pA*r_a_ads + r_a_des*thA_max + r_react*thA_max*thetaB) ** 2))
@@ -244,9 +263,12 @@ class GeneralizedLibudaModel(BaseModel):
 
         if not isinstance(pB, Iterable):
             pB, pA = [pB], [pA]
-        res = np.full(len(pB), np.nan)
+        res = np.full((len(pB), 3), np.nan)
+
+        tol = 1.e-5
 
         for i, pb, pa in zip(range(len(res)), pB, pA):
+            trouble_flag = False
             poly_it = sympy.Poly(this_poly.subs({'pB': pb, 'pA': pa}), thetaB)
             thA_through_thB_it = thA_through_thB.subs({'pB': pb, 'pA': pa})
             all_coeffs = np.array(poly_it.all_coeffs(), dtype='float')
@@ -255,10 +277,15 @@ class GeneralizedLibudaModel(BaseModel):
                 res[i] = float(thA_through_thB_it.subs('thetaB', 0.))
             else:
                 roots_debug = np.roots(all_coeffs)
-                roots = [r for r in np.roots(all_coeffs) if (r > -1.e-10) and (r < self['thetaB_max'] + 1.e-10)]
-                if len(roots) == 2:
-                    # two complex roots with tiny Im part case
-                    roots = [float((roots[0] + roots[1]) / 2)]
+                roots = np.roots(all_coeffs)
+                roots = roots[np.abs(roots.imag) < tol].real
+                roots = roots[(roots > -tol) & (roots < self['thetaB_max'] + tol)]
+                if len(roots) > 1:
+                    trouble_flag = np.max(np.abs(roots - roots[0])) > tol
+                    if trouble_flag:
+                        print('We are in the deep trouble')
+                    else:
+                        roots = [np.mean(roots)]
                 # assert len(roots) == 1  # release
 
                 # DEBUG
@@ -269,7 +296,13 @@ class GeneralizedLibudaModel(BaseModel):
 
                 thetaB_sol = min(max(roots[0], 0.), self['thetaB_max'])
                 thetaA_sol = float(thA_through_thB_it.subs('thetaB', thetaB_sol))
-                res[i] = self['rate_react'] * thetaB_sol * thetaA_sol
+
+                if trouble_flag:
+                    print(f'Trouble with parameters: {pb}, {pa}')
+                    print(f'thetaB alternatives', list(roots))
+                    print(f'thetaA alternatives', [float(thA_through_thB_it.subs('thetaB', r)) for r in roots])
+
+                res[i] = [self['rate_react'] * thetaB_sol * thetaA_sol, thetaB_sol, thetaA_sol]
 
         return res
 
