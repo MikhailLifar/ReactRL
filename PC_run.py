@@ -1,5 +1,3 @@
-import \
-    lib2to3.pgen2.token
 import os
 import time
 from typing import Union
@@ -409,6 +407,40 @@ def Ziff_model_poisoning_speed_test():
         time_history, _ = PC_obj.get_process_output()
         O_cov = PC_obj.additional_graph['thetaO'][time_history.size - 1]
     PC_obj.plot('PC_plots/ZGB/230918_dynamics_speed_test/ZGBTwo_O2_rich_speed_test.png')
+
+
+def ZGB_snapshots():
+    x = 0.57
+    m, n = 80, 25
+    time_unit = m * n
+    episode_time = 10 * time_unit
+    step = time_unit
+    ZGB = PC_setup.ZGBModel(m, n, CO2_count_top=step)
+
+    outpath = './PC_plots/ZGB/snapshots'
+    time_ = 0
+
+    def snapshot(model, filepath):
+        surface = model.surface
+        fig, ax = plt.subplots(figsize=(m * 16 / (m + n), n * 16 / (m + n)))
+
+        where_co = np.where(surface == 1)
+        where_o = np.where(surface == 2)
+
+        ax.scatter(*where_co, c='r', marker='o', label='CO')
+        ax.scatter(*where_o, c='b', marker='o', label='O')
+        ax.set_title(f'surface state, step {int(time_)}')
+        ax.xaxis.set_visible(False)
+        ax.yaxis.set_visible(False)
+        fig.legend(loc='outside lower center', ncol=2, fancybox=True)
+
+        fig.savefig(filepath, dpi=400, bbox_inches='tight')
+        plt.close(fig)
+
+    while time_ < episode_time:
+        ZGB.update([x], step)
+        time_ += step
+        snapshot(ZGB, f'{outpath}/step_{int(time_)}.png')
 
 
 def transition_speed_test():
@@ -866,6 +898,7 @@ def main():
     # KMC_simple_tests()
 
     # Ziff_model_poisoning_speed_test()
+    ZGB_snapshots()
 
     # PC_obj = PC_setup.general_PC_setup('ZGBTwo', ('to_model_constructor', {'rate_ads_O': 3., 'rate_ads_CO': 1.}))
     # run_constant_policies_bunch(PC_obj, 60_000, 2_000, 'PC_plots/ZGB/ZGBTwo_rates_work_test/O2_3_CO_1')
@@ -904,12 +937,12 @@ def main():
     #                                          'plot_mode': 'separately', 'out_names': ['outputC']})
 
     # PC_obj = PC_setup.general_PC_setup('Libuda2001', ('to_PC_constructor', {'analyser_dt': 0.1}))
-    PC_obj = PC_setup.general_PC_setup('LibudaG', ('to_model_constructor', {'params': {}}))
-    rate_react = 0.1  # (0.001, 0.01, 0.1, 1.)
-    PC_obj.process_to_control.set_params({'thetaA_init': 0., 'thetaB_init': 0.,
-                                          'rate_ads_A': 0.1, 'rate_ads_B': 0.1,
-                                          'rate_des_A': 0.1, 'rate_react': rate_react,  # 0.1
-                                          })  # low des, react rates
+    # PC_obj = PC_setup.general_PC_setup('LibudaG', ('to_model_constructor', {'params': {}}))
+    # rate_react = 0.1  # (0.001, 0.01, 0.1, 1.)
+    # PC_obj.process_to_control.set_params({'thetaA_init': 0., 'thetaB_init': 0.,
+    #                                       'rate_ads_A': 0.1, 'rate_ads_B': 0.1,
+    #                                       'rate_des_A': 0.1, 'rate_react': rate_react,  # 0.1
+    #                                       })  # low des, react rates
     # PC_obj.process_to_control.set_params({'C_B_inhibit_A': 1.,
     #                                       'thetaA_init': 0., 'thetaB_init': 0.,
     #                                       'thetaA_max': 0.5, 'thetaB_max': 0.5, })
@@ -944,10 +977,10 @@ def main():
     # sergeys_check(PC_obj, 10., (0.5, 0.5))
     # sergeys_check_check()
 
-    steady_state_plot_anltc(PC_obj, [1., 0.], [0., 1.], 101,
-                            foldpath=f'./PC_plots/LibudaG/diff_react_rate/231030_r_react({rate_react:.3g})_steady_state',
-                            check_idxs=[i for i in range(0, 100, 15)], check_ep_time=2000., twin_ylim=(0., 0.15 * rate_react),
-                            )
+    # steady_state_plot_anltc(PC_obj, [1., 0.], [0., 1.], 101,
+    #                         foldpath=f'./PC_plots/LibudaG/diff_react_rate/231030_r_react({rate_react:.3g})_steady_state',
+    #                         check_idxs=[i for i in range(0, 100, 15)], check_ep_time=2000., twin_ylim=(0., 0.15 * rate_react),
+    #                         )
 
     # transition_speed_test()
 

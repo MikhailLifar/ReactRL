@@ -20,16 +20,23 @@ from lib import read_plottof_csv
 from typing import List
 
 
-MAIN_FIG_SIZE = (16 / 3 * 2, 9 / 3 * 2)
+# FIG_SIZE_MAIN = (16 / 3 * 2, 9 / 3 * 2)
+FIG_SIZE_MAIN = (16, 12)
 FIG_SIZE_TALL = (9 / 3 * 2, 9 / 3 * 2)
-MAIN_PLOT_FONT_SIZE = 16
-MAIN_LABEL_SIZE = 12
-MAIN_DPI = 300
+FIG_SIZE_SMALL = (16 / 3 * 2, 9 / 3 * 2)
+# FIG_SIZE_ADJUSTED = (1.5 * FIG_SIZE_MAIN[0], 1.8 * FIG_SIZE_MAIN[1])
+MAIN_PLOT_FONT_SIZE = 14
+MAIN_LABEL_SIZE = 14  # 12, 16
+MAIN_DPI = 400
 
 matplotlib.rcParams.update(
     {'font.size': MAIN_PLOT_FONT_SIZE,
      # 'axes.labelsize': MAIN_PLOT_FONT_SIZE,
      'legend.fontsize': MAIN_LABEL_SIZE,
+     'axes.titlesize': MAIN_LABEL_SIZE,
+     'axes.labelsize': MAIN_LABEL_SIZE,
+     'xtick.labelsize': MAIN_LABEL_SIZE,
+     'ytick.labelsize': MAIN_LABEL_SIZE,
      'mathtext.default': 'regular'})
 
 PLOT_FOLDER = './ARTICLE/article_figures'
@@ -38,6 +45,10 @@ DATA_FOLDER = './ARTICLE/data'
 LABEL_A = 'CO'
 LABEL_B = '$O_2$'
 LABEL_B_VAR2 = 'O'
+
+
+def savefig(fig, filepath):
+    fig.savefig(filepath, bbox_inches='tight', dpi=MAIN_DPI)
 
 
 def color_arr_from_arr(arr, bottom_color=(0.6, 0, 0.9), top_color=(0.9, 0.9, 0.5), bottom=0., up=0.):
@@ -86,7 +97,7 @@ def plot_learning_curve(data: List[np.ndarray], outpath: str,
                                    bottom_color=(0, 0, 0),
                                    top_color=(0.85, 0.85, 0.85),
                                    bottom=0, up=1.)
-    fig, ax = plt.subplots(1, figsize=MAIN_FIG_SIZE)
+    fig, ax = plt.subplots(1, figsize=FIG_SIZE_SMALL)
     if plottype == 'scatter':
         ax.scatter(xdata,
                    ydata,
@@ -176,7 +187,7 @@ def policy_out_graphs(datapath, outpath, together=False, units='Pa'):
     base_name, ext = os.path.splitext(outpath)
 
     if together:
-        fig, axs = plt.subplots(1, 2, figsize=(MAIN_FIG_SIZE[0], MAIN_FIG_SIZE[1] * 0.7))
+        fig, axs = plt.subplots(1, 2, figsize=(FIG_SIZE_MAIN[0], FIG_SIZE_MAIN[1] * 0.7))
         # plotting policy
         plot_policy(policy_data, axs[0], units=units)
         ylabel = 'Pressure'
@@ -201,14 +212,14 @@ def policy_out_graphs(datapath, outpath, together=False, units='Pa'):
 
     else:
         # plotting policy
-        fig, ax = plt.subplots(1, figsize=MAIN_FIG_SIZE)
+        fig, ax = plt.subplots(1, figsize=FIG_SIZE_MAIN)
         plot_policy(policy_data, ax)
         fig.savefig(f'{base_name}_policy{ext}',
                     dpi=MAIN_DPI, bbox_inches='tight')
         plt.close(fig)
 
         # plotting output
-        fig, ax = plt.subplots(1, figsize=MAIN_FIG_SIZE)
+        fig, ax = plt.subplots(1, figsize=FIG_SIZE_MAIN)
         plot_output(out_data, ax)
         fig.savefig(f'{base_name}_output{ext}',
                     dpi=MAIN_DPI, bbox_inches='tight')
@@ -220,7 +231,7 @@ def plot_two_epochs(datapath1, datapath2, outpath):
     df1 = read_plottof_csv(datapath1, create_standard=False)
     df2 = read_plottof_csv(datapath2, create_standard=False)
 
-    fig, axs = plt.subplots(2, 2, figsize=MAIN_FIG_SIZE)
+    fig, axs = plt.subplots(2, 2, figsize=FIG_SIZE_MAIN)
 
     # plotting policy
     l1, l2 = plot_policy(df1, axs[0, 0], text_labels=False)
@@ -374,7 +385,7 @@ def all_lines_in_folder_same_plot(folder_path, out_path, kind: str = 'return',
     #          if ('O2_' in name) and ('CO_' in name)]
     files = os.listdir(folder_path)
     files = sorted(files)
-    fig, ax = plt.subplots(1, figsize=MAIN_FIG_SIZE)
+    fig, ax = plt.subplots(1, figsize=FIG_SIZE_MAIN)
     if kind == 'both':
         ax2 = ax.twinx()
     else:
@@ -448,16 +459,12 @@ def all_lines_in_folder_same_plot(folder_path, out_path, kind: str = 'return',
     plt.close(fig)
 
 
-def sup_fig_0(datapath, outpath, end_plot: int = None):
+def multiple_curves(datapath, outpath, end_plot: int = None):
     files = os.listdir(datapath)
     files = sorted(files)
-    fig, ax = plt.subplots(1, figsize=MAIN_FIG_SIZE)
+    fig, ax = plt.subplots(1, figsize=FIG_SIZE_MAIN)
     if end_plot is not None:
         end_plot //= 20
-    # color_arr = color_arr_from_arr(np.arange(len(files)),
-    #                                top_color=(0., 0., 0.),
-    #                                bottom_color=(0.75, 0.75, 0.75))
-    styles = ['solid', (0, (1, 1)), (0, (3, 3)), (0, (5, 1)), (0, (3, 5, 1, 5))]
     for i, f in enumerate(files):
         data_to_plot = pd.read_csv(f'{datapath}/{f}', sep=';')['smooth_1000_step'].to_numpy()
         if end_plot is None:
@@ -465,9 +472,9 @@ def sup_fig_0(datapath, outpath, end_plot: int = None):
         else:
             end_plot = min(data_to_plot.size, end_plot)
         data_to_plot = data_to_plot[:end_plot]
-        line_name = f[f.find('_', 2)+1:f.find('!')]
+        line_name = os.path.splitext(f)[0]
         x_arr = 20 * np.arange(end_plot)
-        ax.plot(x_arr, data_to_plot, c=(0., 0., 0.), linestyle=styles[i], label=line_name)
+        ax.plot(x_arr, data_to_plot, label=line_name)
     ax.set_ylim(bottom=0., top=0.031)
     ax.set(xlabel='Episode number', ylabel='Cumm. output divide on episode length')
     ax.legend(loc='lower right')
@@ -580,14 +587,6 @@ def plot_several_lines_uni(data, outpath=None, ax=None, to_styles: dict = None, 
     return ax
 
 
-def fig_learning_curve(datapath, plotname):
-    # _, df = read_plottof_csv(datapath, ret_df=True)
-    # data = [df['agent metric x'].to_numpy(), df['agent metric y'].to_numpy()]
-    df = pd.read_csv(datapath, index_col=False, sep=';')
-    data = [np.arange(df.shape[0]) + 1, df['n_integral'].to_numpy()]
-    plot_learning_curve(data, f'{PLOT_FOLDER}/{plotname}', ylim=(-1.e-2, 0.04), xlim=8000)
-
-
 def input_plot(data, ax=None, outpath=None):
     plot_several_lines_uni(data,
                            outpath=outpath,
@@ -612,31 +611,6 @@ def output_plot(data, ax=None, outpath=None):
                            # twin_params={'ylim': [0., 0.1], 'ylabel': '$CO_{2}$ formation rate'},
                            twin_params={'ylim': [0., 0.1], 'ylabel': 'Reaction rate'},
                            )
-#
-#
-# def fig_1_2():
-#     fig, axs = plt.subplots(2, 2, figsize=(12, 12))
-#
-#     # RL
-#     _, df = read_plottof_csv(f'{DATA_FOLDER}/RL_policy_fig12.csv', ret_df=True)
-#
-#     data = [df['thetaB x'], df['inputB y'], df['inputA y']]
-#
-#     input_plot(data, axs[0, 0], outpath=f'{PLOT_FOLDER}/fig12_RL_in.png')
-#
-#     data = [df['thetaB x'], df['thetaB y'], df['thetaA y'], df['reaction rate y']]
-#     output_plot(data, axs[0, 1], outpath=f'{PLOT_FOLDER}/fig12_RL_thetas.png')
-#
-#     # NM
-#     _, df = read_plottof_csv(f'{DATA_FOLDER}/NelderMead_fig12.csv', ret_df=True)
-#
-#     data = [df['thetaB x'], df['inputB y'], df['inputA y']]
-#     input_plot(data, axs[1, 0], outpath=f'{PLOT_FOLDER}/fig12_NM_in.png')
-#
-#     data = [df['thetaB x'], df['thetaB y'], df['thetaA y'], df['reaction rate y']]
-#     output_plot(data, axs[1, 1], outpath=f'{PLOT_FOLDER}/fig12_NM_thetas.png')
-#
-#     fig.savefig(f'{PLOT_FOLDER}/fig12_whole.png')
 
 
 def input_output_plot(ax_input, ax_output, df_NM, df_RL,
@@ -661,9 +635,11 @@ def input_output_plot(ax_input, ax_output, df_NM, df_RL,
                            outpath=None,
                            ax=ax_input,
                            # to_styles={1: {'label': 'inputB', 'linestyle': 'solid'}, 2: {'label': 'inputA', 'linestyle': 'solid'}},  # grey
-                           to_styles={1: {'label': f'{LABEL_B}', 'c': '#5588ff', 'linestyle': 'solid'},
-                                      2: {'label': f'{LABEL_A}', 'c': '#ffaa77', 'linestyle': 'solid'}},  # color
-                           title='model inputs',  # 'input pressures'
+                           to_styles={1: {'label': f'{LABEL_B}',  # давление $O_2$, {LABEL_B}
+                                          'c': '#5588ff', 'linestyle': 'solid'},
+                                      2: {'label': f'{LABEL_A}',  # давление CO, {LABEL_A}
+                                          'c': '#ffaa77', 'linestyle': 'solid'}},  # color
+                           title='model inputs',  # 'input pressures', 'model inputs', 'управляемые параметры'
                            xlim=[0., xtop], ylim=[0., 1.05],
                            twin_params=None,
                            )
@@ -686,11 +662,14 @@ def input_output_plot(ax_input, ax_output, df_NM, df_RL,
                            outpath=None,
                            ax=ax_output,
                            # to_styles={1: {'label': 'thetaB'}, 2: {'label': 'thetaA'}, 3: {'label': 'reaction rate'}},
-                           to_styles={1: {'label': f'theta{LABEL_B_VAR2}', 'c': '#5588ff', 'linestyle': 'solid'},
-                                      2: {'label': f'theta{LABEL_A}', 'c': '#ffaa77', 'linestyle': 'solid'},
-                                      3: {'label': 'reaction rate', 'c': '#44bb44'}},  # color
+                           to_styles={1: {'label': '$\\theta_O$',  # заселенность O, theta{LABEL_B_VAR2}
+                                          'c': '#5588ff', 'linestyle': 'solid'},
+                                      2: {'label': '$\\theta_{CO}$',  # заселенность CO, theta{LABEL_A}
+                                          'c': '#ffaa77', 'linestyle': 'solid'},
+                                      3: {'label': 'reaction rate',  # скорость образования \n$CO_2$, reaction rate
+                                          'c': '#44bb44'}},  # color
                            xlim=[0., xtop], ylim=[0., cov_top],
-                           title='model outputs',  # 'rate & thetas'
+                           title='model outputs',  # 'rate & thetas', 'model outputs', 'выходные параметры'
                            # twin_params={'ylim': [0., 0.1], 'ylabel': '$CO_{2}$ formation rate'},
                            twin_params={'ylim': [0., twin_top], 'ylabel': 'Reaction rate' if twin_label else None},
                            )
@@ -724,10 +703,40 @@ def exp2_reverse_steady_state_maps(exp_id):
                            color_ax_label='p$_{CO}$')
 
 
-def exp3_periodic_covs_plot():
-    pathB = f'{DATA_FOLDER}/exp_libuda_react_div60/press_from_covs_pB.npy'
-    pathA = f'{DATA_FOLDER}/exp_libuda_react_div60/press_from_covs_pA.npy'
-    path_dynamic = f'{DATA_FOLDER}/dynamic_sol.csv'
+def fig_2_learning_curve(datapath, plotname):
+    # _, df = read_plottof_csv(datapath, ret_df=True)
+    # data = [df['agent metric x'].to_numpy(), df['agent metric y'].to_numpy()]
+    df = pd.read_csv(datapath, index_col=False, sep=';')
+    data = [np.arange(df.shape[0]) + 1, df['n_integral'].to_numpy()]
+    plot_learning_curve(data, f'{PLOT_FOLDER}/{plotname}', ylim=(-1.e-2, 0.04), xlim=15_000)
+
+
+def fig_3_two_rate_sets():
+    data_folder = f'{DATA_FOLDER}/fig3_two_rate_sets_v1'
+    fig, axs = plt.subplots(2, 2, figsize=FIG_SIZE_MAIN)  # (1.5 * FIG_SIZE_MAIN[0], 1.8 * FIG_SIZE_MAIN[1])
+
+    list_RL = sorted(os.listdir(f'{data_folder}/RL'))
+    list_NM = sorted(os.listdir(f'{data_folder}/NM'))
+
+    for i, fname_RL, fname_NM in zip(range(len(list_RL)), list_RL, list_NM):
+        _, df_RL = read_plottof_csv(f'{data_folder}/RL/{fname_RL}', ret_df=True)
+        _, df_NM = read_plottof_csv(f'{data_folder}/NM/{fname_NM}', ret_df=True)
+        input_output_plot(axs[0, i], axs[1, i], df_NM, df_RL,  xtop=60., twin_label=(i == 1),
+                          twin_top=1.5 * np.max(df_RL['outputC y']), cov_top=0.75)
+
+    axs[0, 0].set_ylabel('Pressure')
+    axs[1, 0].set_ylabel('Coverage')
+    axs[1, 0].set_xlabel('Time, s')
+    axs[1, 1].set_xlabel('Time, s')
+
+    savefig(fig, f'{PLOT_FOLDER}/fig3_two_rate_sets_v1.png')
+
+
+def fig4_covs_axis_plot():
+    pathB = f'{DATA_FOLDER}/libuda_react_div60/press_from_covs_pB.npy'
+    pathA = f'{DATA_FOLDER}/libuda_react_div60/press_from_covs_pA.npy'
+    path_dynamic = f'{DATA_FOLDER}/dynamic_advantage_rates/dynamic_sol.csv'
+    path_stationary_NM = f'{DATA_FOLDER}/dynamic_advantage_rates/NM_sol.csv'
 
     pB, pA = np.load(pathB), np.load(pathA)
     mask = ~((pB >= 0.) & (pB <= 1.) & (pA >= 0.) & (pA <= 1.))
@@ -740,132 +749,87 @@ def exp3_periodic_covs_plot():
     thetaO = np.linspace(0., 0.25, pB.shape[0])
     thetaCO = np.linspace(0., 0.5, pB.shape[1])[idxs % pB.shape[0]]
 
-    _, df = lib.read_plottof_csv(path_dynamic, ret_df=True, )
-    df = df.loc[df['thetaB x'] >= 120., ['thetaB y', 'thetaA y']]
+    _, df = lib.read_plottof_csv(path_stationary_NM, ret_df=True, )
+    stationary_max = df.loc[df.index.max(), ['thetaB y', 'thetaA y']].to_numpy()
 
-    fig, ax = plt.subplots(figsize=FIG_SIZE_TALL)
-    ax.fill_between(thetaO, thetaCO, hatch='/', alpha=0., label='steady-state coverages')
+    _, df = lib.read_plottof_csv(path_dynamic, ret_df=True, )
+    df = df.loc[df['thetaB x'] >= 120., ['thetaB x', 'thetaB y', 'thetaA x', 'thetaA y']]
+
+    fig, [ax0, ax1] = plt.subplots(1, 2, figsize=(16, 9))
+    ax0.fill_between(thetaO, thetaCO, hatch='/', alpha=0., label='steady-state coverages')
     lib.plot_in_axis(thetaO, thetaCO, {'c': 'black', 'ls': 'dashed', 'label': None},
                      df['thetaB y'], df['thetaA y'], {'label': 'periodic regime'},
-                     ax=ax,
-                     xlabel='$\\theta_O$', ylabel='$\\theta_{CO}$', title='steady-state vs periodic coverages',
+                     ax=ax0,
+                     xlabel='$\\theta_O$', ylabel='$\\theta_{CO}$',
                      xlim=[0., 0.3], ylim=[0., 0.5])
-    fig.savefig(f'{PLOT_FOLDER}/exp3_periodic_covs.png')
+    ax0.plot(stationary_max[0], stationary_max[1], 'ro', label='steady-state maximum', markersize=8)
+    ax0.legend()
+
+    lib.plot_in_axis(df['thetaB x'], df['thetaB y'], {'label': '$\\theta_O$', 'c': 'b'},
+                     df['thetaA x'], df['thetaA y'], {'label': '$\\theta_{CO}$', 'c': 'r'},
+                     df['thetaB x'], np.full_like(df['thetaB x'], stationary_max[0]), {'c': 'b', 'ls': 'dashed'},
+                     df['thetaA x'], np.full_like(df['thetaA x'], stationary_max[1]), {'c': 'r', 'ls': 'dashed'},
+                     ax=ax1,
+                     xlabel='Time, s', ylabel='Coverages',
+                     ylim=[0., 0.5]
+                     )
+
+    savefig(fig, f'{PLOT_FOLDER}/fig4_covs_axis_plot.png')
     plt.close(fig)
 
 
-# def fig_1_2_v2():
-#     fig, axs = plt.subplots(1, 2, figsize=MAIN_FIG_SIZE)
+# def fig_4_6_sol_example(fig_number):
+#     assert fig_number in (4, 6)
+#     # fig, axs = plt.subplots(1, 2, figsize=(16 / 3 * 2 + 4, 9 / 3 * 2))
+#     fig, axs = plt.subplots(2, 1, figsize=(1.1 * FIG_SIZE_MAIN[0], 2 * FIG_SIZE_MAIN[1]))
 #
-#     _, df_NM = read_plottof_csv(f'{DATA_FOLDER}/NelderMead_fig12.csv', ret_df=True)
-#     _, df_RL = read_plottof_csv(f'{DATA_FOLDER}/fig12_RL_50s.csv', ret_df=True)
+#     _, df = read_plottof_csv(f'{DATA_FOLDER}/fig{fig_number}.csv', ret_df=True)
+#     input_output_plot(axs[0], axs[1], None, df, xtop=30., twin_label=True,
+#                       cov_top=0.5 if fig_number == 6 else 1.,
+#                       twin_top=0.1 if fig_number == 6 else 0.006)
 #
-#     input_output_plot(axs[0], axs[1], df_NM, df_RL, xtop=60.)
 #     axs[0].set_ylabel('Pressure')
 #     axs[1].set_ylabel('Coverage')
 #
-#     fig.savefig(f'{PLOT_FOLDER}/fig12_v2.png')
+#     fig.savefig(f'{PLOT_FOLDER}/fig{fig_number}.png')
 
 
-# def fig_1_3():
-#     data_folder = f'{DATA_FOLDER}/fig13'
-#     fig, axs = plt.subplots(2, 3, figsize=(2.2 * MAIN_FIG_SIZE[0], 2. * MAIN_FIG_SIZE[1]))
-#
-#     list_RL = sorted(os.listdir(f'{data_folder}/RL'))
-#     list_NM = sorted(os.listdir(f'{data_folder}/NM'))
-#
-#     for i, fname_RL, fname_NM in zip(range(len(list_RL)), list_RL, list_NM):
-#         _, df_RL = read_plottof_csv(f'{data_folder}/RL/{fname_RL}', ret_df=True)
-#         _, df_NM = read_plottof_csv(f'{data_folder}/NM/{fname_NM}', ret_df=True)
-#         input_output_plot(axs[0, i], axs[1, i], df_NM, df_RL, xtop=60., twin_label=(i == 2))
-#
-#     axs[0, 0].set_ylabel('Pressure')
-#     axs[1, 0].set_ylabel('Coverage')
-#
-#     fig.savefig(f'{PLOT_FOLDER}/fig13.png')
-
-
-def fig_3():
-    data_folder = f'{DATA_FOLDER}/fig3'
-    fig, axs = plt.subplots(2, 2, figsize=(1.5 * MAIN_FIG_SIZE[0], 1.8 * MAIN_FIG_SIZE[1]))
-
-    list_RL = sorted(os.listdir(f'{data_folder}/RL'))
-    list_NM = sorted(os.listdir(f'{data_folder}/NM'))
-
-    for i, fname_RL, fname_NM in zip(range(len(list_RL)), list_RL, list_NM):
-        _, df_RL = read_plottof_csv(f'{data_folder}/RL/{fname_RL}', ret_df=True)
-        _, df_NM = read_plottof_csv(f'{data_folder}/NM/{fname_NM}', ret_df=True)
-        input_output_plot(axs[0, i], axs[1, i], df_NM, df_RL,  xtop=60., twin_label=(i == 1),)
-
-    axs[0, 0].set_ylabel('Pressure')
-    axs[1, 0].set_ylabel('Coverage')
-    axs[1, 0].set_xlabel('Time, s')
-    axs[1, 1].set_xlabel('Time, s')
-
-    fig.savefig(f'{PLOT_FOLDER}/fig3.png')
-
-
-def fig_4_6_sol_example(fig_number):
-    assert fig_number in (4, 6)
-    # fig, axs = plt.subplots(1, 2, figsize=(16 / 3 * 2 + 4, 9 / 3 * 2))
-    fig, axs = plt.subplots(2, 1, figsize=(1.1 * MAIN_FIG_SIZE[0], 2 * MAIN_FIG_SIZE[1]))
-
-    _, df = read_plottof_csv(f'{DATA_FOLDER}/fig{fig_number}.csv', ret_df=True)
-    input_output_plot(axs[0], axs[1], None, df, xtop=30., twin_label=True,
-                      cov_top=0.5 if fig_number == 6 else 1.,
-                      twin_top=0.1 if fig_number == 6 else 0.006)
-
-    axs[0].set_ylabel('Pressure')
-    axs[1].set_ylabel('Coverage')
-
-    fig.savefig(f'{PLOT_FOLDER}/fig{fig_number}.png')
-
-
-def fig_3_2():
-    fig, axs = plt.subplots(2, 4, figsize=(24, 12))
-
-    foldpath = f'{DATA_FOLDER}/fig32'
-    for i, fname in enumerate(os.listdir(foldpath)):
-        _, df = read_plottof_csv(f'{foldpath}/{fname}', ret_df=True)
-        input_plot([df['inputB x'], df['inputB y'], df['inputA y']], ax=axs[0, i])
-        output_plot([df['thetaB x'], df['thetaB y'], df['thetaA y'], df['reaction rate y']], ax=axs[1, i],
-                    )
-
-    fig.savefig(f'{PLOT_FOLDER}/fig32_whole.png')
-
-
-def fig_5():
-    fig, axs = plt.subplots(2, 3, figsize=(27, 13))
+def fig_5_dyndemolrg():
+    plots_num = 2
+    fig, axs = plt.subplots(2, plots_num, figsize=FIG_SIZE_MAIN)  # (27, 13)
     foldpath = f'{DATA_FOLDER}/fig5'
     for i, fname in enumerate(sorted(os.listdir(foldpath))):
         _, df = read_plottof_csv(f'{foldpath}/{fname}', ret_df=True)
         input_output_plot(axs[0, i], axs[1, i], None, df, xtop=240., twin_label=(i == 2),
                           cov_top=1., twin_top=0.006)
-        if i == 2:
+        if i == plots_num - 1:
             break
 
     axs[0, 0].set_ylabel('Pressure')
     axs[1, 0].set_ylabel('Coverage')
-    for i in range(3):
+    for i in range(plots_num):
         axs[1, i].set_xlabel('Time, s')
 
-    fig.savefig(f'{PLOT_FOLDER}/fig5.png')
+    savefig(fig, f'{PLOT_FOLDER}/fig5.png')
 
 
-def fig_7():
-    fig, axs = plt.subplots(2, 3, figsize=(27, 13))
+def fig_7_stchdemolrg():
+    plots_num = 2
+    fig, axs = plt.subplots(2, plots_num, figsize=FIG_SIZE_MAIN)
 
     foldpath = f'{DATA_FOLDER}/fig7'
-    for i, fname in enumerate(os.listdir(foldpath)):
+    for i, fname in enumerate(sorted(os.listdir(foldpath))):
         _, df = read_plottof_csv(f'{foldpath}/{fname}', ret_df=True)
         input_output_plot(axs[0, i], axs[1, i], None, df, xtop=100., twin_label=(i == 2))
+        if i == plots_num - 1:
+            break
 
     axs[0, 0].set_ylabel('Pressure')
     axs[1, 0].set_ylabel('Coverage')
-    for i in range(3):
+    for i in range(plots_num):
         axs[1, i].set_xlabel('Time, s')
 
-    fig.savefig(f'{PLOT_FOLDER}/fig7.png')
+    savefig(fig, f'{PLOT_FOLDER}/fig7.png')
 
 
 def fig_8():
@@ -873,7 +837,7 @@ def fig_8():
     _, df_libuda = read_plottof_csv(f'{foldpath}/Libuda_CORTP.csv', ret_df=True)
     _, df_zgb = read_plottof_csv(f'{foldpath}/ZGB.csv', ret_df=True)
 
-    fig, axs = plt.subplots(2, 1, figsize=(1.2 * MAIN_FIG_SIZE[0], 2.25 * MAIN_FIG_SIZE[1]))
+    fig, axs = plt.subplots(2, 1, figsize=(1.2 * FIG_SIZE_MAIN[0], 2.25 * FIG_SIZE_MAIN[1]))
 
     data_libuda = [df_libuda['mean_reaction_rate x'], df_libuda['thetaB y'], df_libuda['thetaA y'],
                    df_libuda['mean_reaction_rate y'],
@@ -911,20 +875,36 @@ def fig_8():
     fig.savefig(f'{PLOT_FOLDER}/fig8.png')
 
 
+def figs_ananikov():
+    data_folder = f'{DATA_FOLDER}/ananikov'
+    fig0, ax0 = plt.subplots(figsize=(12 / 3 * 2, 12 / 3 * 2))
+    fig1, ax1 = plt.subplots(figsize=(12 / 3 * 2, 12 / 3 * 2))
+
+    _, df = lib.read_plottof_csv(f'{data_folder}/dynamic_advantage_rates/dynamic_sol.csv', ret_df=True)
+    input_output_plot(ax0, ax1, df_NM=None, df_RL=df, xtop=250., twin_top=0.006, cov_top=1.05)
+
+    # axs[0, 0].set_ylabel('Pressure')
+    # axs[1, 0].set_ylabel('Coverage')
+    ax0.set_xlabel('Время, с')  # 'Время, с', 'Time, s'
+    ax1.set_xlabel('Время, с')  # 'Время, с', 'Time, s'
+
+    fig0.savefig(f'{PLOT_FOLDER}/ananikov_in.png')
+    fig1.savefig(f'{PLOT_FOLDER}/ananikov_out.png')
+
+
 def main() -> None:
-    # fig_learning_curve(f'{DATA_FOLDER}/fig1_curve.csv', 'fig1.png')
-    # fig_1_2()
-    # fig_1_2_v2()
-    # fig_3()
-    # fig_1_3()
+    fig_2_learning_curve(f'{DATA_FOLDER}/fig1_curve.csv', 'fig2.png')
+    fig_3_two_rate_sets()
+    fig4_covs_axis_plot()
     # fig_4_6_sol_example(4)
-    # fig_5()
+    fig_5_dyndemolrg()
     # fig_4_6_sol_example(6)
-    # fig_7()
+    fig_7_stchdemolrg()
 
     # exp1_steady_state_map('exp_libuda_react_div60')
     # exp2_reverse_steady_state_maps('exp_libuda_react_div60')
-    exp3_periodic_covs_plot()
+
+    # figs_ananikov()
 
     # fig3.1
     # df = pd.read_csv(filepath, sep=';')
@@ -959,7 +939,7 @@ def main() -> None:
     # plot_many_procedure(f'{work_folder}/data/220628_variation', out_folder=work_folder)
 
     # # suplymentary figures
-    # sup_fig_0('run_RL_out/important_results/220711_diff_states_rews_curves/group_6_1',
+    # multiple_curves('run_RL_out/important_results/220711_diff_states_rews_curves/group_6_1',
     #           f'{work_folder}/sup_fig_group_61.png')
 
     # # L2001_converge_to_const
