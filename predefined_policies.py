@@ -1,8 +1,8 @@
 # all policies have the form f(t),
 # i. e. policy is dependence of the parameter on the current time moment and only on it
 # every policy should be capable transform entire array
-import \
-    copy
+import copy
+import math
 
 import numpy as np
 
@@ -33,7 +33,7 @@ class AbstractPolicy:
 
     def update_policy(self, params: dict):
         self.params.update(params)
-        self.t_init = params.get('t_init', 0.)
+        self.t_init = self.params.get('t_init', 0.)
 
     def set_limitations(self, *args):
         self.limitations = args
@@ -71,24 +71,40 @@ class TwoStepPolicy(AbstractPolicy):
 class AnyStepPolicy(AbstractPolicy):
     names = ()
 
-    def __init__(self, nsteps, params_dict=None):
-        self.nsteps = nsteps
-        self.names = tuple([str(i) for i in range(1, nsteps + 1)] + [f't{i}' for i in range(1, nsteps + 1)])
+    def __init__(self, params_dict=None):
+        self.nsteps = params_dict['nsteps']
         AbstractPolicy.__init__(self, params_dict)
+        self.names = tuple([str(i) for i in range(1, self.nsteps + 1)] + [f't{i}' for i in range(1, self.nsteps + 1)])
+        self.cum_ts = None
+        self.reset()
         # if len(params_dict):
         #     self.t_sum = np.sum([self[f't{i}'] for i in range(1, nsteps + 1)])
 
+    def update_policy(self, params):
+        AbstractPolicy.update_policy(self, params)
+        self.reset()
+
+    def reset(self):
+        ts = np.array([0] + [self[f't{i}'] for i in range(1, self.nsteps + 1)])
+        self.cum_ts = np.cumsum(ts)
+
     def _call(self, t):
+        cum_ts = self.cum_ts
         if isinstance(t, np.ndarray):
-            ts = np.array([0] + [self[f't{i}'] for i in range(1, self.nsteps + 1)])
-            cum_ts = np.cumsum(ts)
             rems = np.floor(t / cum_ts[-1] + 1e-5)  # TODO bug with 1e-5
             rems = t - rems * cum_ts[-1]
             res = np.empty_like(t)
             for i, t in enumerate(cum_ts[1:]):
                 res[(rems >= cum_ts[i]) & (rems < t)] = self[f'{i + 1}']
             return res
-        raise ValueError
+        else:
+            rem = math.floor(t / cum_ts[-1] + 1e-5)  # TODO bug with 1e-5
+            rem = t - rem * cum_ts[-1]
+            rem = min(max(rem, 0.), cum_ts[-1])
+            for i, t in enumerate(cum_ts[1:]):
+                if cum_ts[i] <= rem < t:
+                    return self[f'{i + 1}']
+            raise ValueError(f'Overall period length is {cum_ts[-1]}, but rem is {rem}')
 
 
 class TrianglePolicy(AbstractPolicy):
@@ -172,7 +188,7 @@ class RandomTurnsPolicy(AbstractPolicy):
             self.random_turns = np.random.uniform(*(self['bounds']), self.default_turns_number)
 
     def update_policy(self, params):
-        self.params = params
+        AbstractPolicy.update_policy(self, params)
         self.reset()
 
     def reset(self):
@@ -193,3 +209,13 @@ class RandomTurnsPolicy(AbstractPolicy):
                 self.random_turns = np.hstack((self.random_turns, np.random.uniform(*(self['bounds']),
                                                                                     len(self.random_turns))))
             return self.random_turns[idx]
+
+
+class StackPolicy(AbstractPolicy):
+    """
+    The idea: to stack several policies consequently,
+    for instance, constant policy first and then two step
+    """
+    def __init__(self):
+        AbstractPolicy.__init__(self)
+        raise NotImplementedError

@@ -1,6 +1,41 @@
 import os
 import shutil
 
+import numpy as np
+import pandas as pd
+
+
+def get_metric_stabilization_time(foldpath, quantile=0.99, col='smooth_1000_step'):
+    df = pd.read_csv(f'{foldpath}/integral_by_step.csv', index_col=None, sep=';',)
+    R_max = df[col].max()
+    idx = np.where(df[col] > quantile * R_max)[0][0]
+    if 'smooth' in col:
+        idx *= 20
+    return idx
+
+
+def get_time_along_many(foldpath, choose_subfold_key: callable = lambda s: True):
+    # with open(f'{foldpath}/metric.txt', 'w') as fwrite:
+    #     dirs = [name for name in os.listdir(foldpath) if choose_subfold_key(name)]
+    #     for d in dirs:
+    #         try:
+    #             training_time = get_metric_stabilization_time(f'{foldpath}/{d}')
+    #             fwrite.write(f'Training time for test {d}: {training_time}\n')
+    #         except FileNotFoundError:
+    #             print(f'Error with folder: {d}')
+
+    df = pd.DataFrame(columns=['test-id', 'training_time'])
+    dirs = [name for name in os.listdir(foldpath) if choose_subfold_key(name)]
+    for d in dirs:
+        try:
+            training_time = get_metric_stabilization_time(f'{foldpath}/{d}')
+            test_id = int(d[1:])
+            df.loc[test_id, :] = [test_id, training_time]
+        except FileNotFoundError:
+            print(f'Error with folder: {d}')
+
+    df.to_csv(f'{foldpath}/training_time.csv', index=False)
+
 
 def get_compressed_folder(folder_path, names_to_copy: tuple):
     parent_f, child_f = os.path.split(folder_path)

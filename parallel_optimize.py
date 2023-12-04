@@ -1,74 +1,18 @@
+import numpy as np
+
 from optimize_funcs import *
-# from parse_and_run import *
 from test_models import *
 from ProcessController import *
 from predefined_policies import *
 from targets_metrics import *
 import PC_setup
 
-from multiple_jobs_functions import run_jobs_list
+from multiple_jobs_functions import *
 
-from PC_run import get_to_optimize_SBP_const_ratio
+from PC_run import get_to_optimize_SBP_const_ratio, get_to_fit_L2001_by_LG
 
 
-def main_cluster_function():
-    # # EXPERIMENTAL DATA READING
-    # dfs = []
-    # exp_df1, T_exp, _ = read_exp_data('220422_O2_cutoff', 0)  # read raw data
-    # dfs.append(exp_df1)
-    # exp_df2, _, _ = read_exp_data('220422_CO_cutoff', 1)  # read raw data
-    # dfs.append(exp_df2)
-    # exp_df3, _, _ = read_exp_data('220422_switch', 2)  # read raw data
-    # dfs.append(exp_df3)
-    #
-    # for i in range(len(dfs)):
-    #     dfs[i] = cut_period_from_exp(dfs[i], 375, 915)  # slice a piece of data we need
-    #     get_input_Pa_if_not_exist(dfs[i])
-    #
-    # # MODEL CONSTRUCTION
-    # model_obj = models.LibudaModel_Parametrize(
-    #                   params={'p1': 1.18e-4, 'p2': 20, 'p3': 1e-07, 'p4': 4.68, },
-    #                   init_cond={'thetaCO': 0., 'thetaO': 0.})
-    # model_id = 'libuda2001_p'
-    #
-    # if model_obj is None:
-    #     model_obj = get_model(model_id)
-    # model_bounds = get_model_bounds(model_id)
-    # model_obj.change_temperature(T_exp)
-
-    # MAIN PART
-
-    # optimize_different_methods(create_func_to_approximate(exp_df, model_obj=model_obj,
-    #                                                     label_name='CO2_Pa_out',
-    #                                                     in_cols=['O2_Pa_in', 'CO_Pa_in'],
-    #                                                     rename_dict={'O2_Pa_in': 'O2', 'CO_Pa_in': 'CO'},
-    #                                                     conv_params={'RESOLUTION': 20}),
-    #                            try_num=15,
-    #                            optimize_bounds=model_bounds,
-    #                            out_folder='parse_and_run_out/optimize',
-    #                            debug_params={'DEBUG': True, 'folder': 'auto'},
-    #                            cut_ends=(False, True))
-
-    # iter_optimize_cluster(create_to_approximate_many_frames(dfs, model_obj=model_obj,
-    #                                                     label_name='CO2_Pa_out',
-    #                                                     in_cols=['O2_Pa_in', 'CO_Pa_in'],
-    #                                                     rename_dict={'O2_Pa_in': 'O2', 'CO_Pa_in': 'CO'},
-    #                                                     koefs=np.array([20, 10, 5]),
-    #                                                     conv_params={'RESOLUTION': 20}),
-    #                                                 method='Nelder-Mead',
-    #                                                 try_num=10,
-    #                                                 optimize_bounds=model_bounds,
-    #                                                 out_folder='parse_and_run_out/optimize',
-    #                                                 debug_params={'DEBUG': True, 'folder': 'auto', 'ind_picture': None},
-    #                                                 cut_left=False, cut_right=False,)
-
-    # episode_time = 500
-
-    # DEBUG
-    # def test_func(func_description: dict, DEBUG=False, folder=None, ind_picture=None):
-    #     x = func_description['x']
-    #     return (x - 2) ** 4 + 1
-    
+def main():
     # PC_L2001_low_T = ProcessController(test_models.LibudaModel(init_cond={'thetaCO': 0., 'thetaO': 0., }, Ts=273+25),
     #                                          target_func_to_maximize=target)
     #
@@ -86,12 +30,7 @@ def main_cluster_function():
     #                                                                                 v_d=0.01, v_r=0.1, border=4.),
     #                                          target_func_to_maximize=target)
     #
-    # Pt2210_PC = ProcessController(test_models.PtModel(init_cond={'thetaO': 0., 'thetaCO': 0.}),
-    #                               target_func_to_maximize=target,
-    #                               supposed_step_count=2 * round(episode_time / time_step),  # memory controlling parameters
-    #                               supposed_exp_time=2 * episode_time)
 
-    # get_target_func('CO2xConversion_I', eps=1.)
     # PC_LExtendedReturn = ProcessController(LibudaModelReturnK3K1AndPressures(init_cond={'thetaO': 0., 'thetaCO': 0.}, Ts=273 + 160),
     #                                        long_term_target_to_maximize=get_target_func('Gauss(CO_sub_default)xConvSum_I', default=1e-4,
     #                                                                                     sigma=1e-5 * episode_time, eps=1.),
@@ -118,15 +57,20 @@ def main_cluster_function():
     #                                                    'long_term_target_to_maximize': get_target_func('CO2_plus_CO_conv_I', eps=1.e-5, alpha=1.),
     #                                                    'target_func_name': 'CO2_plus_CO_conv_I', }))
     PC_obj = PC_setup.general_PC_setup('LibudaG',
-                                       ('to_PC_constructor', {'long_term_target_to_maximize': get_target_func('CO2_plus_CO_conv_I', eps=1.e-3, alpha=1., beta=1/0.02),
-                                                              'target_func_to_maximize': None
-                                                              }),
+                                       # ('to_PC_constructor', {'long_term_target_to_maximize': get_target_func('CO2_plus_CO_conv_I', eps=1.e-3, alpha=1., beta=1/0.02),
+                                       #                        'target_func_to_maximize': None
+                                       #                        }),
                                        )
 
     # PC_obj.process_to_control.set_params({'C_A_inhibit_B': 1., 'C_B_inhibit_A': 1.,
     #                                       'thetaA_init': 0., 'thetaB_init': 0.,
     #                                       'thetaA_max': 0.5, 'thetaB_max': 0.5, })
     # PC_obj.process_to_control.set_Libuda()
+    # PC_obj.process_to_control.set_params({'thetaA_init': 0., 'thetaB_init': 0.,
+    #                                       'rate_des_A': 0.1, 'rate_react': 0.1,
+    #                                       })
+    PC_obj.process_to_control.set_params({'rate_ads_A': 0.14895, 'rate_ads_B': 0.06594,  'rate_des_B': 0.,
+                                          'rate_des_A': 0.1, 'rate_react': 0.1, })
     PC_obj.process_to_control.set_params({'thetaA_init': 0., 'thetaB_init': 0., })
 
     # gauss_target_1 = get_target_func('Gauss(CO_sub_default)xConv_I', default=1e-4, sigma=1e-5 * episode_time, eps=1e-4)
@@ -238,52 +182,14 @@ def main_cluster_function():
     # OPTIMIZER CALL
 
     # LibudaG
-    # rates optimization
-    def log10_space_constrains(d):
-        for k, v in d.items():
-            d[k] = pow(10, v)
 
-    run_jobs_list(**get_for_repeated_opt_iterations(get_to_optimize_SBP_const_ratio(
-                                                        PC_obj,
-                                                        np.array([1., 0.]), np.array([0., 1.]), np.array([2., 200.]),
-                                                        resolutions=[3, 3, 3]),
-                                                    optimize_bounds={f'rate_{suff}': (-2., 1.) for suff in ('ads_A', 'des_A', 'ads_B', 'des_B', 'react')},
-                                                    constrains=log10_space_constrains,
-                                                    cut_left=False, cut_right=False,
-                                                    method='Nelder-Mead', try_num=50,
-                                                    call_after_opt_params={'plot_both_best': True, 'folder': 'auto'},
-                                                    optimize_options={'maxiter': 3}),
-
-                  const_params={},
-                  PC=PC_obj,
-                  repeat=1,
-                  sort_iterations_by='fvalue',
-                  cluster_command_ops=False,
-                  python_interpreter='../RL_10_21/venv/bin/python',
-                  out_fold_path='./optimize_out/LibudaG/230726_ratio_if_conversion_alpha1',
-                  separate_folds=False,
-                  at_same_time=30,
-                  )
-
-    # vanilla x_co control
-    # def x_co_constrain(d):
-    #     d['inputB_value'] = 1 - d['x_A']
-    #     d['inputA_value'] = d['x_A']
-    #
-    # episode_time = 50
-    # run_jobs_list(**get_for_repeated_opt_iterations(func_to_optimize_policy(
-    #                                                     PC_obj,
-    #                                                     # AnyStepPolicy(cyclesteps, dict()),
-    #                                                     ConstantPolicy(),
-    #                                                     episode_time, episode_time / 1000,
-    #                                                     t_start_count_from=30.),
-    #                                                 # optimize_bounds={'inputB_value': (0., 1.), 'inputA_value': (0., 1.)},
-    #                                                 optimize_bounds={'x_A': (0., 1.)},
-    #                                                 constrains=x_co_constrain,
+    # rate constants fitting
+    # run_jobs_list(**get_for_repeated_opt_iterations(get_to_fit_L2001_by_LG(),
+    #                                                 # optimize_bounds={f'rate_{suff}': (-2., 1.) for suff in ('ads_A', 'des_A', 'ads_B', 'des_B', 'react')},
+    #                                                 optimize_bounds={'rate_ads_A': (0.1, 0.2), 'rate_ads_B': (0.05, 0.1), 'rate_des_A': (0.05, 0.1), 'rate_react': (2., 10.)},
     #                                                 cut_left=False, cut_right=False,
-    #                                                 method='Nelder-Mead', try_num=10,
-    #                                                 debug_params={'DEBUG': True, 'folder': 'auto'},
-    #                                                 optimize_options={'maxiter': 500}),
+    #                                                 method='Nelder-Mead', try_num=20,
+    #                                                 optimize_options={'maxiter': 3}),
     #
     #               const_params={},
     #               PC=PC_obj,
@@ -291,10 +197,132 @@ def main_cluster_function():
     #               sort_iterations_by='fvalue',
     #               cluster_command_ops=False,
     #               python_interpreter='../RL_10_21/venv/bin/python',
-    #               out_fold_path='./optimize_out/LibudaG/230721_libuda_x_co_opt',
+    #               out_fold_path='./optimize_out/LibudaG/231021_L2001_fit',
+    #               separate_folds=False,
+    #               at_same_time=110,
+    #               )
+
+    # rates optimization
+    # def log10_space_constrains(d):
+    #     for k, v in d.items():
+    #         d[k] = pow(10, v)
+    #
+    # run_jobs_list(**get_for_repeated_opt_iterations(get_to_optimize_SBP_const_ratio(
+    #                                                     PC_obj,
+    #                                                     np.array([1., 0.]), np.array([0., 1.]), np.array([2., 200.]),
+    #                                                     resolutions=[3, 3, 3]),
+    #                                                 optimize_bounds={f'rate_{suff}': (-2., 1.) for suff in ('ads_A', 'des_A', 'ads_B', 'des_B', 'react')},
+    #                                                 constrains=log10_space_constrains,
+    #                                                 cut_left=False, cut_right=False,
+    #                                                 method='Nelder-Mead', try_num=50,
+    #                                                 call_after_opt_params={'plot_both_best': True, 'folder': 'auto'},
+    #                                                 optimize_options={'maxiter': 3}),
+    #
+    #               const_params={},
+    #               PC=PC_obj,
+    #               repeat=1,
+    #               sort_iterations_by='fvalue',
+    #               cluster_command_ops=False,
+    #               python_interpreter='../RL_10_21/venv/bin/python',
+    #               out_fold_path='./optimize_out/LibudaG/230726_ratio_if_conversion_alpha1',
     #               separate_folds=False,
     #               at_same_time=30,
     #               )
+
+    # vanilla x_co/pressures control
+
+    # def x_co_constrain(d):
+    #     d['inputB_value'] = 1 - d['x_A']
+    #     d['inputA_value'] = d['x_A']
+
+    # def get_same_t_constrains(steps_in_cycle):
+    #
+    #     def constrains_(d):
+    #         for i in range(1, steps_in_cycle + 1):
+    #             d[f'inputB_t{i}'] = d[f'inputA_t{i}'] = d[f't{i}']
+    #
+    #     return constrains_
+
+    # def sin_constrains(d):
+    #     d['alpha'] = 0.
+    #     for name in ('T', 'alpha'):
+    #         d[f'inputB_{name}'] = d[f'inputA_{name}'] = d[name]
+    #
+    # episode_time = 250.
+    # cyclesteps = 2
+    #
+    # run_jobs_list(**get_for_repeated_opt_iterations(func_to_optimize_policy(
+    #                                                     PC_obj,
+    #                                                     # AnyStepPolicy(cyclesteps),
+    #                                                     # TrianglePolicy(),
+    #                                                     # ConstantPolicy(),
+    #                                                     SinPolicy(),
+    #                                                     episode_time, episode_time / 1000,
+    #                                                     t_start_count_from=30.),
+    #                                                 # optimize_bounds={'inputB_value': (0., 1.), 'inputA_value': (0., 1.)},
+    #                                                 # optimize_bounds={'inputB_1': (0., 1.), 'inputA_1': (0., 1.),
+    #                                                 #                  'inputB_2': (0., 1.), 'inputA_2': (0., 1.),
+    #                                                 #                  't1': (5., 25.), 't2': (5., 25.),
+    #                                                 #                  },
+    #                                                 optimize_bounds={'inputB_A': (0., 1.), 'inputA_A': (0., 1.),
+    #                                                                  'inputB_bias': (0., 1.), 'inputA_bias': (0., 1.),
+    #                                                                  'T': (2., 25.),
+    #                                                                  },
+    #                                                 # optimize_bounds={'x_A': (0., 1.)},
+    #                                                 # constrains=get_same_t_constrains(cyclesteps),
+    #                                                 constrains=sin_constrains,
+    #                                                 # constrains=x_co_constrain,
+    #                                                 cut_left=False, cut_right=False,
+    #                                                 method='Nelder-Mead', try_num=30,
+    #                                                 call_after_opt_params={'DEBUG': True, 'folder': 'auto'},
+    #                                                 optimize_options={'maxiter': 10}),
+    #
+    #               const_params={},
+    #               PC=PC_obj,
+    #               repeat=1,
+    #               sort_iterations_by='fvalue',
+    #               cluster_command_ops=False,
+    #               python_interpreter='../RL_10_21/venv/bin/python',
+    #               out_fold_path='./optimize_out/LibudaG/230729_both_control_sin',
+    #               separate_folds=False,
+    #               at_same_time=30,
+    #               )
+
+    episode_time = 1000.
+    variants = [pow(10., x) for x in np.linspace(-2., 1., 4)]
+    # k2, k4 = PC_obj.process_to_control['rate_des_A'], PC_obj.process_to_control['rate_react']
+
+    run_jobs_list(**get_for_param_opt_iterations(func_to_optimize_policy,
+                                                 optimize_bounds={'inputB_value': (0., 1.), 'inputA_value': (0., 1.)},
+                                                 ),
+                  **merge_job_lists(
+                      jobs_list_from_grid(variants, variants, names=('model:rate_ads_A', 'model:rate_ads_B')),
+                      jobs_list_from_grid(variants, variants, names=('model:rate_des_A', 'model:rate_react')),
+                      ),
+                  # params_variants=[(k2 * i, k4 / i) for i in range(1, 6)] + [(k2 / i, k4 * i) for i in range(2, 6)],
+                  # names=('model:rate_des_A', 'model:rate_react'),
+                  const_params={
+                      'to_func_to_optimize': {
+                          'PC_obj': PC_obj,
+                          'policy_obj': ConstantPolicy(),
+                          'episode_len': episode_time,
+                          'time_step': episode_time / 1000,
+                          't_start_count_from': 750.
+                      },
+                      'to_iter_optimize': {
+                          'method': 'Nelder-Mead', 'try_num': 5,
+                          'call_after_opt_params': {'DEBUG': True, 'folder': 'auto', 'ind_picture': True},
+                          'optimize_options': {'maxiter': 10},
+                          'cut_left': False, 'cut_right': False,
+                      },
+                  },
+                  PC=PC_obj,
+                  repeat=1,
+                  cluster_command_ops=False,
+                  python_interpreter='../RL_10_21/venv/bin/python',
+                  out_fold_path='./optimize_out/LibudaG/231120_stationary_diff_rates_try3',
+                  at_same_time=110,
+                  )
 
     # L2001
     # CO2_plus_CO_conv_reward
@@ -474,84 +502,8 @@ def main_cluster_function():
     #                       file_to_execute_path='repos/parallel_optimize.py',
     #                       on_cluster=False)
     
-    # iter_optimize_cluster(
-    #                       # func_to_optimize_two_step_sol(PC_obj, 500, 1.,
-    #                                                     # to_plot={'out_names': ['CO2', 'long_term_target'], 'additional_plot': ['theta_CO', 'theta_O']}),
-    #                       func_to_optimize_policy(PC_obj, TwoStepPolicy(dict()), 500, 1.,
-    #                                               to_plot={'out_names': ['CO2', 'long_term_target'], 'additional_plot': ['thetaCO', 'thetaO']}),
-    #                       optimize_bounds={
-    #                           'O2_1': [0., O2_top], 'O2_2': [0., O2_top],
-    #                           'O2_t1': [5., 100.], 'O2_t2': [5., 100.],
-    #                           'CO_1': [0., CO_top], 'CO_2': [0., CO_top],
-    #                           'CO_t1': [5., 100.], 'CO_t2': [5., 100.],
-    #                           # 'time_1': [5., 100.], 'time_2': [5., 100.],
-    #                           },
-    #                       cut_left=False, cut_right=False,
-    #                       method='Nelder-Mead',
-    #                       try_num=30,
-    #                       on_cluster=False,
-    #                       python_interpreter='../RL_10_21/venv/bin/python',
-    #                       file_to_execute_path='repos/parallel_optimize.py',
-    #                       unique_folder=False,
-    #                       out_path='optimize_out/221109_fig_debug_common_func',
-    #                       debug_params={'DEBUG': True, 'folder': 'auto'},
-    #                       )
-    
-    #iter_optimize_cluster(func_to_optimize_policy(PC_obj, TwoStepPolicy(dict()), 500, 1.),
-                          #optimize_bounds={
-                              #'O2_1': [0., 10e-5], 'CO_1': [0., 10e-5],
-                              #'O2_2': [0., 10e-5], 'CO_2': [0., 10e-5],
-                              #'time_1': [10., 50.], 'time_2': [10., 50.],
-                              #},
-                          #cut_left=False, cut_right=False,
-                          #method='Nelder-Mead',
-                          #try_num=30,
-                          #on_cluster=True,
-                          #python_interpreter='../RL_21/venv/bin/python',
-                          #file_to_execute_path='code/parallel_optimize.py',
-                          #unique_folder=False,
-                          #out_path='optimize_out/221021_old_func_two_step',
-                          #debug_params={'DEBUG': True, 'folder': 'auto'},
-                          #)
-    
-    # Pt TESTS
-    #Pt2210_PC.process_to_control.assign_and_eval_values(O2_top=2., CO_top=10.)
-    #iter_optimize_cluster(func_to_optimize_sin_sol(Pt2210_PC, episode_time, 1.),
-                          #optimize_bounds={
-                              #'O2_A': [0., 2.], 'O2_k': [0.02 * np.pi, 0.2 * np.pi], 'O2_bias_t': [0., 2 * np.pi], 'O2_bias_f': [0., 2.],
-                              #'CO_A': [0., 10.], 'CO_k': [0.02 * np.pi, 0.2 * np.pi], 'CO_bias_t': [0., 2 * np.pi], 'CO_bias_f': [0., 10.],
-                              #},
-                          #cut_left=False, cut_right=False,
-                          #method='Nelder-Mead',
-                          #try_num=30,
-                          #on_cluster=True,
-                          #python_interpreter='../RL_21/venv/bin/python',
-                          #file_to_execute_path='code/parallel_optimize.py',
-                          #unique_folder=False,
-                          #out_path='optimize_out/221012_Pt_2210_sin_less_O2',
-                          #debug_params={'DEBUG': True, 'folder': 'auto'},
-                          #)
-    
-    #PC_Pt2210.process_to_control.assign_and_eval_values(O2_top=2., CO_top=10.)    # assign limitations
-    #iter_optimize_cluster(func_to_optimize_two_step_sol(PC_LDegrad, 500, 1.),
-                          #optimize_bounds={
-                              #'O2_1': [0., 10e-5], 'CO_1': [0., 10e-5],
-                              #'O2_2': [0., 10e-5], 'CO_2': [0., 10e-5],
-                              #'time_1': [10., 50.], 'time_2': [10., 50.],
-                              #},
-                          #cut_left=False, cut_right=False,
-                          #method='Nelder-Mead',
-                          #try_num=30,
-                          #on_cluster=True,
-                          #python_interpreter='../RL_21/venv/bin/python',
-                          #file_to_execute_path='code/parallel_optimize.py',
-                          #unique_folder=False,
-                          #out_path='optimize_out/221021_old_func_two_step',
-                          #debug_params={'DEBUG': True, 'folder': 'auto'},
-                          #)
-
     pass
 
 
 if __name__ == '__main__':
-    main_cluster_function()
+    main()

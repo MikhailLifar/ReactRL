@@ -9,7 +9,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 import sys
-sys.path.append('../')
+sys.path.append('/home/mikhail/RL_22_07_MicroFluidDroplets/repos')
 
 from test_models import TestModel, generate_max_rank_matr
 
@@ -33,13 +33,18 @@ def benchmark_RL_agents():
     import run_RL
     # import tensorforce.execution as tf_exec
 
-    agent_name = 'vpg'
-    env_name = 'CartPole'
+    # agent_name = 'vpg'
+    agent_name = 'ppo'
+
+    # env_name = 'CartPole-v0'
+    env_name = 'LunarLander-v2'
+
+    num_episodes = 2000
 
     # env = tensorforce.environments.Environment.create(
     #     environment='gym', level=env_name, max_episode_timesteps=500,
     # )
-    env = tensorforce.environments.OpenAIGym(f'{env_name}-v0', visualize=False)
+    env = tensorforce.environments.OpenAIGym(env_name, visualize=False)
     agent = run_RL.create_tforce_agent(env, agent_name)
 
     # runner = tf_exec.Runner(agent=agent, environment=env, max_episode_timesteps=500)
@@ -48,11 +53,20 @@ def benchmark_RL_agents():
     # runner.run(num_episodes=20, evaluation=True)
     # runner.close()
 
-    folder = f'./benchmark_RL/{agent_name}_{env_name}'
+    folder = f'./benchmark_RL/{agent_name}_{env_name[:env_name.rfind("-")]}'
     os.makedirs(folder, exist_ok=False)
 
-    num_episodes = 2000
+    plot_freq = 100
     cum_rewards = np.zeros(num_episodes)
+
+    def plot_rews(fname: str):
+        fig, ax = plt.subplots()
+        ax.plot(np.arange(num_episodes) + 1, cum_rewards, 'b-d')
+        ax.set_xlabel('Episode number')
+        ax.set_ylabel('Cumulative reward')
+        fig.savefig(f'{folder}/{fname}')
+        plt.close(fig)
+
     for i in range(num_episodes):
         states = env.reset()
         terminal = False
@@ -64,18 +78,10 @@ def benchmark_RL_agents():
             sum_reward += reward
             if terminal:
                 cum_rewards[i] = sum_reward
+        if i % plot_freq == plot_freq - 1:
+            plot_rews('training_rews.png')
 
-    def plot_rews(fname: str):
-        fig, ax = plt.subplots()
-        ax.plot(np.arange(num_episodes) + 1, cum_rewards, 'b-d')
-        ax.set_xlabel('Episode number')
-        ax.set_ylabel('Cumulative reward')
-        fig.savefig(f'{folder}/{fname}')
-        plt.close(fig)
-
-    plot_rews('training_rews.png')
-
-    env = tensorforce.environments.OpenAIGym(f'{env_name}-v0', visualize=True)
+    env = tensorforce.environments.OpenAIGym(env_name, visualize=True)
     num_episodes = 30
     cum_rewards = np.zeros(num_episodes)
     for i in range(num_episodes):
@@ -201,7 +207,7 @@ if __name__ == '__main__':
 
     # Libuda_coefs_estimation()
 
-    # benchmark_RL_agents()
+    benchmark_RL_agents()
 
     # model testing
     # run_test_model()
