@@ -7,13 +7,14 @@ def get_reward_func(params: dict):
         bias = params['bias']
 
         def each_step_base(env_obj) -> float:
+            time_step = env_obj.last_actual_time_step
             time_history, target_history = env_obj.controller.get_target_for_passed()
-            count_step_measurements = int(np.floor(env_obj.time_step / env_obj.controller.analyser_dt))
+            count_step_measurements = int(np.floor(time_step / env_obj.controller.analyser_dt))
             integral_target_last_step = lib.integral(time_history[-count_step_measurements:], target_history[-count_step_measurements:])
             # mean_integral_part = np.mean(target_history[:-1]) * count_step_measurements  # this didn't work well
             # rew = (target_history[-1] - mean_integral_part * part) / mean_integral_part / part
             rew = integral_target_last_step * env_obj.normalize_coef / env_obj.episode_time -\
-                  bias * env_obj.time_step / env_obj.episode_time
+                  bias * time_step / env_obj.episode_time
             return rew
 
         out_func = each_step_base

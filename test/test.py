@@ -33,11 +33,12 @@ def benchmark_RL_agents():
     import run_RL
     # import tensorforce.execution as tf_exec
 
-    # agent_name = 'vpg'
-    agent_name = 'ppo'
+    agent_name = 'vpg'
+    # agent_name = 'ppo'
 
     # env_name = 'CartPole-v0'
-    env_name = 'LunarLander-v2'
+    # env_name = 'LunarLander-v2'
+    env_name = 'BipedalWalker-v3'
 
     num_episodes = 2000
 

@@ -3,38 +3,47 @@ import shutil
 
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 
 
 def get_metric_stabilization_time(foldpath, quantile=0.99, col='smooth_1000_step'):
+    assert os.path.exists(f'{foldpath}/integral_by_step.csv')
     df = pd.read_csv(f'{foldpath}/integral_by_step.csv', index_col=None, sep=';',)
     R_max = df[col].max()
-    idx = np.where(df[col] > quantile * R_max)[0][0]
+    
+    idx = np.where(df[col] > quantile * R_max)[0]
+    assert len(idx)
+    idx = idx[0]
     if 'smooth' in col:
         idx *= 20
     return idx
 
 
-def get_time_along_many(foldpath, choose_subfold_key: callable = lambda s: True):
-    # with open(f'{foldpath}/metric.txt', 'w') as fwrite:
-    #     dirs = [name for name in os.listdir(foldpath) if choose_subfold_key(name)]
-    #     for d in dirs:
-    #         try:
-    #             training_time = get_metric_stabilization_time(f'{foldpath}/{d}')
-    #             fwrite.write(f'Training time for test {d}: {training_time}\n')
-    #         except FileNotFoundError:
-    #             print(f'Error with folder: {d}')
-
-    df = pd.DataFrame(columns=['test-id', 'training_time'])
+def get_time_along_many(foldpath, quantile=0.99, choose_subfold_key: callable = lambda s: True):
+    
+    df = pd.DataFrame(columns=['test-id', 'training_time', 'average_time', 'q1', 'q2', 'q3'])
     dirs = [name for name in os.listdir(foldpath) if choose_subfold_key(name)]
     for d in dirs:
         try:
             training_time = get_metric_stabilization_time(f'{foldpath}/{d}')
             test_id = int(d[1:])
-            df.loc[test_id, :] = [test_id, training_time]
-        except FileNotFoundError:
+            df.loc[test_id, ['test-id', 'training_time']] = [test_id, training_time]
+        except (FileNotFoundError, AssertionError):
             print(f'Error with folder: {d}')
-
+    df.loc[0, ['average_time', 'q1', 'q2', 'q3']] = [np.mean(df['training_time']),
+                                 df['training_time'].quantile(0.25),
+                                 df['training_time'].quantile(0.5),
+                                 df['training_time'].quantile(0.75),]
+    
     df.to_csv(f'{foldpath}/training_time.csv', index=False)
+    
+    fig, ax = plt.subplots()
+    ax.hist(df['training_time'], bins=int(df['training_time'].max() / 1000))
+    ax.set_title('training time histogram')
+    ax.set_xlabel('training episodes before max')
+    ax.set_ylabel('number of tests')
+    fig.savefig(f'{foldpath}/training_time_hist.png')
+    plt.close(fig)
 
 
 def get_compressed_folder(folder_path, names_to_copy: tuple):
@@ -109,11 +118,16 @@ def collect_along_folder(folder_path,
 
 
 def collect_training_results(folder, subfolder_path='testing_deterministic', dest_name='collected'):
+    get_time_along_many(folder, quantile=0.98,
+                        choose_subfold_key=lambda s: s[0] == '_' and s[1].isdigit(),)
     for name_part in (
             '_all_data',
-            '_in',
-            '_out',
-            '_target',
+            #'_in',
+            '_input',
+            #'_out',
+            '_add',
+            '_output',
+            #'_target',
                       ):
         collect_along_folder(folder,
                              subfolder_path,
@@ -129,9 +143,21 @@ if __name__ == '__main__':
     #                                      'output_by_step.png', 'integral_by_step.csv'),
     #                             key=lambda s: s[0] == '_')
 
-    folds = ['220805_Libuda_more_CO_allowed', '220805_Libuda_more_CO_allowed']
+    folds = [
+             #'220805_Libuda_more_CO_allowed',
+             #'221103_Pd_CO2_sub_outs_I_01',
+             #'221107_Pd_CO2_sub_outs_I_05',
+             #'221223_turn_off_control',
+             #'LibudaG/230707_vary_O2_CO_is_arbitrary',
+             #'LibudaG/230713_CO(t)_RTP_shorter_period',
+             #'LibudaG/230725_different_rates',
+             #'LibudaG/230928_T1(440)_T2(560)_ignorant_agent',
+             #'LibudaG/REFERENCE/231002_low_des_react_rates/',
+             #'LibudaG/REFERENCE/230725_different_rates/',
+             'LibudaG/231120_CORTP_NoSampling_dynrates/',
+             ]
     for fold in folds:
-        collect_training_results(f'run_RL_out/current_training/{fold}')
+        collect_training_results(f'run_RL_out/{fold}')
 
     # collect_along_folder('run_RL_out/train_greed/220708_diff_state',
     #                      choose_folder_key=lambda s: s[0] == '_' and s[1].isdigit(),

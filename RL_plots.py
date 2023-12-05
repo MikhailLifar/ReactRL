@@ -581,6 +581,8 @@ def plot_several_lines_uni(data, outpath=None, ax=None, to_styles: dict = None, 
     # if plot_proc_params.get('twin_params', False) is False:
     #     plot_proc_params.update({'twin_params': {}})
 
+    right_ax = None
+
     if ax is None:
         assert outpath is not None
         lib.plot_to_file(*list(reduce(lambda ret, i: ret + [xdata, data[i], styles[i]], range(1, len(data)), [])),
@@ -588,11 +590,11 @@ def plot_several_lines_uni(data, outpath=None, ax=None, to_styles: dict = None, 
                          save_csv=False,
                          **plot_proc_params)
     else:
-        lib.plot_in_axis(*list(reduce(lambda ret, i: ret + [xdata, data[i], styles[i]], range(1, len(data)), [])),
-                         ax=ax,
-                         **plot_proc_params)
+        _, right_ax, _ = lib.plot_in_axis(*list(reduce(lambda ret, i: ret + [xdata, data[i], styles[i]], range(1, len(data)), [])),
+                                          ax=ax,
+                                          **plot_proc_params)
 
-    return ax
+    return ax, right_ax
 
 
 def input_plot(data, ax=None, outpath=None):
@@ -653,7 +655,7 @@ def input_output_plot(ax_input, ax_output, df_NM, df_RL,
                                       2: {
                                           # 'label': f'{LABEL_A}',  # давление CO, {LABEL_A}
                                           'c': colors['CO'], 'linestyle': 'solid'}},  # color
-                           title='model inputs',  # 'input pressures', 'model inputs', 'управляемые параметры'
+                           title='RL policy',  # 'input pressures', 'model inputs', 'управляемые параметры'
                            xlim=[0., xtop], ylim=[0., 1.05],
                            twin_params=None,
                            )
@@ -674,24 +676,28 @@ def input_output_plot(ax_input, ax_output, df_NM, df_RL,
                                               'twin': True}},  # color
                                twin_params={'ylim': [0., twin_top]},
                                )
-    plot_several_lines_uni(data_RL_out,
-                           outpath=None,
-                           ax=ax_output,
-                           # to_styles={1: {'label': 'thetaB'}, 2: {'label': 'thetaA'}, 3: {'label': 'reaction rate'}},
-                           to_styles={1: {
-                                          # 'label': '$\\theta_O$',  # заселенность O, theta{LABEL_B_VAR2}
-                                          'c': colors['O2'], 'linestyle': 'solid'},
-                                      2: {
-                                          # 'label': '$\\theta_{CO}$',  # заселенность CO, theta{LABEL_A}
-                                          'c': colors['CO'], 'linestyle': 'solid'},
-                                      3: {
-                                          # 'label': 'reaction rate',  # скорость образования \n$CO_2$, reaction rate
-                                          'c': colors['CO2']}},  # color
-                           xlim=[0., xtop], ylim=[0., cov_top],
-                           title='model outputs',  # 'rate & thetas', 'model outputs', 'выходные параметры'
-                           # twin_params={'ylim': [0., 0.1], 'ylabel': '$CO_{2}$ formation rate'},
-                           twin_params={'ylim': [0., twin_top], 'ylabel': 'Reaction rate' if twin_label else None},
-                           )
+    _, right_ax = plot_several_lines_uni(data_RL_out,
+                                       outpath=None,
+                                       ax=ax_output,
+                                       # to_styles={1: {'label': 'thetaB'}, 2: {'label': 'thetaA'}, 3: {'label': 'reaction rate'}},
+                                       to_styles={1: {
+                                                      # 'label': '$\\theta_O$',  # заселенность O, theta{LABEL_B_VAR2}
+                                                      'c': colors['O2'], 'linestyle': 'solid'},
+                                                  2: {
+                                                      # 'label': '$\\theta_{CO}$',  # заселенность CO, theta{LABEL_A}
+                                                      'c': colors['CO'], 'linestyle': 'solid'},
+                                                  3: {
+                                                      # 'label': 'reaction rate',  # скорость образования \n$CO_2$, reaction rate
+                                                      'c': colors['CO2']}},  # color
+                                       xlim=[0., xtop], ylim=[0., cov_top],
+                                       title='Environment response',  # 'rate & thetas', 'model outputs', 'выходные параметры'
+                                       # twin_params={'ylim': [0., 0.1], 'ylabel': '$CO_{2}$ formation rate'},
+                                       twin_params={'ylim': [0., twin_top], 'ylabel': 'Reaction rate' if twin_label else None},  # 'Reaction rate'
+                                       )
+
+    right_ax.spines['right'].set_color(colors['CO2'])
+    right_ax.tick_params(axis='y', colors=colors['CO2'])
+    right_ax.yaxis.label.set_color(colors['CO2'])
 
 
 def exp1_steady_state_map(exp_id):
@@ -755,7 +761,7 @@ def fig_2_learning_curve():
 
 def fig_3_one_rate_sets():
     data_folder = f'{DATA_FOLDER}/fig3_one_rate_set'
-    fig, axs = plt.subplots(2, 1, figsize=FIG_SIZE_MAIN)  # (1.5 * FIG_SIZE_MAIN[0], 1.8 * FIG_SIZE_MAIN[1])
+    fig, axs = plt.subplots(2, 1, figsize=(FIG_SIZE_MAIN[0] * 0.6, FIG_SIZE_MAIN[1]))  # (1.5 * FIG_SIZE_MAIN[0], 1.8 * FIG_SIZE_MAIN[1])
 
     list_NM = sorted(os.listdir(f'{data_folder}/NM'))
     list_RL = sorted(os.listdir(f'{data_folder}/RL'))
@@ -766,8 +772,8 @@ def fig_3_one_rate_sets():
         input_output_plot(axs[0], axs[1], df_NM, df_RL,  xtop=60., twin_label=True,
                           twin_top=1.5 * np.max(df_RL['outputC y']), cov_top=0.75)
 
-    axs[0].set_ylabel('Pressure')
-    axs[1].set_ylabel('Coverage')
+    axs[0].set_ylabel('Partial pressure, norm.units')  # Pressure
+    axs[1].set_ylabel('Coverage $\\theta$')
     axs[1].set_xlabel('Time, s')
 
     savefig(fig, f'{PLOT_FOLDER}/fig3_one_rate_set.png')
@@ -858,7 +864,7 @@ def fig4_covs_axis_plot_v3():
                      df['thetaB x'], np.full_like(df['thetaB x'], stationary_max[0]), {'c': 'b', 'ls': 'dashed'},
                      df['thetaA x'], np.full_like(df['thetaA x'], stationary_max[1]), {'c': 'r', 'ls': 'dashed'},
                      ax=axs['bottom'],
-                     xlabel='Time, s', ylabel='Coverages',
+                     xlabel='Time, s', ylabel='Coverage $\\theta$',
                      ylim=[0., 0.4]
                      )
     lib.plot_in_axis(df['outputC x'], df['outputC y'], {'label': 'reaction rate', 'c': 'purple'},
@@ -923,8 +929,8 @@ def fig_5_dyn_demo():
     input_output_plot(axs[0, 1], axs[1, 1], None, df, xtop=240., twin_label=True,
                       cov_top=1., twin_top=0.006)
 
-    axs[0, 0].set_ylabel('Pressure')
-    axs[1, 0].set_ylabel('Coverage')
+    axs[0, 0].set_ylabel('Partial pressure, norm.units')  # Pressure
+    axs[1, 0].set_ylabel('Coverage $\\theta$')
     for i in range(plots_num):
         axs[1, i].set_xlabel('Time, s')
 
@@ -943,8 +949,8 @@ def fig_6_stchdemolrg():
         if i == plots_num - 1:
             break
 
-    axs[0, 0].set_ylabel('Pressure')
-    axs[1, 0].set_ylabel('Coverage')
+    axs[0, 0].set_ylabel('Partial pressure, norm.units')  # Pressure
+    axs[1, 0].set_ylabel('Coverage $\\theta$')
     for i in range(plots_num):
         axs[1, i].set_xlabel('Time, s')
 
@@ -1032,11 +1038,11 @@ def figs_ananikov():
 
 
 def main() -> None:
-    fig_2_learning_curve()
-    # fig_3_one_rate_sets()
+    # fig_2_learning_curve()
+    fig_3_one_rate_sets()
     # fig4_covs_axis_plot_v3()
-    # fig_5_dyn_demo()
-    # fig_6_stchdemolrg()
+    fig_5_dyn_demo()
+    fig_6_stchdemolrg()
     # fig_S1()
 
     # exp1_steady_state_map('exp_libuda_react_div60')

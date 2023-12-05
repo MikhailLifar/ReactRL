@@ -21,16 +21,31 @@ from rewrad_variants import *
 from test_models import *
 
 
+# class State:
+#     def __init__(self, PC, names_to_state, state_spec):
+#         pass
+#
+#     def update(self):
+#         pass
+#
+#     def get(self):
+#         pass
+#
+#     def describe(self):
+#         pass
+
+
 class RL2207_Environment(Environment):
     def __init__(self, PC: ProcessController,
                  names_to_state: list = None,
                  state_spec: dict = None,
                  action_spec: [Dict, str] = 'continuous',
                  reward_spec: [str, callable] = None,
-                 episode_time=500, time_step=10,
+                 episode_time=None, time_step=None,
                  reset_mode='bottom_state',
                  log_scaling_dict=None,
                  init_callback=None,
+                 dynamic_normalization=None,
                  **kwargs):
 
         """
@@ -64,11 +79,20 @@ class RL2207_Environment(Environment):
         self.time_input_dependence = kwargs.get('time_input_dependence', lambda x, t: x)
         self.input_dt = kwargs.get('input_dt', time_step)
 
-        self.time_step = time_step
-        if self.time_step <= self.controller.analyser_dt:
-            self.controller.analyser_dt = self.time_step / 10
-        if self.time_step < self.input_dt:
-            self.input_dt = self.time_step
+        assert episode_time is not None
+
+        if isinstance(time_step, (float, int)):
+            self.time_step = lambda action: time_step
+            if time_step <= self.controller.analyser_dt:
+                self.controller.analyser_dt = time_step / 10  # TODO potential bugs with analyser dt when time step length is variable
+            if time_step < self.input_dt:
+                self.input_dt = self.time_step
+        elif callable(time_step):
+            self.time_step = time_step
+        else:
+            raise ValueError(f'Wrong value for parameter time_step: {time_step}')
+        self.last_actual_time_step = None  # TODO this is crutch
+
         self.episode_time = episode_time
 
         self.input_names = self.controller.controlled_names
@@ -92,6 +116,17 @@ class RL2207_Environment(Environment):
             assert name in self.model.names['output'], f'The model does not return the name: {name}'
         self.inds_to_state = [i for i, name in enumerate(self.model.names['output']) if name in names_to_state]
         self.names_to_state = copy.deepcopy(names_to_state)
+
+        self.dynamic_normalization = dynamic_normalization is not None
+        self.dyn_norm_idx = None
+        self.dyn_norm_bounds = None
+        self.dyn_norm_alpha = None
+        if self.dynamic_normalization:
+            self.dyn_norm_idx = [i for i, name in enumerate(self.model.names['output'])
+                                 if name in dynamic_normalization['names']]
+            self.dyn_norm_bounds = np.zeros((2, len(self.dyn_norm_idx)))
+            self.dyn_norm_bounds[1] += 1.e-5
+            self.dyn_norm_alpha = dynamic_normalization['alpha']
 
         one_state_row_len = len(names_to_state)
         # one_state_row_len = len(self.model.limits['input']) + len(self.model.limits['output'])
@@ -156,7 +191,7 @@ class RL2207_Environment(Environment):
                         f'action_info: {self.action_spec["info"]}\n' \
                         f'reward: {self.reward_name}\n' \
                         f'episode_time: {self.episode_time}\n' \
-                        f'time_step: {self.time_step}\n'
+                        f'time_step: {time_step}\n'
 
         assert self.normalize_coef >= 0
 
@@ -201,21 +236,46 @@ class RL2207_Environment(Environment):
                                           self.norm_to_log[1]) / self.norm_to_log[0]
         measurement[self.to_log_inds] = np.log(1 + self.to_log_scales * part_to_preprocess)
 
+    def dyn_norm_proc(self, full_env_response):
+        renorm_part = full_env_response[self.dyn_norm_idx]
+        # self.dyn_norm_bounds[0] = np.min(np.vstack(self.dyn_norm_bounds[0], renorm_part * (1. - self.dyn_norm_alpha * np.sign(renorm_part))))
+
+        update_idx = renorm_part < self.dyn_norm_bounds[0]
+        if np.any(update_idx):
+            self.dyn_norm_bounds[0, update_idx] = renorm_part[update_idx] *\
+                                                  (1. - self.dyn_norm_alpha * np.sign(renorm_part[update_idx]))
+
+        update_idx = renorm_part > self.dyn_norm_bounds[1]
+        if np.any(update_idx):
+            self.dyn_norm_bounds[1, update_idx] = renorm_part[update_idx] *\
+                                                  (1. + self.dyn_norm_alpha * np.sign(renorm_part[update_idx]))
+
+        full_env_response[self.dyn_norm_idx] = (renorm_part - self.dyn_norm_bounds[0]) / \
+                                               (self.dyn_norm_bounds[1] - self.dyn_norm_bounds[0])
+
     def states(self):
         lower = self.model.get_bounds('min', 'output')[self.inds_to_state]
         upper = self.model.get_bounds('max', 'output')[self.inds_to_state]
+
+        lower[self.dyn_norm_idx] = 0.
+        upper[self.dyn_norm_idx] = 1.
+
         if self.if_use_log_scale:
             lower[self.to_log_inds] = 0.
             upper[self.to_log_inds] = np.log(1. + self.to_log_scales) + 1e-5
+
         # print(self.model.get_bounds('min', 'input'))
         # print(self.model.get_bounds('min', 'output'))
+
         states_shape = self.state_spec['shape']
         assert states_shape[1] == lower.size
         min_values = np.repeat(lower.reshape(1, -1), states_shape[0], axis=0)
         max_values = np.repeat(upper.reshape(1, -1), states_shape[0], axis=0)
+
         if self.state_spec['use_differences']:
             min_values[1::2, :] = lower - upper
             max_values[1::2, :] = -min_values[1::2]
+
         return dict(type='float', shape=states_shape,
                     min_value=min_values, max_value=max_values)
 
@@ -270,16 +330,24 @@ class RL2207_Environment(Environment):
         return self.end_episode
 
     def update_env(self, act):
+        time_step = self.time_step(act)
+        time_step = min(self.episode_time, self.controller.time + time_step)
+        self.last_actual_time_step = time_step
         model_inputs = self.transform_action(act)
         temp = 0.
-        while temp < self.time_step - self.input_dt + 1.e-9:
+        while temp < time_step - self.input_dt + 1.e-9:
             model_inputs = self.time_input_dependence(model_inputs, self.controller.time)
             self.controller.set_controlled(model_inputs)
             self.controller.time_forward(dt=self.input_dt)
             temp += self.input_dt
-        if temp < self.time_step:
-            self.controller.time_forward(self.time_step - temp)
-        current_measurement = self.controller.get_process_output()[1][-1][self.inds_to_state]
+        if temp < time_step:
+            self.controller.time_forward(time_step - temp)
+
+        full_env_response = self.controller.get_process_output()[1][-1].copy()
+        if self.dynamic_normalization:
+            self.dyn_norm_proc(full_env_response)
+
+        current_measurement = full_env_response[self.inds_to_state]
         if self.if_use_log_scale:
             current_measurement = copy.deepcopy(current_measurement)
             self.log_preprocess(current_measurement)
@@ -333,12 +401,12 @@ class RL2207_Environment(Environment):
 
                 to_process_flows = {self.input_names[i]: in_values[i] for i in range(len(self.input_names))}
                 current_measurement = self.controller.const_preprocess(to_process_flows,
-                                                                       time=self.reset_mode.get('time', np.random.randint(1, 4) * self.time_step),
+                                                                       time=self.reset_mode.get('time', np.random.randint(1, 4) * self.reset_mode['time_step']),
                                                                        dt=self.reset_mode.get('dt', self.controller.analyser_dt),
                                                                        )
             elif self.reset_mode['kind'] == 'predefined_step':
                 self.controller.set_controlled(self.reset_mode['step'])
-                self.controller.time_forward(self.time_step)
+                self.controller.time_forward(self.reset_mode['time_step'])
                 current_measurement = self.controller.get_process_output()[1][-1]
             else:
                 raise ValueError
