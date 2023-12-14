@@ -13,24 +13,11 @@ import PC_setup
 
 
 def main():
-    # size = [20, 20]
-    # PC_KMC = ProcessController(KMC_CO_O2_Pt_Model((*size, 1), log_on=True,
-    #                                               O2_top=1.1e5, CO_top=1.1e5,
-    #                                               CO2_rate_top=3.e5, CO2_count_top=1.e4,
-    #                                               T=373.),
-    #                            analyser_dt=1,
-    #                            target_func_to_maximize=get_target_func('CO2_count'),
-    #                            target_func_name='CO2_count',
-    #                            target_int_or_sum='sum',
-    #                            RESOLUTION=1,  # ATTENTION! Always should be 1 if we use KMC, otherwise we will get wrong results!
-    #                            supposed_step_count=1000,  # memory controlling parameters
-    #                            supposed_exp_time=1.e-5)
 
-    # PC_obj = PC_setup.default_PC_setup('ZGB')
-    # PC_obj = PC_setup.general_PC_setup('Libuda2001')
-    #PC_obj = PC_setup.general_PC_setup('ZGBk', ('to_PC_constructor', 'supposed_exp_time', 1.e+8),
-                                               #('to_PC_constructor', 'supposed_step_count', int(1.e+5))
-                                       #)
+    # PC_obj = PC_setup.general_PC_setup('ZGB')
+    # PC_obj = PC_setup.general_PC_setup('ZGBk', ('to_PC_constructor', 'supposed_exp_time', 1.e+8),
+    #                                            ('to_PC_constructor', 'supposed_step_count', int(1.e+5))
+    #                                    )
     #PC_obj = PC_setup.general_PC_setup('Lynch',
                                        #('to_PC_constructor', 'analyser_dt', 0.1),
                                        #)
@@ -43,12 +30,31 @@ def main():
     #PC_obj = PC_setup.general_PC_setup('LibudaGWithT',
                                        #('to_model_constructor', {'params': {}}),
                                        #)
-    PC_obj = PC_setup.general_PC_setup('LibudaG', ('to_model_constructor', {'params': {}}))
-    
-    PC_obj.process_to_control.set_params({'C_A_inhibit_B': 1., 'C_B_inhibit_A': 1.,
-                                          'thetaA_init': 0., 'thetaB_init': 0.,
-                                          'thetaA_max': 0.5, 'thetaB_max': 0.5,
-                                          })
+    PC_obj = PC_setup.general_PC_setup('LibudaG')
+    # PC_obj = PC_setup.general_PC_setup('LibudaGWithT')
+
+    # PC_obj.process_to_control.set_params({'C_A_inhibit_B': 1., 'C_B_inhibit_A': 1.,
+    #                                       'thetaA_init': 0., 'thetaB_init': 0.,
+    #                                       'thetaA_max': 0.5, 'thetaB_max': 0.5,
+    #
+    #                                       'rate_ads_A': 1., 'rate_ads_B': 1.,  # adjusted to be ZGB like
+    #                                       'rate_des_A': 0., 'rate_des_B': 0.,
+    #                                       'rate_react': 0.3,
+    #
+    #                                       })
+    # PC_obj.process_to_control.set_params({'thetaA_init': 0., 'thetaB_init': 0., })
+    # PC_obj.process_to_control.set_params({'thetaA_init': 0.1254, 'thetaB_init': 0.0517, })  # optimal steady-state
+    # PC_obj.process_to_control.set_params({'C_B_inhibit_A': 1., 'thetaA_init': 0., 'thetaB_init': 0.,
+    #                                       'thetaA_max': 0.5, 'thetaB_max': 0.5,
+    #                                       'rate_ads_A': 0.14895, 'rate_ads_B': 0.06594 * 4,
+    #                                       })  # Libuda eqns CO RTP
+    c_b_a = 0.01  # (0.01, 0.1, 1.)
+    rate_react = 0.1  # (0.001, 0.01, 0.1, 1.)
+    PC_obj.process_to_control.set_params({'thetaA_init': 0., 'thetaB_init': 0.,
+                                          'rate_ads_A': 0.1, 'rate_ads_B': 0.1,
+                                          'rate_des_A': 0.1, 'rate_react': rate_react,  # 0.1
+                                          'C_B_inhibit_A': c_b_a,
+                                          })  # low des, react rates
     
     # LibudaGWithT
     # diff temperatures steady-state
@@ -290,25 +296,25 @@ def main():
     
     # LibudaG
     # return, ratio on rates dependence
-    points_num = 40  # 30, 40
-    variants = np.linspace(0.01, 10., points_num)
-    run_jobs_list(
-        **(get_for_opt_policy_search('rate_ads_A', 'rate_ads_B', variants,
-                                     map_grid_resolutions=(300, 300),
-                                     inputs_start=np.array([1., 0.]), inputs_end=np.array([0., 1.]),
-                                     period_bounds=np.array([0.2, 1000.]), resolutions=[200, 20, 10])),  # [200, 20, 10]
-        params_variants=variants.reshape(-1, 1).tolist(),
-        names=('rate_ads_A', ),
-        names_groups=(),
-        const_params={},
-        sort_iterations_by=None,
-        PC=PC_obj,
-        repeat=1,
-        out_fold_path=f'PC_plots/LibudaG/230722_draw_maps',
-        cluster_command_ops={'n': 1, 'm': 3000},
-        python_interpreter='../RL_10_21/venv/bin/python',
-        at_same_time=100,
-    )
+    # points_num = 40  # 30, 40
+    # variants = np.linspace(0.01, 10., points_num)
+    # run_jobs_list(
+    #     **(get_for_opt_policy_search('rate_ads_A', 'rate_ads_B', variants,
+    #                                  map_grid_resolutions=(300, 300),
+    #                                  inputs_start=np.array([1., 0.]), inputs_end=np.array([0., 1.]),
+    #                                  period_bounds=np.array([0.2, 1000.]), resolutions=[200, 20, 10])),  # [200, 20, 10]
+    #     params_variants=variants.reshape(-1, 1).tolist(),
+    #     names=('rate_ads_A', ),
+    #     names_groups=(),
+    #     const_params={},
+    #     sort_iterations_by=None,
+    #     PC=PC_obj,
+    #     repeat=1,
+    #     out_fold_path=f'PC_plots/LibudaG/230722_draw_maps',
+    #     cluster_command_ops={'n': 1, 'm': 3000},
+    #     python_interpreter='../RL_10_21/venv/bin/python',
+    #     at_same_time=100,
+    # )
 
     # LIBUDA, LYNCH
     
@@ -339,27 +345,74 @@ def main():
         #at_same_time=110,
     #)
 
-    # benchmark
-    #pressure_unit = 0.1  # Libuda: 1.e-5
-    #pairs_num = 10
-    #variants = np.linspace(0.4, 0.5, pairs_num).reshape(-1, 1)
-    #variants = np.hstack((variants, -1 * variants + 1)) * 10 * pressure_unit
-    #run_jobs_list(
-        #**(get_for_Ziff_iterations(pressure_unit, episode_time, take_from_the_end=0.5, CO2_output_column=0,
-                                   #out_names_to_plot='CO2')),
-        #params_variants=variants.tolist(),
-        #names=('O2', 'CO'),
-        #names_groups=(),
-        #const_params={},
-        #sort_iterations_by='CO2',
-        #PC=PC_obj,
-        #repeat=1,
-        #out_fold_path='PC_plots/230428_Lynch_benchmark_3',
-        #separate_folds=False,
-        #cluster_command_ops={'n': 1, 'm': 3000},
-        #python_interpreter='../RL_10_21/venv/bin/python',
-        #at_same_time=100,
-    #)
+    # steady state
+    # episode_time = 1000
+    # variants = np.linspace(0., 1., 100).reshape(-1, 1)
+    #
+    # def transform(d):
+    #     d['inputB_value'] = 1 - d['x']
+    #     d['inputA_value'] = d['x']
+    #
+    # run_jobs_list(
+    #     **(get_for_common_variations({'inputA': ConstantPolicy(), 'inputB': ConstantPolicy()},
+    #                                  'x', {'name': 'mean_reaction_rate', 'column': 0},
+    #                                  transform_params=transform,
+    #                                  additional_names=('thetaB', 'thetaA'),
+    #                                  take_from_the_end=0.33,
+    #                                  )),
+    #     params_variants=variants,
+    #     names=('x', ),
+    #     names_groups=(),
+    #     const_params={'episode_time': episode_time, 'calc_dt': lambda x: x / 1000,
+    #                   },
+    #     sort_iterations_by='mean_reaction_rate',
+    #     PC=PC_obj,
+    #     repeat=1,
+    #     out_fold_path=f'PC_plots/LibudaG/diff_react_rate/231030_c_b_a({c_b_a:.3g})_steady_state',
+    #     separate_folds=False,
+    #     cluster_command_ops=False,
+    #     python_interpreter='../RL_10_21/venv/bin/python',
+    #     at_same_time=110,
+    # )
+
+    # # Sergey's approach / rate vs frequency, CO part is equal to O2 part
+    points_num = 100  # 49, 25
+    variants = np.linspace(10., -10., points_num).reshape(-1, 1)
+    # variants = np.hstack((np.linspace(0., optimal_ratio, int(points_num * optimal_ratio)),
+    #                       np.linspace(optimal_ratio, 1., points_num - int(points_num * optimal_ratio)))).reshape(-1, 1)
+
+    def transform_from_log_omega(d):
+        T = 2 ** (-d['log_omega'])
+        d.update({'inputB_t1': T / 2, 'inputB_t2': T / 2, 'inputA_t1': T / 2, 'inputA_t2': T / 2, 'episode_time': 100 * T})
+
+    run_jobs_list(
+        **(get_for_common_variations({'inputA': TwoStepPolicy({'1': 0., '2': 1.}),
+                                      'inputB': TwoStepPolicy({'1': 1., '2': 0.})},  # low rates
+                                     # {'inputA': TwoStepPolicy({'1': 0.47, '2': 1., 't1': 1., 't2': 1.}),
+                                     #  'inputB': ConstantPolicy()},  # Sergey's
+                                     'log_omega', {'name': 'mean_reaction_rate', 'column': 0},
+                                     transform_params=transform_from_log_omega,
+                                     additional_names=('thetaB', 'thetaA'),
+                                     take_from_the_end=0.5,
+                                     kwargs_to_sum_plot={'ylim': (0., 0.6), 'twin_ylim': (0., 0.015 * rate_react / 0.1), },
+                                     )),
+        params_variants=variants.tolist(),
+        names=('log_omega', ),
+        names_groups=(),
+        const_params={'calc_dt': lambda x: x / 1000,    # 1000, 10_000
+                      'preprocess': {'in_values': {'inputB': 0.5, 'inputA': 0.5, },
+                                     'time': 1000.,
+                                     'dt': 1.},
+                      },
+        sort_iterations_by='mean_reaction_rate',
+        PC=PC_obj,
+        repeat=1,
+        out_fold_path=f'PC_plots/LibudaG/diff_react_rate/231030_c_b_a({c_b_a:.3g})_rate_vs_freq',
+        separate_folds=False,
+        cluster_command_ops=False,
+        python_interpreter='../RL_10_21/venv/bin/python',
+        at_same_time=100,
+    )
 
     # ZGB k
     ## benchmark
@@ -428,64 +481,32 @@ def main():
     #)
 
     # ZGB
-
-    # benchmark
-    # pressure_unit = 1.e+4
-    # pairs_num = 26
+    # episode_time = 150_000
+    # variants = np.linspace(0., 1., 100).reshape(-1, 1)
+    #
+    # def transform(d):
+    #     d['x_value'] = d['x']
+    #
     # run_jobs_list(
-    #     **(get_for_Ziff_iterations(pressure_unit, 24.e+4, take_from_the_end=0.1, CO2_output_column=0)),
-    #     params_variants=np.linspace(0., 1., pairs_num).reshape(-1, 1).tolist(),
+    #     **(get_for_common_variations({'x': ConstantPolicy()}, 'x', {'name': 'mean_reaction_rate', 'column': 0},
+    #                                  transform_params=transform,
+    #                                  additional_names=('thetaO', 'thetaCO'),
+    #                                  take_from_the_end=0.33,
+    #                                  )),
+    #     params_variants=variants,
     #     names=('x', ),
     #     names_groups=(),
-    #     const_params={},
-    #     sort_iterations_by='CO2',
+    #     const_params={'episode_time': episode_time, 'calc_dt': lambda x: x / 1000,
+    #                   },
+    #     sort_iterations_by='mean_reaction_rate',
     #     PC=PC_obj,
-    #     repeat=3,
-    #     out_fold_path='PC_plots/230413_DEBUG_Ziff_model',
+    #     repeat=1,
+    #     out_fold_path=f'PC_plots/ZGB/230923_steady_state',
     #     separate_folds=False,
     #     cluster_command_ops=False,
     #     python_interpreter='../RL_10_21/venv/bin/python',
     #     at_same_time=100,
     # )
-
-    # run_jobs_list(
-    #     **(get_for_SBP_iteration(2.e-6, 'O2')),
-    #     **(jobs_list_from_grid(
-    #         (0.25e-7, 0.5e-7, 0.75e-7),
-    #         map(lambda x: 0.1 * x, range(1, 10)),
-    #         names=('total', 'first_part'),
-    #     )),
-    #     names_groups=(),
-    #     const_params={'O2_max': 1.e+5, 'CO_max': 1.e+5},
-    #     sort_iterations_by='CO2',
-    #     PC=PC_obj,
-    #     repeat=3,
-    #     out_fold_path='PC_plots/230410_SwitchBetweenPure_20x20',
-    #     separate_folds=False,
-    #     cluster_command_ops=False,
-    #     python_interpreter='../RL_10_21/venv/bin/python',
-    #     at_same_time=100,
-    # )
-
-    # pressure_unit = 1.e+4
-    # # pairs_num = 26
-    # pairs_num = 3
-    # run_jobs_list(
-    #     **(get_for_Ziff_iterations(pressure_unit, 2.e-6)),
-    #     params_variants=[((1 - x) * 10 * pressure_unit, x * 10 * pressure_unit)
-    #                      # for x in np.linspace(0., 1., pairs_num)],
-    #                      for x in np.linspace(0.5, 1., pairs_num)],
-    #     names=('O2', 'CO'),
-    #     ...
-    # )
-
-    # # the best stationary obtained by optimization
-    # one_turn_search_iteration(PC_obj, {'x0': 0.295, 'x1': 0.295,
-    #                                    't0': 1.e-6, 't1': 1.e-6, },
-    #                           'PC_plots/2303_KMC_const_best', 0)
-
-    # Ziff_iteration = get_for_Ziff_iterations(1.e+4, 2.e-6)['iteration_function']
-    # Ziff_iteration(PC_obj, {'O2': 7.1e+4, 'CO': 2.9e+4}, './PC_plots/KMC', 0)
 
 
 if __name__ == '__main__':

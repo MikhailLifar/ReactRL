@@ -282,8 +282,7 @@ def main():
     # my time_step action scheme: min_value + a1 * pow(10, 1) + a2 * pow(10, 2)
 
     def time_step(act):
-        a1, a2 = act[-2:]
-        return 1. + max(0., (a1 - 0.2) / 0.8) * 10. + max(0., (a2 - 0.2) / 0.8) * 100.
+        return 1. + np.max(act[-2:]) * 10 ** (1 + np.argmax(act[-2:]))
 
     variable_time_step_len = {'type': 'continuous',
                               'transform_action': lambda x: x[:-2],

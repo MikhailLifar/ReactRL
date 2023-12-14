@@ -367,37 +367,43 @@ def agent_test_both_control_unseen_rates(agent_path, outfolder, ):
 
 
 def agent_test_arbitrary_co_problem(agent_path, outfolder):
+    # curves = [
+    #     policies.ConstantPolicy({'value': 0.75}),
+    #     policies.ConstantPolicy({'value': 0.5}),
+    #     policies.ConstantPolicy({'value': 0.25}),
+    #     policies.TwoStepPolicy({'1': 0., '2': 1., 't1': 5., 't2': 5., }),
+    #     policies.TwoStepPolicy({'1': 0., '2': 1., 't1': 10., 't2': 10., }),
+    #     policies.TwoStepPolicy({'1': 0.1, '2': 0.6, 't1': 5., 't2': 5., }),
+    #     policies.TwoStepPolicy({'1': 0.1, '2': 0.6, 't1': 10., 't2': 10., }),
+    #     policies.TwoStepPolicy({'1': 0.6, '2': 1., 't1': 5., 't2': 5., }),
+    #     policies.TwoStepPolicy({'1': 0.6, '2': 1., 't1': 10., 't2': 10., }),
+    #
+    #     # special, test only curves
+    #     # TRIANGLE
+    #     policies.TrianglePolicy({'1': 0., '2': 1., 't1': 5., 't2': 5., }),
+    #     policies.TrianglePolicy({'1': 0., '2': 1., 't1': 10., 't2': 10., }),
+    #     policies.TrianglePolicy({'1': 0.2, '2': 0.8, 't1': 5., 't2': 5., }),
+    #     policies.TrianglePolicy({'1': 0.2, '2': 0.8, 't1': 10., 't2': 10., }),
+    #
+    #     # SAW
+    #     policies.TrianglePolicy({'1': 1., '2': 0., 't1': 0., 't2': 10., }),
+    #     policies.TrianglePolicy({'1': 0., '2': 1., 't1': 0., 't2': 10., }),
+    #     policies.TrianglePolicy({'1': 1., '2': 0., 't1': 0., 't2': 5., }),
+    #     policies.TrianglePolicy({'1': 0., '2': 1., 't1': 0., 't2': 5., }),
+    #
+    #     # SIN
+    #     policies.SinPolicy({'A': 0.5, 'T': 5., 'alpha': 0., 'bias': 0.5, }),
+    #     policies.SinPolicy({'A': 0.5, 'T': 10., 'alpha': 0., 'bias': 0.5, }),
+    #     policies.SinPolicy({'A': 0.3, 'T': 5., 'alpha': 0., 'bias': 0.7, }),
+    #     policies.SinPolicy({'A': 0.3, 'T': 10., 'alpha': 0., 'bias': 0.7, }),
+    #     policies.SinPolicy({'A': 0.3, 'T': 5., 'alpha': 0., 'bias': 0.3, }),
+    #     policies.SinPolicy({'A': 0.3, 'T': 10., 'alpha': 0., 'bias': 0.3, }),
+    # ]
+
     curves = [
-        policies.ConstantPolicy({'value': 0.75}),
-        policies.ConstantPolicy({'value': 0.5}),
-        policies.ConstantPolicy({'value': 0.25}),
-        policies.TwoStepPolicy({'1': 0., '2': 1., 't1': 5., 't2': 5., }),
-        policies.TwoStepPolicy({'1': 0., '2': 1., 't1': 10., 't2': 10., }),
-        policies.TwoStepPolicy({'1': 0.1, '2': 0.6, 't1': 5., 't2': 5., }),
-        policies.TwoStepPolicy({'1': 0.1, '2': 0.6, 't1': 10., 't2': 10., }),
-        policies.TwoStepPolicy({'1': 0.6, '2': 1., 't1': 5., 't2': 5., }),
-        policies.TwoStepPolicy({'1': 0.6, '2': 1., 't1': 10., 't2': 10., }),
-
-        # special, test only curves
-        # TRIANGLE
-        policies.TrianglePolicy({'1': 0., '2': 1., 't1': 5., 't2': 5., }),
-        policies.TrianglePolicy({'1': 0., '2': 1., 't1': 10., 't2': 10., }),
-        policies.TrianglePolicy({'1': 0.2, '2': 0.8, 't1': 5., 't2': 5., }),
-        policies.TrianglePolicy({'1': 0.2, '2': 0.8, 't1': 10., 't2': 10., }),
-
-        # SAW
-        policies.TrianglePolicy({'1': 1., '2': 0., 't1': 0., 't2': 10., }),
-        policies.TrianglePolicy({'1': 0., '2': 1., 't1': 0., 't2': 10., }),
-        policies.TrianglePolicy({'1': 1., '2': 0., 't1': 0., 't2': 5., }),
-        policies.TrianglePolicy({'1': 0., '2': 1., 't1': 0., 't2': 5., }),
-
-        # SIN
-        policies.SinPolicy({'A': 0.5, 'T': 5., 'alpha': 0., 'bias': 0.5, }),
-        policies.SinPolicy({'A': 0.5, 'T': 10., 'alpha': 0., 'bias': 0.5, }),
-        policies.SinPolicy({'A': 0.3, 'T': 5., 'alpha': 0., 'bias': 0.7, }),
-        policies.SinPolicy({'A': 0.3, 'T': 10., 'alpha': 0., 'bias': 0.7, }),
-        policies.SinPolicy({'A': 0.3, 'T': 5., 'alpha': 0., 'bias': 0.3, }),
-        policies.SinPolicy({'A': 0.3, 'T': 10., 'alpha': 0., 'bias': 0.3, }),
+        policies.AnyStepPolicy({'nsteps': 4,
+                                '1': 0.75, '2': 0.45, '3': 1., '4': 0.2,
+                                't1': 10., 't2': 10., 't3': 20., 't4': 10.})
     ]
 
     for co_curve in curves:
@@ -419,7 +425,7 @@ def agent_test_arbitrary_co_problem(agent_path, outfolder):
         action_spec=vary_o2_co_is_arbitrary,
         reward_spec='each_step_base',
         target_type='one_row',
-        episode_time=30.,
+        episode_time=100.,
         time_step=1.,
         normalize_coef=1.,
         input_dt=0.1,
@@ -455,16 +461,6 @@ def main():
 
     # PRETRAINED AGENT ARCHITECTURE
 
-    # # PC_obj = ProcessController(
-    # #             LibudaModelWithDegradation(
-    # #                 init_cond={'thetaCO': 0., 'thetaO': 0.},
-    # #                 Ts=273+160,  # 273+160
-    # #                 v_d=0.01,
-    # #                 v_r=0.1,
-    # #                 border=4.),
-    # #             target_func_to_maximize=get_target_func('CO2_value'),
-    # #             supposed_step_count=100, supposed_exp_time=1000)
-    #
     # # PC_obj = PC_setup.general_PC_setup('Libuda2001',
     # #                                    ('to_model_constructor', {'Ts': 433.}),
     # #                                    ('to_PC_constructor', {'target_func_to_maximize': lambda x: x[4]}),
@@ -473,7 +469,8 @@ def main():
     #                                    ('to_model_constructor', {'Ts': 433.}),
     #                                    ('to_PC_constructor', {'target_func_to_maximize': lambda x: x[4]}),
     #                                    )
-    #
+    PC_obj = PC_setup.general_PC_setup('LibudaG')
+
     # my_env = RL2207_Environment(
     #     PC_obj,
     #     state_spec={'rows': 1, 'use_differences': False},
@@ -497,7 +494,22 @@ def main():
     # # rl_agent = Agent.load('temp/for_english/periodic_agent_2', format='numpy', environment=my_env)
     # # test_run(my_env, rl_agent, 'temp/for_english/L2001_test_run', 5, deterministic=True)
     # # test_run(my_env, rl_agent, 'temp/for_english/LD_test_run', 5, deterministic=True)
-    # print(rl_agent.get_architecture())
+
+    my_env = Environment.create(environment=RL2207_Environment(
+        PC_obj,
+        state_spec={'rows': 2, 'use_differences': False},
+        names_to_state=['B', 'A', 'outputC'],
+        reward_spec='each_step_base',
+        target_type='one_row',
+        episode_time=50.,
+        time_step=5.,
+        normalize_coef=1.,
+        input_dt=0.1,
+    ), max_episode_timesteps=6000)
+    my_env.actions()
+    rl_agent = Agent.load('./231002_sudden_discovery/agent', format='numpy', environment=my_env)
+    print(rl_agent.get_specification())
+    print(rl_agent.get_architecture())
 
     # agent_test_both_control_problem('ARTICLE/best_stationary_agent/agent', 'ARTICLE/best_stationary_agent/agent_test')
     # agent_test_both_control_unseen_rates('run_RL_out/agent_test/best_stationary_agent/agent_rows1',
@@ -510,37 +522,38 @@ def main():
     #                                      'run_RL_out/agent_test/best_both_control_random_start/test_unseen_rates_rows3')
     # agent_test_x_co_control_problem('ARTICLE/best_x_co_agent/agent', 'ARTICLE/best_x_co_agent/agent_test')
 
-    # agent_test_arbitrary_co_problem('ARTICLE/bestCORTPagent/agent', 'ARTICLE/bestCORTPagent/agent_test')
+    # agent_test_arbitrary_co_problem('./ARTICLE/agents/best_CORTP_no_sampling_agent/230717_CORTPS_it2',
+    #                                 './ARTICLE/agents/best_CORTP_no_sampling_agent/agent_test')
 
-    run_agents_test(PC_setup.general_PC_setup('LibudaG'),
-                    agents_paths=[
-                        # 'ARTICLE/agents/diff_rates_both_control/agent_it_20',
-                        # 'ARTICLE/agents/diff_rates_both_control/agent_it_40',
-                        # 'ARTICLE/agents/diff_rates_both_control/agent_it_94',
-                        # 'ARTICLE/agents/diff_rates_both_control/agent_it_65',
-                        'ARTICLE/agents/diff_rates_both_control/agent_libuda',
-                    ],
-                    env_params={
-                        'episode_time': 100.,
-                        'time_step': 5.,
-                        'names_to_state': ['B', 'A', 'outputC'],
-                        # 'state_spec': {'rows': 3, 'use_differences': False},
-                        'state_spec': {'rows': 1, 'use_differences': False},
-                        'reward_spec': 'each_step_base',
-                        'input_dt': 0.1,
-                        'target_type': 'one_row',
-                        'reset_mode': {'kind': 'predefined_step', 'step': np.zeros(2)},
-                        'normalize_coef': 1 / 0.03,
-                    },
-                    model_params=[
-                        # {'rate_ads_A': 0.1, 'rate_ads_B': 1.0, 'rate_des_A': 0.07162, 'rate_react': 5.98734, },
-                        # {'rate_ads_A': 10., 'rate_ads_B': 0.1, 'rate_des_A': 0.07162, 'rate_react': 5.98734, },
-                        # {'rate_ads_A': 0.14895, 'rate_ads_B': 0.06594, 'rate_des_A': 10.0, 'rate_react': 10.0, },
-                        # {'rate_ads_A': 0.14895, 'rate_ads_B': 0.06594, 'rate_des_A': 0.1, 'rate_react': 0.1, 'thetaB_init': 0.},
-                        {'rate_ads_A': 0.14895, 'rate_ads_B': 0.06594, 'rate_des_A': 0.07162, 'rate_react': 5.98734, 'thetaB_init': 0.},
-                    ],
-                    n_episodes=5, deterministic=True,
-                    )
+    # run_agents_test(PC_setup.general_PC_setup('LibudaG'),
+    #                 agents_paths=[
+    #                     # 'ARTICLE/agents/diff_rates_both_control/agent_it_20',
+    #                     # 'ARTICLE/agents/diff_rates_both_control/agent_it_40',
+    #                     # 'ARTICLE/agents/diff_rates_both_control/agent_it_94',
+    #                     # 'ARTICLE/agents/diff_rates_both_control/agent_it_65',
+    #                     'ARTICLE/agents/diff_rates_both_control/agent_libuda',
+    #                 ],
+    #                 env_params={
+    #                     'episode_time': 100.,
+    #                     'time_step': 5.,
+    #                     'names_to_state': ['B', 'A', 'outputC'],
+    #                     # 'state_spec': {'rows': 3, 'use_differences': False},
+    #                     'state_spec': {'rows': 1, 'use_differences': False},
+    #                     'reward_spec': 'each_step_base',
+    #                     'input_dt': 0.1,
+    #                     'target_type': 'one_row',
+    #                     'reset_mode': {'kind': 'predefined_step', 'step': np.zeros(2)},
+    #                     'normalize_coef': 1 / 0.03,
+    #                 },
+    #                 model_params=[
+    #                     # {'rate_ads_A': 0.1, 'rate_ads_B': 1.0, 'rate_des_A': 0.07162, 'rate_react': 5.98734, },
+    #                     # {'rate_ads_A': 10., 'rate_ads_B': 0.1, 'rate_des_A': 0.07162, 'rate_react': 5.98734, },
+    #                     # {'rate_ads_A': 0.14895, 'rate_ads_B': 0.06594, 'rate_des_A': 10.0, 'rate_react': 10.0, },
+    #                     # {'rate_ads_A': 0.14895, 'rate_ads_B': 0.06594, 'rate_des_A': 0.1, 'rate_react': 0.1, 'thetaB_init': 0.},
+    #                     {'rate_ads_A': 0.14895, 'rate_ads_B': 0.06594, 'rate_des_A': 0.07162, 'rate_react': 5.98734, 'thetaB_init': 0.},
+    #                 ],
+    #                 n_episodes=5, deterministic=True,
+    #                 )
 
     pass
 

@@ -22,7 +22,9 @@ from test_models import *
 
 
 # class State:
-#     def __init__(self, PC, names_to_state, state_spec):
+#     def __init__(self, PC, names_to_state, rows, use_diffs,
+#                  log_scaling_dict,
+#                  ):
 #         pass
 #
 #     def update(self):
@@ -236,22 +238,24 @@ class RL2207_Environment(Environment):
                                           self.norm_to_log[1]) / self.norm_to_log[0]
         measurement[self.to_log_inds] = np.log(1 + self.to_log_scales * part_to_preprocess)
 
-    def dyn_norm_proc(self, full_env_response):
+    def dyn_norm(self, full_env_response):
         renorm_part = full_env_response[self.dyn_norm_idx]
         # self.dyn_norm_bounds[0] = np.min(np.vstack(self.dyn_norm_bounds[0], renorm_part * (1. - self.dyn_norm_alpha * np.sign(renorm_part))))
 
-        update_idx = renorm_part < self.dyn_norm_bounds[0]
-        if np.any(update_idx):
+        if np.any(renorm_part < self.dyn_norm_bounds[0]):
+            update_idx = renorm_part < self.dyn_norm_bounds[0]
             self.dyn_norm_bounds[0, update_idx] = renorm_part[update_idx] *\
                                                   (1. - self.dyn_norm_alpha * np.sign(renorm_part[update_idx]))
 
-        update_idx = renorm_part > self.dyn_norm_bounds[1]
-        if np.any(update_idx):
+        if np.any(renorm_part > self.dyn_norm_bounds[1]):
+            update_idx = renorm_part > self.dyn_norm_bounds[1]
             self.dyn_norm_bounds[1, update_idx] = renorm_part[update_idx] *\
                                                   (1. + self.dyn_norm_alpha * np.sign(renorm_part[update_idx]))
 
+        full_env_response = full_env_response.copy()
         full_env_response[self.dyn_norm_idx] = (renorm_part - self.dyn_norm_bounds[0]) / \
                                                (self.dyn_norm_bounds[1] - self.dyn_norm_bounds[0])
+        return full_env_response
 
     def states(self):
         lower = self.model.get_bounds('min', 'output')[self.inds_to_state]
@@ -330,8 +334,7 @@ class RL2207_Environment(Environment):
         return self.end_episode
 
     def update_env(self, act):
-        time_step = self.time_step(act)
-        time_step = min(self.episode_time, self.controller.time + time_step)
+        time_step = min(self.episode_time, self.controller.time + self.time_step(act))
         self.last_actual_time_step = time_step
         model_inputs = self.transform_action(act)
         temp = 0.
@@ -343,9 +346,9 @@ class RL2207_Environment(Environment):
         if temp < time_step:
             self.controller.time_forward(time_step - temp)
 
-        full_env_response = self.controller.get_process_output()[1][-1].copy()
+        full_env_response = self.controller.get_process_output()[1][-1]
         if self.dynamic_normalization:
-            self.dyn_norm_proc(full_env_response)
+            full_env_response = self.dyn_norm(full_env_response)
 
         current_measurement = full_env_response[self.inds_to_state]
         if self.if_use_log_scale:
