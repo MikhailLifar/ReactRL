@@ -208,12 +208,8 @@ class RL2207_Environment(Environment):
                     params={'name': 'full_ep_2', 'subtype': f'{subtype}_mode', 'depth': 25}
                 ), self)
             elif reward_spec in ('each_step_base', 'full_ep_base'):
-                # TODO here is crutch with bias
-                bias = 0.02
-                if isinstance(self.model, TestModel):
-                    bias = -0.3
                 self.reward = MethodType(get_reward_func(
-                    params={'name': reward_spec, 'bias': bias}
+                    params={'name': reward_spec}
                 ), self)
             else:
                 self.reward = MethodType(get_reward_func(params={'name': reward_spec}), self)
@@ -334,7 +330,8 @@ class RL2207_Environment(Environment):
         return self.end_episode
 
     def update_env(self, act):
-        time_step = min(self.episode_time, self.controller.time + self.time_step(act))
+        time_step = self.time_step(act)
+        time_step = min(self.episode_time - self.controller.time, time_step)
         self.last_actual_time_step = time_step
         model_inputs = self.transform_action(act)
         temp = 0.

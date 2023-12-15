@@ -89,8 +89,9 @@ def main():
     # PC_obj = PC_setup.general_PC_setup('LibudaG')
     PC_obj = PC_setup.general_PC_setup(
         'LibudaG',
-        ('to_PC_constructor', 'target_func_to_maximize', get_target_func('(Gauss)xCO_conv', default=0.3,
-                                                                         sigma=0.05, eps=1.e-4)))  # CO conversion x Gauss(I_CO - I_CO_default)
+        ('to_PC_constructor', {'target_func_to_maximize': None,
+                               'long_term_target_to_maximize':
+                                   get_target_func('(Gauss)xCO_conv', default=0.5, sigma=0.1, eps=1.e-4)}))  # CO conversion x Gauss(I_CO - I_CO_default)
     # PC_obj = PC_setup.general_PC_setup('LibudaGWithT')
     # PC_obj = PC_setup.default_PC_setup('Ziff')
     # PC_obj = PC_setup.general_PC_setup('Ziff', ('to_model_constructor', 'CO2_count_top', 2.e+3))
@@ -343,11 +344,14 @@ def main():
                           'time_step': time_step,
                           'names_to_state': ['B', 'A', 'outputC'],
                           'state_spec': {'rows': 3, 'use_differences': False},
-                          'reward_spec': 'each_step_base',
+                          # 'reward_spec': 'each_step_base',
+                          'reward_spec': 'full_ep_base',
                           'input_dt': 0.1,
-                          'target_type': 'one_row',
+                          # 'target_type': 'one_row',
+                          'target_type': 'episode',
                           'dynamic_normalization': {'names': ['outputC'], 'alpha': 0.2},
-                          'init_callback': PC_run.get_estimate_rate_callback(),
+                          # 'init_callback': PC_run.get_estimate_rate_callback(),
+                          'normalize_coef': 0.5,
                       },
                       'agent': {},
                       'model': {},
@@ -357,7 +361,7 @@ def main():
                   sort_iterations_by='deterministic_test::max_on_test',
                   cluster_command_ops=False,
                   python_interpreter='../RL_10_21/venv/bin/python',
-                  out_fold_path='./run_RL_out/LibudaG/231205_var_time_step_dyn_norm',
+                  out_fold_path='./run_RL_out/LibudaG/231215_gauss_x_co_conv',
                   at_same_time=110,
                   )
 
