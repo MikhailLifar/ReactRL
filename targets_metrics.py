@@ -184,6 +184,20 @@ def get_target_func(func_name, **kwargs):
 
         return Gauss_CO_sub_default_x_CO2_I
 
+    elif func_name == '(Gauss)xCO_conv':
+        CO_0 = kwargs['default']
+        sigma = kwargs['sigma']  # try 0.1 * CO_0
+        eps = kwargs['eps']
+
+        def Gauss_CO_sub_default_x_CO_conv(output_history_dt, output_history):
+            I_CO_press = integral(output_history_dt, output_history[:, 4])
+            I_CO = integral(output_history_dt, output_history[:, 2])
+            I_CO2 = integral(output_history_dt, output_history[:, 0])
+            diff = (I_CO_press - CO_0 * output_history_dt[output_history_dt > 0.][-1])
+            return np.exp((-diff) * diff / sigma) * (I_CO2 / (I_CO + eps))
+
+        return Gauss_CO_sub_default_x_CO_conv
+
     else:
         raise ValueError
 
