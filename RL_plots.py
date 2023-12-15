@@ -655,7 +655,7 @@ def input_output_plot(ax_input, ax_output, df_NM, df_RL,
                                       2: {
                                           # 'label': f'{LABEL_A}',  # давление CO, {LABEL_A}
                                           'c': colors['CO'], 'linestyle': 'solid'}},  # color
-                           title='RL policy',  # 'input pressures', 'model inputs', 'управляемые параметры'
+                           title='Политика агента',  # 'input pressures', 'model inputs', 'управляемые параметры', 'RL policy'
                            xlim=[0., xtop], ylim=[0., 1.05],
                            twin_params=None,
                            )
@@ -690,9 +690,9 @@ def input_output_plot(ax_input, ax_output, df_NM, df_RL,
                                                       # 'label': 'reaction rate',  # скорость образования \n$CO_2$, reaction rate
                                                       'c': colors['CO2']}},  # color
                                        xlim=[0., xtop], ylim=[0., cov_top],
-                                       title='Environment response',  # 'rate & thetas', 'model outputs', 'выходные параметры'
+                                       title='Поведение модели',  # 'rate & thetas', 'model outputs', 'выходные параметры', 'Environment response'
                                        # twin_params={'ylim': [0., 0.1], 'ylabel': '$CO_{2}$ formation rate'},
-                                       twin_params={'ylim': [0., twin_top], 'ylabel': 'Reaction rate' if twin_label else None},  # 'Reaction rate'
+                                       twin_params={'ylim': [0., twin_top], 'ylabel': 'Скорость реакции' if twin_label else None},  # 'Reaction rate'
                                        )
 
     right_ax.spines['right'].set_color(colors['CO2'])
@@ -1020,7 +1020,7 @@ def fig_S1():
     savefig(fig, f'{PLOT_FOLDER}/figS1.png')
 
 
-def figs_ananikov():
+def ananikov_thesis():
     data_folder = f'{DATA_FOLDER}/ananikov'
     fig0, ax0 = plt.subplots(figsize=(12 / 3 * 2, 12 / 3 * 2))
     fig1, ax1 = plt.subplots(figsize=(12 / 3 * 2, 12 / 3 * 2))
@@ -1037,18 +1037,43 @@ def figs_ananikov():
     fig1.savefig(f'{PLOT_FOLDER}/ananikov_out.png')
 
 
+def ananikov_sol_plot(datapath, foldpath, xtop):
+    fig, axs = plt.subplots(2, 1, figsize=(FIG_SIZE_MAIN[0] * 0.6, FIG_SIZE_MAIN[1]))  # (1.5 * FIG_SIZE_MAIN[0], 1.8 * FIG_SIZE_MAIN[1])
+
+    _, df_RL = read_plottof_csv(datapath, ret_df=True)
+    input_output_plot(axs[0], axs[1], None, df_RL,  xtop=xtop, twin_label=True,
+                      twin_top=1.5 * np.max(df_RL['outputC y' if 'outputC y' in df_RL.columns else 'reaction rate y']), cov_top=0.75,
+                      update_colors={'CO': 'gray'})
+
+    axs[0].set_xlabel('Время, с')
+    axs[1].set_xlabel('Время, с')
+
+    _, fname = os.path.split(datapath)
+    fname = os.path.splitext(fname)[0]
+
+    savefig(fig, f'{foldpath}/{fname}.png')
+
+
 def main() -> None:
     # fig_2_learning_curve()
-    fig_3_one_rate_sets()
+    # fig_3_one_rate_sets()
     # fig4_covs_axis_plot_v3()
-    fig_5_dyn_demo()
-    fig_6_stchdemolrg()
+    # fig_5_dyn_demo()
+    # fig_6_stchdemolrg()
     # fig_S1()
+
+    # data_folder = f'{PLOT_FOLDER}/ananikov/task1_data'
+    # for fname in os.listdir(data_folder):
+    #     ananikov_sol_plot(f'{data_folder}/{fname}', f'{PLOT_FOLDER}/ananikov/task1', xtop=240.)
+
+    data_folder = f'{PLOT_FOLDER}/ananikov/task2_data'
+    for fname in os.listdir(data_folder):
+        ananikov_sol_plot(f'{data_folder}/{fname}', f'{PLOT_FOLDER}/ananikov/task2', xtop=100.)
 
     # exp1_steady_state_map('exp_libuda_react_div60')
     # exp2_reverse_steady_state_maps('exp_libuda_react_div60')
 
-    # figs_ananikov()
+    # ananikov_thesis()
 
     # fig3.1
     # df = pd.read_csv(filepath, sep=';')

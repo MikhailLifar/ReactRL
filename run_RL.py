@@ -495,21 +495,21 @@ def main():
     # # test_run(my_env, rl_agent, 'temp/for_english/L2001_test_run', 5, deterministic=True)
     # # test_run(my_env, rl_agent, 'temp/for_english/LD_test_run', 5, deterministic=True)
 
-    my_env = Environment.create(environment=RL2207_Environment(
-        PC_obj,
-        state_spec={'rows': 2, 'use_differences': False},
-        names_to_state=['B', 'A', 'outputC'],
-        reward_spec='each_step_base',
-        target_type='one_row',
-        episode_time=50.,
-        time_step=5.,
-        normalize_coef=1.,
-        input_dt=0.1,
-    ), max_episode_timesteps=6000)
-    my_env.actions()
-    rl_agent = Agent.load('./231002_sudden_discovery/agent', format='numpy', environment=my_env)
-    print(rl_agent.get_specification())
-    print(rl_agent.get_architecture())
+    # my_env = Environment.create(environment=RL2207_Environment(
+    #     PC_obj,
+    #     state_spec={'rows': 2, 'use_differences': False},
+    #     names_to_state=['B', 'A', 'outputC'],
+    #     reward_spec='each_step_base',
+    #     target_type='one_row',
+    #     episode_time=50.,
+    #     time_step=5.,
+    #     normalize_coef=1.,
+    #     input_dt=0.1,
+    # ), max_episode_timesteps=6000)
+    # my_env.actions()
+    # rl_agent = Agent.load('./231002_sudden_discovery/agent', format='numpy', environment=my_env)
+    # print(rl_agent.get_specification())
+    # print(rl_agent.get_architecture())
 
     # agent_test_both_control_problem('ARTICLE/best_stationary_agent/agent', 'ARTICLE/best_stationary_agent/agent_test')
     # agent_test_both_control_unseen_rates('run_RL_out/agent_test/best_stationary_agent/agent_rows1',
@@ -525,35 +525,35 @@ def main():
     # agent_test_arbitrary_co_problem('./ARTICLE/agents/best_CORTP_no_sampling_agent/230717_CORTPS_it2',
     #                                 './ARTICLE/agents/best_CORTP_no_sampling_agent/agent_test')
 
-    # run_agents_test(PC_setup.general_PC_setup('LibudaG'),
-    #                 agents_paths=[
-    #                     # 'ARTICLE/agents/diff_rates_both_control/agent_it_20',
-    #                     # 'ARTICLE/agents/diff_rates_both_control/agent_it_40',
-    #                     # 'ARTICLE/agents/diff_rates_both_control/agent_it_94',
-    #                     # 'ARTICLE/agents/diff_rates_both_control/agent_it_65',
-    #                     'ARTICLE/agents/diff_rates_both_control/agent_libuda',
-    #                 ],
-    #                 env_params={
-    #                     'episode_time': 100.,
-    #                     'time_step': 5.,
-    #                     'names_to_state': ['B', 'A', 'outputC'],
-    #                     # 'state_spec': {'rows': 3, 'use_differences': False},
-    #                     'state_spec': {'rows': 1, 'use_differences': False},
-    #                     'reward_spec': 'each_step_base',
-    #                     'input_dt': 0.1,
-    #                     'target_type': 'one_row',
-    #                     'reset_mode': {'kind': 'predefined_step', 'step': np.zeros(2)},
-    #                     'normalize_coef': 1 / 0.03,
-    #                 },
-    #                 model_params=[
-    #                     # {'rate_ads_A': 0.1, 'rate_ads_B': 1.0, 'rate_des_A': 0.07162, 'rate_react': 5.98734, },
-    #                     # {'rate_ads_A': 10., 'rate_ads_B': 0.1, 'rate_des_A': 0.07162, 'rate_react': 5.98734, },
-    #                     # {'rate_ads_A': 0.14895, 'rate_ads_B': 0.06594, 'rate_des_A': 10.0, 'rate_react': 10.0, },
-    #                     # {'rate_ads_A': 0.14895, 'rate_ads_B': 0.06594, 'rate_des_A': 0.1, 'rate_react': 0.1, 'thetaB_init': 0.},
-    #                     {'rate_ads_A': 0.14895, 'rate_ads_B': 0.06594, 'rate_des_A': 0.07162, 'rate_react': 5.98734, 'thetaB_init': 0.},
-    #                 ],
-    #                 n_episodes=5, deterministic=True,
-    #                 )
+    run_agents_test(PC_setup.general_PC_setup('LibudaG'),
+                    agents_paths=[
+                        # 'ARTICLE/agents/diff_rates_both_control/agent_it_20',
+                        # 'ARTICLE/agents/diff_rates_both_control/agent_it_40',
+                        # 'ARTICLE/agents/diff_rates_both_control/agent_it_94',
+                        # 'ARTICLE/agents/diff_rates_both_control/agent_it_65',
+                        'ARTICLE/agents/diff_rates_both_control/agent_libuda',
+                    ],
+                    env_params={
+                        'episode_time': 500.,
+                        'time_step': 5.,
+                        'names_to_state': ['B', 'A', 'outputC'],
+                        # 'state_spec': {'rows': 3, 'use_differences': False},
+                        'state_spec': {'rows': 1, 'use_differences': False},
+                        'reward_spec': 'each_step_base',
+                        'input_dt': 0.1,
+                        'target_type': 'one_row',
+                        # 'reset_mode': {'kind': 'predefined_step', 'step': np.zeros(2)},
+                        'normalize_coef': 1 / 0.03,
+                    },
+                    model_params=[
+                        # {'rate_ads_A': 0.1, 'rate_ads_B': 1.0, 'rate_des_A': 0.07162, 'rate_react': 5.98734, },
+                        # {'rate_ads_A': 10., 'rate_ads_B': 0.1, 'rate_des_A': 0.07162, 'rate_react': 5.98734, },
+                        # {'rate_ads_A': 0.14895, 'rate_ads_B': 0.06594, 'rate_des_A': 10.0, 'rate_react': 10.0, },
+                        # {'rate_ads_A': 0.14895, 'rate_ads_B': 0.06594, 'rate_des_A': 0.1, 'rate_react': 0.1, 'thetaB_init': 0.},
+                        {'rate_ads_A': 0.14895, 'rate_ads_B': 0.06594, 'rate_des_A': 0.07162, 'rate_react': 5.98734, 'thetaB_init': 0.},
+                    ],
+                    n_episodes=5, deterministic=True,
+                    )
 
     pass
 
