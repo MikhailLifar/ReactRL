@@ -88,43 +88,6 @@ def get_reward_func(params: dict):
 
         out_func = full_ep_new
 
-    elif params['name'] == 'hybrid':
-        subtype = params['subtype']
-        depth = params['depth']
-
-        def hybrid_reward(env_obj) -> float:
-            """
-
-            Reward combines full_ep_[mode] and each_step_base rewards
-
-            :param env_obj:
-            :return:
-            """
-
-            # if env_obj.end_episode:
-            #     # print('Something went wrong!')
-            #     int_arr = env_obj.stored_integral_data['integral'][:env_obj.count_episodes]
-            #     std_lasts = np.std(int_arr[-depth:])
-            #     if std_lasts < 1.e-2 * env_obj.integral:
-            #         std_lasts = 1.e-2 * env_obj.integral
-            #     if subtype == 'mean_mode':
-            #         rew = (env_obj.integral - np.mean(int_arr[-depth-1:-1])) / std_lasts
-            #     elif subtype == 'median_mode':
-            #         rew = (env_obj.integral - np.median(int_arr[-depth-1:-1])) / std_lasts
-            #     elif subtype == 'max_mode':
-            #         rew = (env_obj.integral - np.max(int_arr[-depth-1:-1])) / std_lasts
-            #     else:
-            #         rew = None
-            #     # rew = min(rew, 2.)
-            #     # rew = max(-2., rew)
-            #     if rew == 0:
-            #         rew = 0.5 - 1. * (env_obj.count_episodes % 2)
-            #     return rew
-            # else:
-            raise NotImplementedError
-
-        out_func = hybrid_reward
-
     else:
         assert False, f'Error! Invalid type of reward function: {params["name"]}'
 

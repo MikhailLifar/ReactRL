@@ -21,33 +21,145 @@ from rewrad_variants import *
 from test_models import *
 
 
-# class State:
-#     def __init__(self, PC, names_to_state, rows, use_diffs,
-#                  log_scaling_dict,
-#                  ):
-#         pass
-#
-#     def update(self):
-#         pass
-#
-#     def get(self):
-#         pass
-#
-#     def describe(self):
-#         pass
+class State:
+    """
+    State(PC) -> state
+    PC: ProcessController
+    state: agent network input
+
+    Features:
+    All the scalar's in the state have or fixed bounds (default),
+      or dynamically adjusted
+    """
+    def __init__(self, PC: ProcessController,
+                 shape,
+                 history_shift_t=None,
+                 transform=None, inner_transform=None, inner=None,
+                 info='',
+                 dynamic_normalization=None):
+        self.PC = PC
+        self.model = PC.process_to_control
+        self.shape = shape
+        self.measurement_len = len(self.model.names['output'])
+
+        if history_shift_t is None:
+            history_shift_t = np.zeros(1, dtype=np.float32)
+        assert history_shift_t[-1] == 0
+        self.history_shift_t = history_shift_t
+        self.history_shift_idx = (self.history_shift_t // PC.analyser_dt).astype('int')
+
+        if transform is None:
+            transform = lambda s0, i: s0
+        self.transform = transform
+        self.inner = inner
+        if inner_transform is None:
+            inner_transform = lambda s0, s1, i: None
+        self.inner_transform = inner_transform
+
+        self.dynamic_normalization = dynamic_normalization is not None
+        self.dyn_norm_idx = None
+        self.dyn_norm_bounds = None
+        self.dyn_norm_alpha = None
+        if self.dynamic_normalization:
+            self.dyn_norm_idx = [i for i, name in enumerate(self.model.names['output'])
+                                 if name in dynamic_normalization['names']]
+            self.dyn_norm_idx = np.array(self.dyn_norm_idx)
+            self.dyn_norm_bounds = np.zeros((2, len(self.dyn_norm_idx)))
+            self.dyn_norm_bounds[1] += 1.e-5
+            self.dyn_norm_alpha = dynamic_normalization.get('alpha', 0.2)
+
+        # TODO functionality may be extended to support more narrow bounds
+        lower = self.model.get_bounds('min', 'output')
+        upper = self.model.get_bounds('max', 'output')
+        self.bounds = np.vstack((lower, upper))
+        if self.dynamic_normalization:
+            self.bounds[0, self.dyn_norm_idx] = 0.
+            self.bounds[1, self.dyn_norm_idx] = 1.
+
+        self.info = info
+
+    def normalize(self, s0):
+        # dynamic normalization update
+        renorm_part = s0[self.dyn_norm_idx]
+        # self.dyn_norm_bounds[0] = np.min(np.vstack(self.dyn_norm_bounds[0], renorm_part * (1. - self.dyn_norm_alpha * np.sign(renorm_part))))
+
+        if np.any(renorm_part < self.dyn_norm_bounds[0]):
+            update_idx = renorm_part < self.dyn_norm_bounds[0]
+            self.dyn_norm_bounds[0, update_idx] = renorm_part[update_idx] *\
+                                                  (1. - self.dyn_norm_alpha * np.sign(renorm_part[update_idx]))
+
+        if np.any(renorm_part > self.dyn_norm_bounds[1]):
+            update_idx = renorm_part > self.dyn_norm_bounds[1]
+            self.dyn_norm_bounds[1, update_idx] = renorm_part[update_idx] *\
+                                                  (1. + self.dyn_norm_alpha * np.sign(renorm_part[update_idx]))
+
+        s0 = s0.copy()
+        # dynamic normalization
+        s0[self.dyn_norm_idx] = (renorm_part - self.dyn_norm_bounds[0]) / \
+                                (self.dyn_norm_bounds[1] - self.dyn_norm_bounds[0])
+        # fixed normalization
+        s0 = (s0 - self.bounds[0]) / (self.bounds[1] - self.bounds[0])
+
+        return s0
+
+    def get(self, s0=None):
+        if s0 is None:
+            PC = self.PC
+            last_ind = np.where(PC.output_history_dt == -1)[0][0] - 1
+            s0 = self.PC.output_history[last_ind - self.history_shift_idx, :]
+
+        for i, row in enumerate(s0):
+            s0[i] = self.normalize(row)
+
+        s1 = self.transform(s0, self.inner)
+        self.inner = self.inner_transform(s0, s1, self.inner)
+        return s1
+
+    def get_info(self):
+        string = self.info + f'shape: {self.shape}\n'
+        return string
+
+
+def get_state(string, PC: ProcessController, **kwargs):
+    model = PC.process_to_control
+
+    shape = (len(model.names['output']), )
+    times = None
+    transform = None
+    inner_transform = None
+    inner = None
+    info = kwargs.get('info', 'vanilla')
+
+    if string == 'LG:CO2&O2&CO':
+        transform = lambda s0, i: np.squeeze(s0[0:3])
+        info = f'{string}\n'
+
+    elif string == 'LG:(CO2&O2&CO)x(points)':
+        n = kwargs['points']
+        times = np.arange(n)[::-1] * kwargs.get('step', 3.)
+        transform = lambda s0, i: s0[:, 0:3]
+        info = f'{string}\n'
+        shape = (n, 3)
+
+    return State(PC, shape, times,
+                 transform=transform, inner_transform=inner_transform, inner=inner,
+                 info=info,
+                 dynamic_normalization=kwargs.get('dynamic_normalization', None))
+
+
+def get_state_sequential():
+    raise NotImplementedError
 
 
 class RL2207_Environment(Environment):
     def __init__(self, PC: ProcessController,
-                 names_to_state: list = None,
-                 state_spec: dict = None,
+                 state_string,
+                 state_args: dict = None,
                  action_spec: [Dict, str] = 'continuous',
                  reward_spec: [str, callable] = None,
                  episode_time=None, time_step=None,
                  reset_mode='bottom_state',
-                 log_scaling_dict=None,
                  init_callback=None,
-                 dynamic_normalization=None,
                  **kwargs):
 
         """
@@ -66,6 +178,10 @@ class RL2207_Environment(Environment):
         self.model_type = 'continuous'
         if (hasattr(self.model, 'model_type')) and (self.model.model_type == 'discrete'):
             raise NotImplementedError('Models with discrete inputs are not supported for now')
+
+        if state_args is None:
+            state_args = dict()
+        self.state_obj = get_state(state_string, self.controller, **state_args)
 
         if isinstance(action_spec, str):
             action_spec = {'type': action_spec}
@@ -111,37 +227,6 @@ class RL2207_Environment(Environment):
         self.stored_integral_data['smooth_50_step'] = None
         self.stored_integral_data['smooth_1000_step'] = None
 
-        if names_to_state is None:
-            names_to_state = self.model.names['output']
-        assert names_to_state
-        for name in names_to_state:
-            assert name in self.model.names['output'], f'The model does not return the name: {name}'
-        self.inds_to_state = [i for i, name in enumerate(self.model.names['output']) if name in names_to_state]
-        self.names_to_state = copy.deepcopy(names_to_state)
-
-        self.dynamic_normalization = dynamic_normalization is not None
-        self.dyn_norm_idx = None
-        self.dyn_norm_bounds = None
-        self.dyn_norm_alpha = None
-        if self.dynamic_normalization:
-            self.dyn_norm_idx = [i for i, name in enumerate(self.model.names['output'])
-                                 if name in dynamic_normalization['names']]
-            self.dyn_norm_bounds = np.zeros((2, len(self.dyn_norm_idx)))
-            self.dyn_norm_bounds[1] += 1.e-5
-            self.dyn_norm_alpha = dynamic_normalization['alpha']
-
-        one_state_row_len = len(names_to_state)
-        # one_state_row_len = len(self.model.limits['input']) + len(self.model.limits['output'])
-        if state_spec is None:
-            state_spec = dict()
-            state_spec['rows'] = 2
-        if 'use_differences' not in state_spec:
-            state_spec['use_differences'] = False
-        state_spec['shape'] = (state_spec['rows'], one_state_row_len)
-        self.state_spec = copy.deepcopy(state_spec)
-
-        self.state_memory = np.zeros((2 * self.state_spec['rows'] + 2, one_state_row_len))
-
         self.reset_mode = copy.deepcopy(reset_mode)
 
         # self.reward_type = 'each_step'
@@ -159,25 +244,6 @@ class RL2207_Environment(Environment):
         else:
             self.normalize_coef = normalize_coef(self)
 
-        # Log preprocessing parameters.
-        # Log preprocessing may be used when output values of the process
-        # are distributed not uniformly between min and max bounds,
-        # exactly when these values are mostly much closer to the min bound.
-        # I've tried log scaling with L2001 model, but results were the same as without scaling
-        self.if_use_log_scale = log_scaling_dict is not None
-        self.to_log_inds = None
-        self.to_log_scales = None
-        self.norm_to_log = None
-        if self.if_use_log_scale:
-            to_log_inds_scales = np.array([[self.controller.output_ind[name],
-                                                 log_scaling_dict[name]]
-                                           for name in self.controller.output_names if name in log_scaling_dict])
-            self.to_log_inds = to_log_inds_scales[:, 0]
-            self.to_log_scales = to_log_inds_scales[:, 1]
-            self.norm_to_log = np.vstack(((self.model.get_bounds('max', 'output') -
-                                           self.model.get_bounds('min', 'output'))[self.to_log_inds],
-                                          self.model.get_bounds('min', 'output')[self.to_log_inds]))
-
         # self.save_policy = False
         # self.policy_df = pd.DataFrame(columns=[*self.in_gas_names, 'time_steps'])
 
@@ -186,9 +252,6 @@ class RL2207_Environment(Environment):
 
         # info
         self.env_info = f'model_type: {self.model_type}\n' \
-                        f'names to state: {self.names_to_state}\n' \
-                        f'state_spec: shape {self.state_spec["shape"]}, ' \
-                        f'use_differences {self.state_spec["use_differences"]}\n' \
                         f'action_type: {self.action_spec["type"]}\n' \
                         f'action_info: {self.action_spec["info"]}\n' \
                         f'reward: {self.reward_name}\n' \
@@ -214,70 +277,14 @@ class RL2207_Environment(Environment):
             else:
                 self.reward = MethodType(get_reward_func(params={'name': reward_spec}), self)
 
-            # elif reward_spec == 'hybrid':
-            #     self.reward = MethodType(get_reward_func(params={
-            #         'name': reward_spec,
-            #         'subtype': 'mean_mode',
-            #         'depth': 25,
-            #         'part': 0.9,
-            #     }), self)
-            #     self.reward_type = 'hybrid'
-
             self.reward_name = reward_spec
 
         elif callable(reward_spec):
             self.reward = MethodType(reward_spec, self)
             self.reward_name = 'callable'
 
-    def log_preprocess(self, measurement: np.ndarray):
-        part_to_preprocess = (measurement[self.to_log_inds] -
-                                          self.norm_to_log[1]) / self.norm_to_log[0]
-        measurement[self.to_log_inds] = np.log(1 + self.to_log_scales * part_to_preprocess)
-
-    def dyn_norm(self, full_env_response):
-        renorm_part = full_env_response[self.dyn_norm_idx]
-        # self.dyn_norm_bounds[0] = np.min(np.vstack(self.dyn_norm_bounds[0], renorm_part * (1. - self.dyn_norm_alpha * np.sign(renorm_part))))
-
-        if np.any(renorm_part < self.dyn_norm_bounds[0]):
-            update_idx = renorm_part < self.dyn_norm_bounds[0]
-            self.dyn_norm_bounds[0, update_idx] = renorm_part[update_idx] *\
-                                                  (1. - self.dyn_norm_alpha * np.sign(renorm_part[update_idx]))
-
-        if np.any(renorm_part > self.dyn_norm_bounds[1]):
-            update_idx = renorm_part > self.dyn_norm_bounds[1]
-            self.dyn_norm_bounds[1, update_idx] = renorm_part[update_idx] *\
-                                                  (1. + self.dyn_norm_alpha * np.sign(renorm_part[update_idx]))
-
-        full_env_response = full_env_response.copy()
-        full_env_response[self.dyn_norm_idx] = (renorm_part - self.dyn_norm_bounds[0]) / \
-                                               (self.dyn_norm_bounds[1] - self.dyn_norm_bounds[0])
-        return full_env_response
-
     def states(self):
-        lower = self.model.get_bounds('min', 'output')[self.inds_to_state]
-        upper = self.model.get_bounds('max', 'output')[self.inds_to_state]
-
-        lower[self.dyn_norm_idx] = 0.
-        upper[self.dyn_norm_idx] = 1.
-
-        if self.if_use_log_scale:
-            lower[self.to_log_inds] = 0.
-            upper[self.to_log_inds] = np.log(1. + self.to_log_scales) + 1e-5
-
-        # print(self.model.get_bounds('min', 'input'))
-        # print(self.model.get_bounds('min', 'output'))
-
-        states_shape = self.state_spec['shape']
-        assert states_shape[1] == lower.size
-        min_values = np.repeat(lower.reshape(1, -1), states_shape[0], axis=0)
-        max_values = np.repeat(upper.reshape(1, -1), states_shape[0], axis=0)
-
-        if self.state_spec['use_differences']:
-            min_values[1::2, :] = lower - upper
-            max_values[1::2, :] = -min_values[1::2]
-
-        return dict(type='float', shape=states_shape,
-                    min_value=min_values, max_value=max_values)
+        return dict(type='float', shape=self.state_obj.shape, min_value=0., max_value=1.)
 
     def actions(self):
         # WARNING: only the models with continuous inputs are supported for now
@@ -342,33 +349,8 @@ class RL2207_Environment(Environment):
             temp += self.input_dt
         if temp < time_step:
             self.controller.time_forward(time_step - temp)
-
-        full_env_response = self.controller.get_process_output()[1][-1]
-        if self.dynamic_normalization:
-            full_env_response = self.dyn_norm(full_env_response)
-
-        current_measurement = full_env_response[self.inds_to_state]
-        if self.if_use_log_scale:
-            current_measurement = copy.deepcopy(current_measurement)
-            self.log_preprocess(current_measurement)
-
-        # if self.save_policy:
-        #     ind = self.policy_df.shape[0]
-        #     if self.model.names['input']:
-        #         for i, action_name in enumerate(self.model.names['input']):
-        #             self.policy_df.loc[ind, action_name] = model_inputs[i]
-        #     self.policy_df.loc[ind, 'time_steps'] = self.delta_t
-
-        self.state_memory[1:] = self.state_memory[:-1]
-        self.state_memory[0] = np.array([*current_measurement])
-        rows_num = self.state_spec['rows']
-        if self.state_spec['use_differences']:
-            out = np.zeros(self.state_spec['shape'])
-            out[::2] = self.state_memory[:rows_num//2 + 1]
-            out[1::2] = self.state_memory[:rows_num//2] - self.state_memory[1:rows_num//2 + 1]
-            return out
-        else:
-            return self.state_memory[:rows_num]
+        self.controller.get_process_output()
+        return self.state_obj.get()
 
     def execute(self, actions):
         next_state = self.update_env(actions)
@@ -415,22 +397,15 @@ class RL2207_Environment(Environment):
         else:
             raise ValueError
 
-        current_measurement = current_measurement[self.inds_to_state]
-        self.state_memory[0] = np.array([*current_measurement])
-        self.state_memory[1:] = self.state_memory[0]
-        rows_num = self.state_spec['rows']
-        if self.state_spec['use_differences']:
-            assert (rows_num % 2 == 1) and (rows_num > 1), 'If use differences, shape must be (k, 3)' \
-                                                           ' where k is odd and k > 1'
-            out = np.zeros(self.state_spec['shape'])
-            out[::2] = self.state_memory[:rows_num//2 + 1]
-            out[1::2] = self.state_memory[:rows_num//2] - self.state_memory[1:rows_num//2 + 1]
-            return out
-        else:
-            return self.state_memory[:rows_num]
+        out = current_measurement
+        if len(self.state_obj.shape) > 1:
+            out = self.state_obj.get(np.tile(out, (self.state_obj.shape[0], 1)))
+        return out
 
     def describe_to_file(self, filename):
         with open(filename, 'a') as fout:
+            fout.write('\n-----State-----\n')
+            fout.write(self.state_obj.get_info())
             fout.write('\n-----Environment-----\n')
             fout.write(self.env_info + '\n')
             fout.write('-----ProcessController-----\n')
@@ -460,36 +435,3 @@ class RL2207_Environment(Environment):
                          x_vector[::20], self.stored_integral_data['smooth_50_step'], 'short_smooth',
                          x_vector[::20], self.stored_integral_data['smooth_1000_step'], 'long_smooth',
                          ylim=[0., None], fileName=f'{folder}/output_by_step.png', save_csv=False)
-
-
-def normalize_coef(env_obj):
-
-    if isinstance(env_obj.model, LibudaModel):
-        max_inputs = env_obj.model.get_bounds('max', 'input', out='dict')
-        # relations = [{'O2': 0.8, 'CO': 0.4}, {'O2': 0.5, 'CO': 0.5}, {'O2': 0.4, 'CO': 0.8}]
-        relations = [{'O2': 1., 'CO': value}
-                     for value in [0.1 * i for i in range(1, 10)]]
-        relations += [{'O2': value, 'CO': 1.}
-                     for value in [0.1 * i for i in range(1, 10)]]
-        koefs = []
-        for d in relations:
-            env_obj.controller.reset()
-            env_obj.controller.set_controlled({'O2': max_inputs['O2'] * d['O2'], 'CO': max_inputs['CO'] * d['CO']})
-            env_obj.controller.time_forward(env_obj.episode_time)
-            if env_obj.target_type == 'one_row':
-                cumm_target = env_obj.controller.integrate_along_history(target_mode=True)
-            else:
-                cumm_target = env_obj.controller.get_long_term_target()
-            # assert cumm_target > 0, 'cumm. target should be positive'
-            if cumm_target > 0:
-                koefs.append(1 / cumm_target)
-        if len(koefs):
-            return np.min(koefs)
-        else:
-            warnings.warn('Failed to compute coefficient. Default one will be used.')
-            return 10.
-
-    elif isinstance(env_obj.model, TestModel):
-        target_step_estim = 1 / 3 * np.linalg.norm(env_obj.model.get_bounds('max', 'output')
-                                      - env_obj.model.get_bounds('min', 'output'))
-        return 1 / target_step_estim / env_obj.episode_time
