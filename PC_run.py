@@ -55,7 +55,7 @@ def get_estimate_rate_callback(**kwargs):
             top_rate_estim = kwargs['top_rate_estim']
         else:
             top_rate_estim = estimate_max_rate_libuda_like(env.controller, **kwargs)
-        env.normalize_coef = 2. / top_rate_estim
+        env.rate_estimate = 2. / top_rate_estim
         env.model.assign_and_eval_values(reaction_rate_top=1.6*top_rate_estim)
 
     return callback

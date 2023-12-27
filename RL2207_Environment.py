@@ -34,7 +34,7 @@ class State:
     def __init__(self, PC: ProcessController,
                  shape,
                  history_shift_t=None,
-                 transform=None, inner_transform=None, inner=None,
+                 transform=None, inner=None,
                  info='',
                  dynamic_normalization=None):
         self.PC = PC
@@ -49,12 +49,9 @@ class State:
         self.history_shift_idx = (self.history_shift_t // PC.analyser_dt).astype('int')
 
         if transform is None:
-            transform = lambda s0, i: s0
+            transform = lambda s0, i: (s0, i)
         self.transform = transform
         self.inner = inner
-        if inner_transform is None:
-            inner_transform = lambda s0, s1, i: None
-        self.inner_transform = inner_transform
 
         self.dynamic_normalization = dynamic_normalization is not None
         self.dyn_norm_idx = None
@@ -102,17 +99,19 @@ class State:
 
         return s0
 
-    def get(self, s0=None):
+    def read(self, s0=None):
         if s0 is None:
             PC = self.PC
             last_ind = np.where(PC.output_history_dt == -1)[0][0] - 1
-            s0 = self.PC.output_history[last_ind - self.history_shift_idx, :]
+            idx = last_ind - self.history_shift_idx
+            s0 = self.PC.output_history[idx, :]
+            s0[idx < 0, :] = self.bounds[0]
 
         for i, row in enumerate(s0):
             s0[i] = self.normalize(row)
 
-        s1 = self.transform(s0, self.inner)
-        self.inner = self.inner_transform(s0, s1, self.inner)
+        s1, self.inner = self.transform(s0, self.inner)
+
         return s1
 
     def get_info(self):
@@ -120,35 +119,33 @@ class State:
         return string
 
 
-def get_state(string, PC: ProcessController, **kwargs):
+def get_state_obj(string, PC: ProcessController, **kwargs):
     model = PC.process_to_control
 
     shape = (len(model.names['output']), )
     times = None
     transform = None
-    inner_transform = None
     inner = None
     info = kwargs.get('info', 'vanilla')
 
     if string == 'LG:CO2&O2&CO':
-        transform = lambda s0, i: np.squeeze(s0[0:3])
+        transform = lambda s0, i: (np.squeeze(s0[0:3]), i)
         info = f'{string}\n'
 
     elif string == 'LG:(CO2&O2&CO)x(points)':
         n = kwargs['points']
         times = np.arange(n)[::-1] * kwargs.get('step', 3.)
-        transform = lambda s0, i: s0[:, 0:3]
+        transform = lambda s0, i: (s0[:, 0:3], i)
         info = f'{string}\n'
         shape = (n, 3)
 
     return State(PC, shape, times,
-                 transform=transform, inner_transform=inner_transform, inner=inner,
-                 info=info,
+                 transform=transform, inner=inner, info=info,
                  dynamic_normalization=kwargs.get('dynamic_normalization', None))
 
 
-def get_state_sequential():
-    raise NotImplementedError
+# def get_state_obj_sequential(names_to_state, use_differences):
+#     raise NotImplementedError
 
 
 class RL2207_Environment(Environment):
@@ -181,7 +178,7 @@ class RL2207_Environment(Environment):
 
         if state_args is None:
             state_args = dict()
-        self.state_obj = get_state(state_string, self.controller, **state_args)
+        self.state_obj = get_state_obj(state_string, self.controller, **state_args)
 
         if isinstance(action_spec, str):
             action_spec = {'type': action_spec}
@@ -239,10 +236,8 @@ class RL2207_Environment(Environment):
             self.target_type = 'episode'
 
         # TODO try to generalize normalize_coef evaluation
-        if 'normalize_coef' in kwargs:
-            self.normalize_coef = kwargs['normalize_coef']
-        else:
-            self.normalize_coef = normalize_coef(self)
+        if 'rate_estimate' in kwargs:
+            self.rate_estimate = kwargs['rate_estimate']
 
         # self.save_policy = False
         # self.policy_df = pd.DataFrame(columns=[*self.in_gas_names, 'time_steps'])
@@ -258,7 +253,7 @@ class RL2207_Environment(Environment):
                         f'episode_time: {self.episode_time}\n' \
                         f'time_step: {time_step}\n'
 
-        assert self.normalize_coef >= 0
+        assert self.rate_estimate >= 0
 
     def assign_reward(self, reward_spec: [str, callable]):
         if reward_spec is None:
@@ -350,7 +345,7 @@ class RL2207_Environment(Environment):
         if temp < time_step:
             self.controller.time_forward(time_step - temp)
         self.controller.get_process_output()
-        return self.state_obj.get()
+        return self.state_obj.read()
 
     def execute(self, actions):
         next_state = self.update_env(actions)
@@ -359,7 +354,7 @@ class RL2207_Environment(Environment):
         return next_state, terminal, reward
 
     def reset(self, num_parallel=None):
-        # TODO: fix all crutches and make class more abstract
+        # TODO: fix crutches related to new state implementation
         self.end_episode = False
         self.success = False
 
@@ -399,7 +394,7 @@ class RL2207_Environment(Environment):
 
         out = current_measurement
         if len(self.state_obj.shape) > 1:
-            out = self.state_obj.get(np.tile(out, (self.state_obj.shape[0], 1)))
+            out = self.state_obj.read(np.tile(out, (self.state_obj.shape[0], 1)))
         return out
 
     def describe_to_file(self, filename):

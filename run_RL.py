@@ -447,11 +447,11 @@ def test_if_runs(PC_obj, outfolder):
             },
             'points': 3,
         },
-        reward_spec='full_ep_mean',
+        reward_spec='each_step_base',
         target_type='one_row',
         episode_time=500,
         time_step=10,
-        normalize_coef=0.6,
+        rate_estimate=0.1,
     )
     my_env = Environment.create(environment=my_env, max_episode_timesteps=6000)
     agent = create_tforce_agent(my_env, 'vpg')
