@@ -15,9 +15,9 @@ from __future__ import print_function
 import os
 import numpy as np
 import ase.io
-from MonteCoffee.NeighborKMC.base.kmc import NeighborKMCBase
-from MonteCoffee.NeighborKMC.base.logging import Log
-from MonteCoffee.NeighborKMC.base.basin import scale_rate_constant
+from MonteCoffee_changed.NeighborKMC.base.kmc import NeighborKMCBase
+from MonteCoffee_changed.NeighborKMC.base.logging import Log
+from MonteCoffee_changed.NeighborKMC.base.basin import scale_rate_constant
 from user_constants import *
 from user_sites import Site
 from user_events import *

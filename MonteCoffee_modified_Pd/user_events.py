@@ -10,7 +10,7 @@ Module: base.events for documentation about the methods possible(), get_rate(), 
 """
 
 import numpy as np
-from MonteCoffee.NeighborKMC.base.events import EventBase
+from MonteCoffee_changed.NeighborKMC.base.events import EventBase
 from user_entropy import get_Zvib, get_Z_CO, get_Z_O2
 
 from user_constants import mCO, mO2, Asite, modes_COads, \
@@ -166,7 +166,8 @@ class ODesEvent(EventBase):
         return True
 
 
-MULTIPLY_DIFFUSION_R = 1e-12
+# MULTIPLY_DIFFUSION_R = 1e-12
+MULTIPLY_DIFFUSION_R = 1.  # to reproduce original results
 
 
 class CODiffEvent(EventBase):
@@ -221,7 +222,7 @@ class CODiffEvent(EventBase):
             dE = max(E - Eother, 0.)
 
         Eact = dE + EdiffCO
-        R=self.alpha * self.dZ * np.exp(-Eact / (kB * self.params['T'])) * kB * self.params['T'] / (h)
+        R = self.alpha * self.dZ * np.exp(-Eact / (kB * self.params['T'])) * kB * self.params['T'] / (h)
         R = MULTIPLY_DIFFUSION_R * R  # M. Lifar added
         return R
 

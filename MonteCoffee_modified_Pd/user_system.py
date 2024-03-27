@@ -11,7 +11,7 @@ Module: user_sites
 """
 
 import numpy as np
-from MonteCoffee.NeighborKMC.base.system import SystemBase
+from MonteCoffee_changed.NeighborKMC.base.system import SystemBase
 from scipy.spatial.distance import cdist
 
 
