@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+import lib
 from ProcessController import *
 from predefined_policies import *
 from test_models import *
@@ -322,7 +323,7 @@ def benchmark_runs(PC_obj: ProcessController, out_path: str, rate_or_count: str,
                          xlim=[0., None], ylim=[-0.1, None], )
 
 
-def KMC_simple_tests():
+def MCKMC_simple_tests():
     # size = [20, 20]
     # PC_obj = ProcessController(KMC_CO_O2_Pt_Model((*size, 1), log_on=True, O2_top=1.1e-4, CO_top=1.1e-4,),
     #                            target_func_to_maximize=get_target_func('CO2_value'),
@@ -339,28 +340,17 @@ def KMC_simple_tests():
     #     Libuda2001_CO_cutoff_policy(PC_obj, run_dir, 0.25, 0.5, 0.75)
 
     # TEST IF COMPARABLE WITH ORIGINAL
-    size = [20, 20]
-    PC_obj = ProcessController(KMC_CO_O2_Pt_Model((*size, 1), log_on=True,
-                                                  O2_top=1.1e5, CO_top=1.1e5,
-                                                  CO2_rate_top=1.4e6, CO2_count_top=1.e4,
-                                                  T=373.),
-                               analyser_dt=1.e-6,
-                               target_func_to_maximize=get_target_func('CO2_count'),
-                               RESOLUTION=1,  # always should be 1 if we use KMC, otherwise we will get wrong results!
-                               supposed_step_count=100,  # memory controlling parameters
-                               supposed_exp_time=1.e-3)
+    # size = [20, 20]
+    # PC_obj = ProcessController(KMC_CO_O2_Pt_Model((*size, 1), log_on=True,
+    #                                               O2_top=1.e5, CO_top=1.1e5,
+    #                                               CO2_rate_top=1.4e6, CO2_count_top=1.e4,
+    #                                               T=373.),
+    #                            analyser_dt=1.e-6,
+    #                            target_func_to_maximize=get_target_func('CO2_count'),
+    #                            RESOLUTION=1,  # always should be 1 if we use KMC, otherwise we will get wrong results!
+    #                            )
 
-    PC_obj.set_plot_params(input_lims=[-1e-5, None], input_ax_name='Pressure, Pa',
-                           output_lims=[-1e-2, None],
-                           additional_lims=[-1e-2, 1. + 1.e-2],
-                           # output_ax_name='CO2 formation rate, $(Pt atom * sec)^{-1}$',
-                           output_ax_name='CO x O events count')
-    PC_obj.set_metrics(
-                       # ('CO2', CO2_integral),
-                       ('CO2 count', CO2_count),
-                       # ('O2 conversion', overall_O2_conversion),
-                       # ('CO conversion', overall_CO_conversion)
-                       )
+    PC_obj = PC_setup.general_PC_setup('MCKMC')
 
     # PC_obj.analyser_dt = 1.e-7
     # PC_obj.reset()
@@ -379,6 +369,33 @@ def KMC_simple_tests():
 
     # BENCHMARK
     # benchmark_runs(PC_obj, './PC_plots/model_benchmarks', 'count')
+
+    # NEW TESTS BASED ON DYNAMIC ADV
+    PC_obj.reset()
+    dt = 10.
+
+    options, _ = lib.read_plottof_csv('231002_sudden_discovery/rl_agent_sol.csv', ret_ops=True)
+    Oidx = options[2::3].index('inputB') * 3 + 2
+    COidx = options[2::3].index('inputA') * 3 + 2
+
+    times = options[Oidx - 2]
+    O_control = options[Oidx - 1]
+    CO_control = options[COidx - 1]
+    O_control *= 1.e-4
+    CO_control *= 1.e-4
+
+    Ostart = O_control[0]
+    COstart = CO_control[0]
+
+    PC_obj.set_controlled((Ostart, COstart))
+    turning_points = np.where(np.abs(O_control[1:] - O_control[:-1]) > 1.e-5)[0] + 5
+    turning_times = times[turning_points]
+
+    PC_obj.time_forward(turning_times[0] - 5)
+    for O_val, CO_val, t in zip(O_control[turning_points], CO_control[turning_points], turning_times):
+        PC_obj.set_controlled((O_val, CO_val))
+        PC_obj.time_forward(t - PC_obj.time)
+    PC_obj.get_and_plot('repos/MonteCoffee_modified_Pd/snapshots/PC_runned/MCKMC.png')
 
 
 def Ziff_model_poisoning_speed_test():
@@ -642,7 +659,6 @@ def low_desorp_react_try():
 
 
 def integral_from_csv(datapath, feature_name, xlim=None):
-
     _, df = lib.read_plottof_csv(datapath, ret_df=True)
     X = df[f'{feature_name} x'].to_numpy()
     Y = df[f'{feature_name} y'].to_numpy()
@@ -895,10 +911,10 @@ def main():
 
     # Libuda2001_original_simulation()
 
-    # KMC_simple_tests()
+    MCKMC_simple_tests()
 
     # Ziff_model_poisoning_speed_test()
-    ZGB_snapshots()
+    # ZGB_snapshots()
 
     # PC_obj = PC_setup.general_PC_setup('ZGBTwo', ('to_model_constructor', {'rate_ads_O': 3., 'rate_ads_CO': 1.}))
     # run_constant_policies_bunch(PC_obj, 60_000, 2_000, 'PC_plots/ZGB/ZGBTwo_rates_work_test/O2_3_CO_1')

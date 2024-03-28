@@ -14,7 +14,9 @@ from __future__ import print_function
 # import copy
 import os
 import numpy as np
+import matplotlib.pyplot as plt
 import ase.io
+
 from MonteCoffee_changed.NeighborKMC.base.kmc import NeighborKMCBase
 from MonteCoffee_changed.NeighborKMC.base.logging import Log
 from MonteCoffee_changed.NeighborKMC.base.basin import scale_rate_constant
@@ -200,13 +202,13 @@ class NeighborKMC(NeighborKMCBase):
 
             # Log every self.LogSteps step.
             if self.stepN_CNT >= self.LogSteps:
-                if self.verbose:
-                    print("Time : ", self.t, "\t Covs :", self.system.get_coverages(self.Nspecies))
-
-                self.log.dump_point(self.stepNMC, self.t, self.evs_exec)
+                covs = self.system.get_coverages(self.Nspecies)
+                # if self.verbose:
+                #     print("Time : ", self.t, "\t Covs :", covs)
+                self.log.dump_point(self.stepNMC, self.t, self.evs_exec, covs)
 
                 self.times.append(self.t)
-#               self.MCstep.append(stepNMC)
+                #               self.MCstep.append(stepNMC)
 
                 covs_cur = [s.covered for s in self.system.sites]
                 self.covered.append(covs_cur)
@@ -216,6 +218,7 @@ class NeighborKMC(NeighborKMCBase):
 
             # Save every self.SaveSteps steps.
             if self.stepSaveN == self.SaveSteps:
+                self.plot_snapshot(f'./snapshots/snapshot_t({self.t:.3f}).png')
                 self.save_txt()
                 self.stepSaveN = 0.
 
@@ -301,10 +304,36 @@ class NeighborKMC(NeighborKMCBase):
                 self.save_txt()
                 self.stepSaveN = 0.
 
+                # plot snapshots
+                self.plot_snapshot(f'./snapshots/snapshot_t({self.t:.3f}).png')
+
             self.stepN_CNT += 1
             self.stepNMC += 1
 
         self.finalize()
+
+    def plot_snapshot(self, filepath):
+        # TODO rewrite sites to numpy array instead of list
+        m, n, _ = self.system.shape
+        surface = np.zeros((m, n))
+        for i in range(m):
+            for j in range(n):
+                surface[i][j] = self.system.sites[i * n + j].covered
+
+        fig, ax = plt.subplots(figsize=(m * 16 / (m + n), n * 16 / (m + n)))
+
+        where_co = np.where(surface == 1)
+        where_o = np.where(surface == 2)
+
+        ax.scatter(*where_co, c='r', marker='o', label='CO')
+        ax.scatter(*where_o, c='b', marker='o', label='O')
+        ax.set_title(f'surface state, time {self.t}')
+        ax.xaxis.set_visible(False)
+        ax.yaxis.set_visible(False)
+        fig.legend(loc='outside lower center', ncol=2, fancybox=True)
+
+        fig.savefig(filepath, dpi=400, bbox_inches='tight')
+        plt.close(fig)
 
     # def run_steps(self, full_time, step_time):
     #     self.tend = full_time

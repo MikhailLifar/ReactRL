@@ -2,8 +2,11 @@
  
 """
 import random
+import json
 
 import numpy as np
+from scipy.optimize import fsolve
+
 from ase.io import write
 from ase.build import fcc111
 
@@ -16,14 +19,17 @@ from user_system import System
 
 from user_kmc import NeighborKMC
 from user_events import (OAdsEvent, ODesEvent,
-                         COAdsEvent, CODesEvent, COOxEvent, CODiffEvent, ODiffEvent)
+                         COAdsEvent, CODesEvent, COOxEvent, CODiffEvent, ODiffEvent,
+                         PD_EV_CONSTANTS)
 
 
 def periodic_policy(sim: NeighborKMC):
-    pressures = {'CO': (4.e-5, 10.e-5), 'O2': (10.e-5, 4.e-5), }
-    dt = 10
+    # pressures = {'CO': (4.e-5, 10.e-5), 'O2': (10.e-5, 4.e-5), }
+    pressures = {'CO': (0.887 * 1.e-4, 0.83 * 1.e-4, 0.0528 * 1.e-4, 0.0301 * 1.e-4, ),
+                 'O2': (0.0867 * 1.e-4, 0.112 * 1.e-4, 0.844 * 1.e-4, 0.919 * 1.e-4, ), }  # dynamic advantage policy
+    dt = 10.
     for i in range(10):
-        for j in range(2):
+        for j in range(4):
             sim.set_pressures(pressures['O2'][j], pressures['CO'][j])
             sim.step_forward(dt)
             rs = np.zeros(len(sim.events))
@@ -107,10 +113,10 @@ def runDynamicAdvParameters():
     """
     # Define constants.
     # ------------------------------------------
-    T = 440.   # 300., 440.; Temperature of simulation in K
-    pCO = 5.e-4  # 5.e-4; CO pressure in Pa
-    pO2 = 5.e-4  # 5.e-4; O2 pressure in Pa
-    a = 4.00  # Lattice Parameter (not related to DFT!)
+    T = 440.   # 440.; Temperature of simulation in K
+    pCO = 1.e-4  # 5.e-4; CO pressure in Pa
+    pO2 = 1.e-4  # 5.e-4; O2 pressure in Pa
+    a = 4.00  # Lattice Parameter (not related to DFT!); What is lattice parameter for Pd?
     neighbour_cutoff = a / np.sqrt(2.) + 0.05  # Nearest neighbor cutoff; arbitrary
     # Clear up old output files.
     # ------------------------------------------
@@ -123,14 +129,15 @@ def runDynamicAdvParameters():
 
     # Define the sites from ase.Atoms.
     # ------------------------------------------
-    size = (5, 5, 1)
-    Pt_surface_ase_obj = fcc111("Pt", a=a, size=size)
+    shape = (25, 25, 1)
+    Pt_surface_ase_obj = fcc111("Pt", a=a, size=shape)
     Pt_surface_ase_obj.write('surface.traj')
     # Create a site for each surface-atom:
+    random.seed(0)
     sites = [Site(stype=0, covered=0, ind=i) for i in range(len(Pt_surface_ase_obj))]
     # Instantiate a system, events, and simulation.
     # ---------------------------------------------
-    p = System(atoms=Pt_surface_ase_obj, sites=sites)
+    p = System(atoms=Pt_surface_ase_obj, sites=sites, shape=shape)
 
     # Set the global neighborlist based on distances:
     p.set_neighbors(neighbour_cutoff, pbc=True)
@@ -155,16 +162,57 @@ def runDynamicAdvParameters():
                       events=events,
                       rev_events=reverse_events)
 
+    # get rates
+    with open('PdDynamicAdvParams.txt', 'r') as fread:
+        PD_EV_CONSTANTS.update(json.load(fread))
+    for e in sim.events:
+        print(type(e), e.get_rate(p, 0, 0))
+
+    # # restore energies given rates
+    # evs_order = [
+    #     'COAds', 'CODes', 'OAds', 'ODes',
+    #     'CODiff', 'ODiff', 'COOx'
+    # ]
+    # rates_target = {
+    #     'COAds': 0.17582,
+    #     'CODes': 0.1,
+    #     'OAds': 0.074495,
+    #     'ODes': 1.e-6,
+    #     'CODiff': 10.,
+    #     'ODiff': 10.,  # TODO - questionable, may be better different diffusion for both species
+    #     'COOx': 6.288,
+    # }
+    #
+    # def F(param_v, param_name, ev_type, target_rate):
+    #     PD_EV_CONSTANTS[param_name] = param_v
+    #     return sim.events[evs_order.index(ev_type)].get_rate(sim.system, 0, 0) - target_rate
+    #
+    # PD_EV_CONSTANTS['s0CO'] = fsolve(F, (0.9, ), args=('s0CO', 'COAds', rates_target['COAds']))[0]
+    # PD_EV_CONSTANTS['EadsCO'] = fsolve(F, (1.36, ), args=('EadsCO', 'CODes', rates_target['CODes']))[0]
+    # PD_EV_CONSTANTS['s0O'] = fsolve(F, (0.1, ), args=('s0O', 'OAds', rates_target['OAds']))[0]
+    # PD_EV_CONSTANTS['EadsO'] = fsolve(F, (1.36, ), args=('EadsO', 'ODes', rates_target['ODes']))[0]
+    # PD_EV_CONSTANTS['EdiffCO'] = fsolve(F, (0.8, ), args=('EdiffCO', 'CODiff', rates_target['CODiff']))[0]
+    # PD_EV_CONSTANTS['EdiffO'] = fsolve(F, (0.8, ), args=('EdiffO', 'ODiff', rates_target['ODiff']))[0]
+    # PD_EV_CONSTANTS['Ea_const'] = fsolve(F, (PD_EV_CONSTANTS['Ea_const'], ), args=('Ea_const', 'COOx', rates_target['COOx']))[0]
+    # print(PD_EV_CONSTANTS)
+    # with open('PdDynamicAdvParams.txt', 'w') as fwrite:
+    #     json.dump(PD_EV_CONSTANTS, fwrite)
+
     # Run the simulation.
-    sim.run_kmc(tend)  # previously used method
-    # sim.reset()
-    # periodic_policy(sim)
-    # sim.finalize()
-    print("Simulation end time reached ! ! !")
+    # sim.run_kmc(100.)
+    sim.reset()
+    periodic_policy(sim)
+    sim.finalize()
+    # print("Simulation end time reached ! ! !")
+
+
+def plot_res():
+    pass
 
 
 def main():
-    run_original()
+    # run_original()
+    runDynamicAdvParameters()
 
 
 if __name__ == '__main__':

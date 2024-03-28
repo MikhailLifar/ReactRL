@@ -38,8 +38,9 @@ class System(SystemBase):
 
     """
 
-    def __init__(self, atoms=None, sites=[]):
+    def __init__(self, atoms=None, sites=[], shape=None):
         SystemBase.__init__(self, atoms=atoms, sites=sites)
+        self.shape = shape
 
     def set_neighbors(self, Ncutoff, pbc=False):
         """Sets neighborlists of self.sites by distances.

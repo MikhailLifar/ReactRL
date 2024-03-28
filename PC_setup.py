@@ -98,6 +98,30 @@ DEFAULT_PARAMS = {
                         # ('O2 conversion', overall_O2_conversion),
                         # ('CO conversion', overall_CO_conversion)
                         )
+        },
+        'MCKMC': {
+            'model_class': KMC_CO_O2_Pt_Model,
+            'to_model_constructor': dict(
+                surf_shape=(5, 5, 1),
+                log_on=True,
+                O2_top=1.e-4, CO_top=1.e-4,
+                CO2_rate_top=1.4e2, CO2_count_top=1.e2,
+                T=440.,
+                snapshotDir='./repos/MonteCoffee_modified_Pd/snapshots/PC_runned'
+            ),
+            'to_PC_constructor': {
+                'analyser_dt': 1.e-1,
+                'target_func_to_maximize': get_target_func('coordinate'),
+                'target_func_name': 'CO2_prod_rate',
+                'target_int_or_sum': 'int',
+                'RESOLUTION': 1,
+            },
+            'metrics': (
+                        # ('CO2 count', lambda time_arr, arr: np.sum(arr[:, 0]), ),
+                        ('integral CO2', lambda time_arr, arr: integral(time_arr, arr[:, 0])),
+                        # ('O2 conversion', overall_O2_conversion),
+                        # ('CO conversion', overall_CO_conversion)
+                        )
         }
     }
 
@@ -248,7 +272,33 @@ DEFAULT_PLOT_SPECS = {
              'ylim': [-5.e-3, None],
              'save_csv': True,
                      }},
-    ]
+    ],
+    'MCKMC': [
+        # input
+        {'names': ('O2', 'CO'), 'groups': 'input', 'styles': (None, ),
+         'to_fname': '_input',
+         'to_plot_to_f': {
+             'xlabel': 'Time, s', 'ylabel': 'Pressure',
+             'ylim': [-5.e-2, 1. + 5.e-2],
+             'save_csv': True,
+         }},
+        # add
+        {'names': ('thetaO', 'thetaCO'), 'groups': ('add', 'add'), 'styles': None,
+         'to_fname': '_add',
+         'to_plot_to_f': {
+             'xlabel': 'Time, s', 'ylabel': '?',
+             'ylim': [-5.e-2, 1. + 5.e-2],
+             'save_csv': True,
+         }},
+        # output
+        {'names': ('CO2_rate', ), 'groups': ('output', ), 'styles': None,
+         'to_fname': '_output',
+         'to_plot_to_f': {
+             'xlabel': 'Time, s', 'ylabel': 'reaction rate',
+             'ylim': [-5.e-2, 1. + 5.e-2],
+             'save_csv': True,
+                     }},
+    ],
 }
 
 # Libuda2001 plot specs

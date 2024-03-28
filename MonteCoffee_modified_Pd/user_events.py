@@ -20,6 +20,18 @@ from user_energy import EadsCO, EadsO, get_Ea, \
     get_repulsion, EdiffCO, EdiffO
 
 
+PD_EV_CONSTANTS = {
+    'Asite': Asite,
+    's0CO': s0CO,
+    's0O': s0O,
+    'EadsCO': EadsCO,
+    'EadsO': EadsO,
+    'EdiffCO': EdiffCO,
+    'EdiffO': EdiffO,
+    'Ea_const': 0.168 + 0.47238,
+}
+
+
 class COAdsEvent(EventBase):
     """CO adsorption event class.
     The event is CO(g) + * -> CO*.
@@ -39,7 +51,7 @@ class COAdsEvent(EventBase):
             return False
 
     def get_rate(self, system, site, other_site):
-        R = (s0CO * self.params['pCO']) / (Asite * np.sqrt(2. * np.pi * mCO * kB * eV2J * self.params['T']))
+        R = (PD_EV_CONSTANTS['s0CO'] * self.params['pCO']) / (PD_EV_CONSTANTS['Asite'] * np.sqrt(2. * np.pi * mCO * kB * eV2J * self.params['T']))
         return self.alpha * R  # alpha important for temporal acceleration.
 
     def do_event(self, system, site, other_site):
@@ -78,9 +90,9 @@ class CODesEvent(EventBase):
 
     def get_rate(self, system, site, other_site):
         Ncovs = system.get_ncovs(site)
-        ECO = max(EadsCO - get_repulsion(1, Ncovs, 0), 0)
+        ECO = max(PD_EV_CONSTANTS['EadsCO'] - get_repulsion(1, Ncovs, 0), 0)
         K = self.dZ * np.exp(ECO/(kB * self.params['T']))
-        RF = (self.params['pCO'] * s0CO) / (Asite * np.sqrt(2. * np.pi * mCO * kB * eV2J * self.params['T']))
+        RF = (self.params['pCO'] * PD_EV_CONSTANTS['s0CO']) / (PD_EV_CONSTANTS['Asite'] * np.sqrt(2. * np.pi * mCO * kB * eV2J * self.params['T']))
         R = self.alpha * RF / K
         return R 
 
@@ -110,7 +122,7 @@ class OAdsEvent(EventBase):
             return False
 
     def get_rate(self, system, site, other_site):
-        R = (s0O * self.params['pO2']) / (Asite * np.sqrt(2. * np.pi * mO2 * kB * eV2J * self.params['T']))
+        R = (PD_EV_CONSTANTS['s0O'] * self.params['pO2']) / (PD_EV_CONSTANTS['Asite'] * np.sqrt(2. * np.pi * mO2 * kB * eV2J * self.params['T']))
         return self.alpha * R 
 
     def do_event(self, system, site, other_site):
@@ -153,8 +165,8 @@ class ODesEvent(EventBase):
     def get_rate(self, system, site, other_site):
         Ncovs = system.get_ncovs(site)
         Ncovsother = system.get_ncovs(other_site)
-        E2O = max(2. * EadsO - get_repulsion(2, Ncovs, 0) - get_repulsion(2, Ncovsother, 0), 0.)
-        Rf = (s0O * self.params['pO2']) / (Asite * np.sqrt(2. * np.pi * mO2 * kB * eV2J * self.params['T']))
+        E2O = max(2. * PD_EV_CONSTANTS['EadsO'] - get_repulsion(2, Ncovs, 0) - get_repulsion(2, Ncovsother, 0), 0.)
+        Rf = (PD_EV_CONSTANTS['s0O'] * self.params['pO2']) / (PD_EV_CONSTANTS['Asite'] * np.sqrt(2. * np.pi * mO2 * kB * eV2J * self.params['T']))
         K = self.dZ * np.exp(E2O / (kB * self.params['T']))
         return self.alpha * Rf / K
 
@@ -164,10 +176,6 @@ class ODesEvent(EventBase):
 
     def get_involve_other(self):
         return True
-
-
-# MULTIPLY_DIFFUSION_R = 1e-12
-MULTIPLY_DIFFUSION_R = 1.  # to reproduce original results
 
 
 class CODiffEvent(EventBase):
@@ -200,30 +208,30 @@ class CODiffEvent(EventBase):
             return False
 
     def get_rate(self, system, site, other_site):
+        EadsCO_ = PD_EV_CONSTANTS['EadsCO']
         if system.sites[site].covered == 1:
             Ncovs = [system.sites[n].covered for n in system.neighbors[site]]
-            E = max(0., EadsCO - get_repulsion(1, Ncovs, 0))
+            E = max(0., EadsCO_ - get_repulsion(1, Ncovs, 0))
             system.sites[site].covered = 0
             system.sites[other_site].covered = 1
             Nothercovs = [system.sites[n].covered for n in system.neighbors[other_site]]
-            Eother = max(0, EadsCO - get_repulsion(1, Nothercovs, 0))
+            Eother = max(0, EadsCO_ - get_repulsion(1, Nothercovs, 0))
             system.sites[site].covered = 1 
             system.sites[other_site].covered = 0
             dE = max(E - Eother, 0.)
         else:
             Ncovs = [system.sites[n].covered for n in system.neighbors[other_site]]
-            E = max(0., EadsCO - get_repulsion(1, Ncovs, 0))
+            E = max(0., EadsCO_ - get_repulsion(1, Ncovs, 0))
             system.sites[site].covered = 1
             system.sites[other_site].covered = 0
             Nothercovs = [system.sites[n].covered for n in system.neighbors[site]]
-            Eother = max(0, EadsCO - get_repulsion(1, Nothercovs, 0))
+            Eother = max(0, EadsCO_ - get_repulsion(1, Nothercovs, 0))
             system.sites[site].covered = 0 
             system.sites[other_site].covered = 1
             dE = max(E - Eother, 0.)
 
-        Eact = dE + EdiffCO
+        Eact = dE + PD_EV_CONSTANTS['EdiffCO']
         R = self.alpha * self.dZ * np.exp(-Eact / (kB * self.params['T'])) * kB * self.params['T'] / (h)
-        R = MULTIPLY_DIFFUSION_R * R  # M. Lifar added
         return R
 
     def do_event(self, system, site, other_site):
@@ -266,29 +274,29 @@ class ODiffEvent(EventBase):
             return False
 
     def get_rate(self, system, site, other_site):
+        EadsO_ = PD_EV_CONSTANTS['EadsO']
         if system.sites[site].covered == 2:
             Ncovs = [system.sites[n].covered for n in system.neighbors[site]]
-            E = max(0., EadsO - get_repulsion(2, Ncovs, 0))
+            E = max(0., EadsO_ - get_repulsion(2, Ncovs, 0))
             system.sites[site].covered = 0
             system.sites[other_site].covered = 2
             Nothercovs = [system.sites[n].covered for n in system.neighbors[other_site]]
-            Eother = max(0, EadsO - get_repulsion(2, Nothercovs, 0))
+            Eother = max(0, EadsO_ - get_repulsion(2, Nothercovs, 0))
             system.sites[site].covered = 2 
             system.sites[other_site].covered = 0
             dE = max(E - Eother, 0.)
         else:
             Ncovs = [system.sites[n].covered for n in system.neighbors[other_site]]
-            E = max(0., EadsO - get_repulsion(2, Ncovs, 0))
+            E = max(0., EadsO_ - get_repulsion(2, Ncovs, 0))
             system.sites[site].covered = 2
             system.sites[other_site].covered = 0
             Nothercovs = [system.sites[n].covered for n in system.neighbors[site]]
-            Eother = max(0, EadsO - get_repulsion(2, Nothercovs, 0))
+            Eother = max(0, EadsO_ - get_repulsion(2, Nothercovs, 0))
             system.sites[site].covered = 0 
             system.sites[other_site].covered = 2
             dE = max(E - Eother, 0.)
-        Eact = dE + EdiffO
+        Eact = dE + PD_EV_CONSTANTS['EdiffO']
         R = self.alpha * self.dZ * np.exp(-Eact / (kB * self.params['T'])) * kB * self.params['T'] / h
-        R = MULTIPLY_DIFFUSION_R * R  # M. Lifar added
         return R
 
     def do_event(self, system, site, other_site):
@@ -329,8 +337,8 @@ class COOxEvent(EventBase):
             return False
 
     def get_rate(self, system, site, other_site):
-        ECO = EadsCO
-        EO = EadsO
+        ECO = PD_EV_CONSTANTS['EadsCO']
+        EO = PD_EV_CONSTANTS['EadsO']
         # Find the Nearest neighbor repulsion
         if system.sites[site].covered == 1:
             Ncovs_CO = [system.sites[n].covered for n in system.neighbors[site] ]
@@ -340,7 +348,7 @@ class COOxEvent(EventBase):
             Ncovs_O = [system.sites[n].covered for n in system.neighbors[site]]
         ECO -= get_repulsion(1, Ncovs_CO, 0)
         EO -= get_repulsion(2, Ncovs_O, 0)
-        Ea = max(0., get_Ea(ECO, EO))
+        Ea = max(0., get_Ea(ECO, EO, Ea_const=PD_EV_CONSTANTS['Ea_const']))
         return self.alpha * self.Zratio * np.exp(-Ea /(kB * self.params['T'])) * kB * self.params['T'] / h
 
     def do_event(self, system, site, other_site):

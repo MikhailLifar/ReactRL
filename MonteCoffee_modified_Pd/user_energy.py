@@ -32,7 +32,7 @@ EadsO = 0.97
 # EadsO *= 10.  # M. Lifar: to make desorption very slow. Upd: multiple 10 is too large
 
 
-def get_Ea(ECO, EO):
+def get_Ea(ECO, EO, Ea_const=None):
     """Computes the reaction energy barrier for CO oxidation.
     
     Uses a BEP relation for CO oxidation, relative to Pt(111), 
@@ -51,7 +51,10 @@ def get_Ea(ECO, EO):
         Reaction energy barrier of CO*+O*->CO2(g) in eV.
 
     """
-    ETS = 0.824 * (-EO -ECO)+0.168+0.47238  # M. Lifar commented  # How much larger is the energy of CO and O wrt Pt(111)
+
+    if Ea_const is None:
+        Ea_const = 0.168 + 0.47238
+    ETS = 0.824 * (-EO - ECO) + Ea_const  # M. Lifar commented  # How much larger is the energy of CO and O wrt Pt(111)
     Ea = ETS+ECO+EO  # M. Lifar commented  # Translate the barriers relative to Pt(111)
     # Ea = 0
     # Ea *= 0.6  # 0.6
@@ -82,17 +85,20 @@ def get_repulsion(cov_self, cov_NN, stype):
 
     """
 
-    repulsion = 0.
-    ECOCO = 0.19  # M. Lifar commented  # 0.38 # How CO affects CO
-    # ECOCO = 0.32  # 0.38 # How CO affects CO
-    EOO = 0.32  # How O affects O - double since it is called from get barrier of O2
+    # repulsion = 0.
+    # ECOCO = 0.19  # M. Lifar commented  # 0.38 # How CO affects CO
+    # # ECOCO = 0.32  # 0.38 # How CO affects CO
+    # EOO = 0.32  # How O affects O - double since it is called from get barrier of O2
+    #
+    # ECOO = 0.3  # How CO affects O
+    # EOCO = 0.3  # How O affects CO
+    #
+    # HInttwo = [[0., 0., 0.], [0., ECOCO, EOCO], [0., ECOO, EOO]]  # Two body interaction Hamiltonian 3x3 beacuse 0 = empty.
+    #
+    # for j in cov_NN:  # For each covered Neighbor, give a repulsion:
+    #     repulsion += HInttwo[cov_self][j]
+    #
+    # return repulsion
 
-    ECOO = 0.3  # How CO affects O
-    EOCO = 0.3  # How O affects CO
+    return 0.  # TODO repulsion could be returned later
 
-    HInttwo = [[0., 0., 0.], [0., ECOCO, EOCO], [0., ECOO, EOO]]  # Two body interaction Hamiltonian 3x3 beacuse 0 = empty.
-
-    for j in cov_NN:  # For each covered Neighbor, give a repulsion:
-        repulsion += HInttwo[cov_self][j]
-
-    return repulsion

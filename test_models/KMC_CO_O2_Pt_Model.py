@@ -2,6 +2,7 @@ import sys
 import os
 
 # import numpy as np
+import matplotlib.pyplot as plt
 import warnings
 
 import h5py
@@ -10,19 +11,23 @@ from ase.build import fcc111
 
 # TODO: This 'append' statements don't look well
 sys.path.append('/home/mikhail/RL_22_07_MicroFluidDroplets')
-OPTIONS_PATH = '/home/mikhail/RL_22_07_MicroFluidDroplets/repos/MonteCoffee_Pt_111_COOx'
+OPTIONS_PATH = '/home/mikhail/RL_22_07_MicroFluidDroplets/repos/MonteCoffee_modified_Pd'
 sys.path.append(OPTIONS_PATH)
 
-from MonteCoffee.NeighborKMC.base.kmc import NeighborKMCBase
-from MonteCoffee.NeighborKMC.base.logging import Log
-from user_sites import Site
-from user_system import System
-from user_events import (OAdsEvent, ODesEvent,
-                         COAdsEvent, CODesEvent, COOxEvent, CODiffEvent, ODiffEvent)
+from MonteCoffee_changed.NeighborKMC.base.kmc import NeighborKMCBase
+from MonteCoffee_changed.NeighborKMC.base.logging import Log
+from MonteCoffee_modified_Pd.user_sites import Site
+from MonteCoffee_modified_Pd.user_system import System
+from MonteCoffee_modified_Pd.user_events import (OAdsEvent, ODesEvent,
+                                                 COAdsEvent, CODesEvent, COOxEvent, CODiffEvent, ODiffEvent)
 from .BaseModel import *
 
 
 class KMC_CO_O2_Pt_Model(BaseModel, NeighborKMCBase):
+    """
+    This class substitutes NeighborKMC class from user_kmc.py
+    """
+
     names = {'input': ['O2', 'CO'], 'output': ['CO2_rate', 'O2_Pa', 'CO_Pa', 'CO2_count'], }
 
     bottom = {'input': dict(), 'output': dict(), }
@@ -34,21 +39,24 @@ class KMC_CO_O2_Pt_Model(BaseModel, NeighborKMCBase):
 
     # KMC parameters
     events_clss = [COAdsEvent, CODesEvent, OAdsEvent, ODesEvent,
-                   # CODiffEvent, ODiffEvent,
+                   CODiffEvent, ODiffEvent,
                    COOxEvent]
     reverse_events_duct = {0: 1, 2: 3,
-                           # 4: 4, 5: 5
+                           4: 4, 5: 5
                            }
-    kmc_parameters_dict = {'pCO': 1.e+3, 'pO2': 1.e+3, 'T': 440.,
+    kmc_parameters_dict = {'pCO': 1.e-4, 'pO2': 1.e-4, 'T': 440.,
                            'Name': 'COOx Pt(111) reaction simulation',
                            'reverses ': reverse_events_duct,
                            'Events': events_clss}
 
     model_name = 'KMC_CO_O2_Pt'
 
-    LOGS_FOLD_PATH = '/home/mikhail/RL_22_07_MicroFluidDroplets/kMClogs_clean_regulary'
+    # LOGS_FOLD_PATH = '/home/mikhail/RL_22_07_MicroFluidDroplets/kMClogs_clean_regulary'
+    LOGS_FOLD_PATH = '/home/mikhail/RL_22_07_MicroFluidDroplets/repos/MonteCoffee_modified_Pd/PC_logs'
 
-    def __init__(self, surf_shape, log_on: bool = False, **params):
+    def __init__(self,
+                 surf_shape, log_on: bool = False, snapshotDir=None,
+                 **params):
         """
         The Model is based on the NeighborKMC class from Pt(111) example from MonteCoffee package
 
@@ -69,7 +77,7 @@ class KMC_CO_O2_Pt_Model(BaseModel, NeighborKMCBase):
         # Create a site for each surface-atom:
         sites = [Site(stype=0, covered=0, ind=i) for i in range(len(Pt_surface_ase_obj))]
         # Instantiate a system, events, and simulation.
-        system = System(atoms=Pt_surface_ase_obj, sites=sites)
+        system = System(atoms=Pt_surface_ase_obj, sites=sites, shape=surf_shape)
         # Set the global neighborlist based on distances:
         system.set_neighbors(neighbour_cutoff, pbc=True)
 
@@ -105,13 +113,16 @@ class KMC_CO_O2_Pt_Model(BaseModel, NeighborKMCBase):
 
         self.add_info = self.get_add_info()
 
-        # TODO during the first stage this stuff is ignored, later it may be useful
         self.log_on = log_on
 
         self.log = None
         self.stepN_CNT = 0
         self.stepNMC = 0
         self.stepSaveN = 0
+
+        self.snapshotDir = snapshotDir
+        self.snapshotPeriod = 0.5
+        self.snapshotTime = 0.
 
         # self.rescaleN = self.ne
         # self.rescaleStep = 0
@@ -135,6 +146,29 @@ class KMC_CO_O2_Pt_Model(BaseModel, NeighborKMCBase):
         self.assign_constants(**kw)
         self.new_values()
         self.add_info = self.get_add_info()
+
+    def plotSnapshot(self, filepath):
+        # TODO rewrite sites to numpy array instead of list
+        m, n, _ = self.system.shape
+        surface = np.zeros((m, n))
+        for i in range(m):
+            for j in range(n):
+                surface[i][j] = self.system.sites[i * n + j].covered
+
+        fig, ax = plt.subplots(figsize=(m * 16 / (m + n), n * 16 / (m + n)))
+
+        where_co = np.where(surface == 1)
+        where_o = np.where(surface == 2)
+
+        ax.scatter(*where_co, c='r', marker='o', label='CO')
+        ax.scatter(*where_o, c='b', marker='o', label='O')
+        ax.set_title(f'surface state, time {self.t}')
+        ax.xaxis.set_visible(False)
+        ax.yaxis.set_visible(False)
+        fig.legend(loc='outside lower center', ncol=2, fancybox=True)
+
+        fig.savefig(filepath, dpi=400, bbox_inches='tight')
+        plt.close(fig)
 
     def update(self, data_slice, delta_t, save_for_plot=False):
         # set pressures
@@ -213,6 +247,12 @@ class KMC_CO_O2_Pt_Model(BaseModel, NeighborKMCBase):
             warnings.warn('The rate is higher than upper bound! Try to increase the latter.')
             rate = self.limits['output'][0][1]
 
+        if self.snapshotDir is not None:
+            self.snapshotTime += delta_t
+            if self.snapshotTime > self.snapshotPeriod:
+                self.plotSnapshot(f'{self.snapshotDir}/snapshot_t({self.t}).png')
+                self.snapshotTime = 0.
+
         self.model_output = np.array([rate, data_slice[0], data_slice[1], count])
         return self.model_output
 
@@ -272,6 +312,7 @@ class KMC_CO_O2_Pt_Model(BaseModel, NeighborKMCBase):
         for s in self.system.sites:
             s.covered = 0  # turn all sites empty
 
+        self.snapshotTime = 0.
         self.COxO_prev_count = 0
 
         NeighborKMCBase.reset(self)
