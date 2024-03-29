@@ -107,7 +107,6 @@ DEFAULT_PARAMS = {
                 O2_top=1.e-4, CO_top=1.e-4,
                 CO2_rate_top=1.4e2, CO2_count_top=1.e2,
                 T=440.,
-                snapshotDir='./repos/MonteCoffee_modified_Pd/snapshots/PC_runned'
             ),
             'to_PC_constructor': {
                 'analyser_dt': 1.e-1,
@@ -279,7 +278,7 @@ DEFAULT_PLOT_SPECS = {
          'to_fname': '_input',
          'to_plot_to_f': {
              'xlabel': 'Time, s', 'ylabel': 'Pressure',
-             'ylim': [-5.e-2, 1. + 5.e-2],
+             'ylim': [-5.e-6, 1.e-4 + 5.e-6],
              'save_csv': True,
          }},
         # add

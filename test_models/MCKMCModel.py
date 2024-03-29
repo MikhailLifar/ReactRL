@@ -124,6 +124,8 @@ class MCKMCModel(BaseModel, NeighborKMCBase):
         self.stepSaveN = 0
 
         self.snapshotDir = snapshotDir
+        if self.snapshotDir is None:
+            warnings.warn('MCKMC: Snapshots are not saved')
         self.snapshotPeriod = 0.5
         self.snapshotTime = 0.
 

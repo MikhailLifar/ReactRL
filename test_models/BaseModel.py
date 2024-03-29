@@ -6,18 +6,11 @@ class BaseModel:
     bottom = dict()
     top = dict()
 
-    parameters_count = dict()
-    each_pair_limits = dict()
-
     # define parameters names...
     names['input'] = []  # ATTENTION, this list should define the order
     # of the arguments in the update method
     bottom['input'] = {}
     top['input'] = {}
-    # ...or parameters number (if don't have names) instead
-    # with same limits for each output in this case
-    parameters_count['input'] = None
-    each_pair_limits['input'] = None
 
     # same for the outputs
     # define parameters names..
@@ -25,12 +18,8 @@ class BaseModel:
     # of the outputs in the update method
     bottom['output'] = {}
     top['output'] = {}
-    # ...or parameters number (if don't have names) instead
-    parameters_count['output'] = -1
-    each_pair_limits['output'] = -1
 
     model_name = '???'
-    limits = {}
 
     predefined_params = dict()
 
@@ -44,6 +33,14 @@ class BaseModel:
         self.t = 0.
         self.model_output = np.full(len(self.names['input']), np.nan)
         self.add_info = ''
+
+        self.limits = {}
+        self.parameters_count = dict()
+        self.each_pair_limits = dict()
+        self.parameters_count['input'] = None
+        self.each_pair_limits['input'] = None
+        self.parameters_count['output'] = -1
+        self.each_pair_limits['output'] = -1
 
         self.plot = dict()
 

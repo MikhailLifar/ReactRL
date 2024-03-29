@@ -350,7 +350,7 @@ def MCKMC_simple_tests():
     #                            RESOLUTION=1,  # always should be 1 if we use KMC, otherwise we will get wrong results!
     #                            )
 
-    PC_obj = PC_setup.general_PC_setup('MCKMC', ('to_model_constructor', {'surf_shape': (25, 25, 1)}))
+
 
     # PC_obj.analyser_dt = 1.e-7
     # PC_obj.reset()
@@ -370,33 +370,63 @@ def MCKMC_simple_tests():
     # BENCHMARK
     # benchmark_runs(PC_obj, './PC_plots/model_benchmarks', 'count')
 
-    # NEW TESTS BASED ON DYNAMIC ADV
+    # # DYNAMIC ADV TESTS
+    # PC_obj = PC_setup.general_PC_setup('MCKMC', ('to_model_constructor', {'surf_shape': (25, 25, 1),
+    #                                                                       'snapshotDir': './repos/MonteCoffee_modified_Pd/snapshots/PC_runned',
+    #                                                                       }))
+    # PC_obj.reset()
+    # dt = 10.
+    #
+    # options, _ = lib.read_plottof_csv('231002_sudden_discovery/rl_agent_sol.csv', ret_ops=True)
+    # Oidx = options[2::3].index('inputB') * 3 + 2
+    # COidx = options[2::3].index('inputA') * 3 + 2
+    #
+    # times = options[Oidx - 2]
+    # O_control = options[Oidx - 1]
+    # CO_control = options[COidx - 1]
+    # O_control *= 1.e-4
+    # CO_control *= 1.e-4
+    #
+    # Ostart = O_control[0]
+    # COstart = CO_control[0]
+    #
+    # PC_obj.set_controlled((Ostart, COstart))
+    # turning_points = np.where(np.abs(O_control[1:] - O_control[:-1]) > 1.e-5)[0] + 1
+    # step_end_times = times[turning_points - 1]
+    #
+    # PC_obj.time_forward(step_end_times[0])
+    # step_end_times = np.array(step_end_times[1:].tolist() + [times[-1]])
+    # for O_val, CO_val, t in zip(O_control[turning_points], CO_control[turning_points], step_end_times):
+    #     PC_obj.set_controlled((O_val, CO_val))
+    #     PC_obj.time_forward(t - PC_obj.time)
+    # PC_obj.get_and_plot('repos/MonteCoffee_modified_Pd/snapshots/PC_runned/MCKMC.png')
+
+    # DE COMPATIBILITY TEST
+    PC_obj = PC_setup.general_PC_setup('MCKMC', ('to_model_constructor', {'surf_shape': (25, 25, 1),
+                                                                          'log_on': False,
+                                                                          'snapshotDir': './PC_plots/MCKMC/de_compatibility',
+                                                                          }))
+    PC_DE = PC_setup.general_PC_setup('LibudaG')
+    PC_DE.process_to_control.set_params({'C_A_inhibit_B': 1., 'C_B_inhibit_A': 0.3,
+                                          'thetaA_max': 0.5, 'thetaB_max': 0.25,
+                                          'rate_des_A': 0.1, 'rate_react': 0.1,
+                                          })
+    PC_DE.process_to_control.set_params({'thetaA_init': 0., 'thetaB_init': 0., })
+
     PC_obj.reset()
-    dt = 10.
+    PC_DE.reset()
 
-    options, _ = lib.read_plottof_csv('231002_sudden_discovery/rl_agent_sol.csv', ret_ops=True)
-    Oidx = options[2::3].index('inputB') * 3 + 2
-    COidx = options[2::3].index('inputA') * 3 + 2
+    PC_obj.set_controlled((1.e-4, 0.))
+    PC_obj.time_forward(10.)
+    PC_obj.set_controlled((0., 1.e-4))
+    PC_obj.time_forward(10.)
+    PC_obj.get_and_plot('./PC_plots/MCKMC/de_compatibility/MCKMC.png')
 
-    times = options[Oidx - 2]
-    O_control = options[Oidx - 1]
-    CO_control = options[COidx - 1]
-    O_control *= 1.e-4
-    CO_control *= 1.e-4
-
-    Ostart = O_control[0]
-    COstart = CO_control[0]
-
-    PC_obj.set_controlled((Ostart, COstart))
-    turning_points = np.where(np.abs(O_control[1:] - O_control[:-1]) > 1.e-5)[0] + 1
-    step_end_times = times[turning_points - 1]
-
-    PC_obj.time_forward(step_end_times[0])
-    step_end_times = np.array(step_end_times[1:].tolist() + [times[-1]])
-    for O_val, CO_val, t in zip(O_control[turning_points], CO_control[turning_points], step_end_times):
-        PC_obj.set_controlled((O_val, CO_val))
-        PC_obj.time_forward(t - PC_obj.time)
-    PC_obj.get_and_plot('repos/MonteCoffee_modified_Pd/snapshots/PC_runned/MCKMC.png')
+    PC_DE.set_controlled((1., 0.))
+    PC_DE.time_forward(10.)
+    PC_DE.set_controlled((0., 1.))
+    PC_DE.time_forward(10.)
+    PC_DE.get_and_plot('./PC_plots/MCKMC/de_compatibility/DE.png')
 
 
 def Ziff_model_poisoning_speed_test():
