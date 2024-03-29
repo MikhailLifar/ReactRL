@@ -180,7 +180,7 @@ def runDynamicAdvParameters():
     #     'ODes': 1.e-6,
     #     'CODiff': 10.,
     #     'ODiff': 10.,  # TODO - questionable, may be better different diffusion for both species
-    #     'COOx': 6.288,
+    #     'COOx': 0.1,
     # }
     #
     # def F(param_v, param_name, ev_type, target_rate):
@@ -200,9 +200,9 @@ def runDynamicAdvParameters():
 
     # Run the simulation.
     # sim.run_kmc(100.)
-    sim.reset()
-    periodic_policy(sim)
-    sim.finalize()
+    # sim.reset()
+    # periodic_policy(sim)
+    # sim.finalize()
     # print("Simulation end time reached ! ! !")
 
 

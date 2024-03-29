@@ -1,5 +1,6 @@
 import sys
 import os
+import random
 
 # import numpy as np
 import matplotlib.pyplot as plt
@@ -23,7 +24,7 @@ from MonteCoffee_modified_Pd.user_events import (OAdsEvent, ODesEvent,
 from .BaseModel import *
 
 
-class KMC_CO_O2_Pt_Model(BaseModel, NeighborKMCBase):
+class MCKMCModel(BaseModel, NeighborKMCBase):
     """
     This class substitutes NeighborKMC class from user_kmc.py
     """
@@ -70,10 +71,12 @@ class KMC_CO_O2_Pt_Model(BaseModel, NeighborKMCBase):
             if p in self.kmc_parameters_dict:
                 self.kmc_parameters_dict[p] = params[p]
 
+        random.seed(0)
         # INITIALIZE SYSTEM OBJECT
-        a = 4.00  # Lattice Parameter (not related to DFT!)
+        a = 4.00  # Lattice Parameter (not related to DFT!) # is it relevant for Pd?
         neighbour_cutoff = a / np.sqrt(2.) + 0.05  # Nearest neighbor cutoff
-        Pt_surface_ase_obj = fcc111("Pt", a=a, size=surf_shape)
+        # Pt_surface_ase_obj = fcc111("Pt", a=a, size=surf_shape)
+        Pt_surface_ase_obj = fcc111("Pd", a=a, size=surf_shape)
         # Create a site for each surface-atom:
         sites = [Site(stype=0, covered=0, ind=i) for i in range(len(Pt_surface_ase_obj))]
         # Instantiate a system, events, and simulation.
@@ -160,9 +163,10 @@ class KMC_CO_O2_Pt_Model(BaseModel, NeighborKMCBase):
         where_co = np.where(surface == 1)
         where_o = np.where(surface == 2)
 
-        ax.scatter(*where_co, c='r', marker='o', label='CO')
-        ax.scatter(*where_o, c='b', marker='o', label='O')
-        ax.set_title(f'surface state, time {self.t}')
+        marker_size = 200. * 16 / (m + n)
+        ax.scatter(*where_co, c='r', marker='o', label='CO', s=marker_size)
+        ax.scatter(*where_o, c='b', marker='o', label='O', s=marker_size)
+        ax.set_title(f'Kinetic Monte Carlo simulation\nsurface state, time {self.t:.5f}')
         ax.xaxis.set_visible(False)
         ax.yaxis.set_visible(False)
         fig.legend(loc='outside lower center', ncol=2, fancybox=True)
@@ -181,14 +185,18 @@ class KMC_CO_O2_Pt_Model(BaseModel, NeighborKMCBase):
         t0 = self.t
         while self.t - t0 < delta_t:
 
-            self.frm_step(throw_exception=False, tstep_up_bound=2*delta_t)
+            kmc_dt = self.frm_step(throw_exception=False, tstep_up_bound=2*delta_t)
+
+            covs = self.system.get_coverages(self.Nspecies)
+            if covs[2] == 1.:
+                warnings.warn('The surface is completely occupied by oxygen')
 
             if self.log_on:
 
                 # LOGGING. SHOULD BE INSIDE WHILE LOOP
                 # Log every self.LogSteps step.
                 if self.stepN_CNT >= self.LogSteps:
-                    covs = self.system.get_coverages(self.Nspecies)
+
                     if self.verbose:
                         print("Time : ", self.t, "\t Covs :", covs)
 
@@ -208,13 +216,15 @@ class KMC_CO_O2_Pt_Model(BaseModel, NeighborKMCBase):
                     self.save_txt()
                     self.stepSaveN = 0.
 
-                # # MY CODE. Trying to rescale constants (probably I didn't comprehend how acceleration works)
-                # self.rescaleStep += 1
-                # if self.rescaleStep == self.rescaleN:
-                #     scale_rate_constant(self)
-
                 self.stepN_CNT += 1
                 self.stepNMC += 1
+
+            # snapshot every snapshotPeriod s
+            if self.snapshotDir is not None:
+                self.snapshotTime += kmc_dt
+                if self.snapshotTime > self.snapshotPeriod:
+                    self.plotSnapshot(f'{self.snapshotDir}/snapshot_t({self.t}).png')
+                    self.snapshotTime = 0.
 
         if self.t - t0 > 0.1 * delta_t:
             if self.t - t0 > delta_t:
@@ -232,7 +242,7 @@ class KMC_CO_O2_Pt_Model(BaseModel, NeighborKMCBase):
         # get CO2 formation rate (number of reactions / atom / delta_t)
 
         if save_for_plot:
-            _, self.plot['thetaCO'], self.plot['thetaO'] = self.system.get_coverages(self.Nspecies)
+            _, self.plot['thetaCO'], self.plot['thetaO'] = covs
 
         count = self.evs_exec[-1] - self.COxO_prev_count
         self.COxO_prev_count += count
@@ -246,12 +256,6 @@ class KMC_CO_O2_Pt_Model(BaseModel, NeighborKMCBase):
         if rate > self.limits['output'][0][1]:
             warnings.warn('The rate is higher than upper bound! Try to increase the latter.')
             rate = self.limits['output'][0][1]
-
-        if self.snapshotDir is not None:
-            self.snapshotTime += delta_t
-            if self.snapshotTime > self.snapshotPeriod:
-                self.plotSnapshot(f'{self.snapshotDir}/snapshot_t({self.t}).png')
-                self.snapshotTime = 0.
 
         self.model_output = np.array([rate, data_slice[0], data_slice[1], count])
         return self.model_output

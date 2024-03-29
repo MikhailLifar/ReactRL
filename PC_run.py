@@ -350,7 +350,7 @@ def MCKMC_simple_tests():
     #                            RESOLUTION=1,  # always should be 1 if we use KMC, otherwise we will get wrong results!
     #                            )
 
-    PC_obj = PC_setup.general_PC_setup('MCKMC')
+    PC_obj = PC_setup.general_PC_setup('MCKMC', ('to_model_constructor', {'surf_shape': (25, 25, 1)}))
 
     # PC_obj.analyser_dt = 1.e-7
     # PC_obj.reset()
@@ -388,11 +388,12 @@ def MCKMC_simple_tests():
     COstart = CO_control[0]
 
     PC_obj.set_controlled((Ostart, COstart))
-    turning_points = np.where(np.abs(O_control[1:] - O_control[:-1]) > 1.e-5)[0] + 5
-    turning_times = times[turning_points]
+    turning_points = np.where(np.abs(O_control[1:] - O_control[:-1]) > 1.e-5)[0] + 1
+    step_end_times = times[turning_points - 1]
 
-    PC_obj.time_forward(turning_times[0] - 5)
-    for O_val, CO_val, t in zip(O_control[turning_points], CO_control[turning_points], turning_times):
+    PC_obj.time_forward(step_end_times[0])
+    step_end_times = np.array(step_end_times[1:].tolist() + [times[-1]])
+    for O_val, CO_val, t in zip(O_control[turning_points], CO_control[turning_points], step_end_times):
         PC_obj.set_controlled((O_val, CO_val))
         PC_obj.time_forward(t - PC_obj.time)
     PC_obj.get_and_plot('repos/MonteCoffee_modified_Pd/snapshots/PC_runned/MCKMC.png')

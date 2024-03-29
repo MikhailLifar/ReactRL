@@ -147,10 +147,10 @@ def test_jobs_functions():
     import multiple_jobs_functions as jobfuncs
 
     size = [10, 10]
-    PC_obj = ProcessController(models.KMC_CO_O2_Pt_Model((*size, 1), log_on=False,
-                                                          O2_top=1.1e5, CO_top=1.1e5,
-                                                          CO2_rate_top=1.4e6, CO2_count_top=1.e4,
-                                                          T=373.),
+    PC_obj = ProcessController(models.MCKMCModel((*size, 1), log_on=False,
+                                                 O2_top=1.1e5, CO_top=1.1e5,
+                                                 CO2_rate_top=1.4e6, CO2_count_top=1.e4,
+                                                 T=373.),
                                analyser_dt=0.25e-7,
                                target_func_to_maximize=get_target_func('CO2_count'),
                                target_func_name='CO2_count',

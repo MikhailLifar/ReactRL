@@ -9,6 +9,8 @@ Module: base.events for documentation about the methods possible(), get_rate(), 
 
 """
 
+import json
+
 import numpy as np
 from MonteCoffee_changed.NeighborKMC.base.events import EventBase
 from user_entropy import get_Zvib, get_Z_CO, get_Z_O2
@@ -30,6 +32,9 @@ PD_EV_CONSTANTS = {
     'EdiffO': EdiffO,
     'Ea_const': 0.168 + 0.47238,
 }
+# TODO ugly structured code
+with open('/home/mikhail/RL_22_07_MicroFluidDroplets/repos/MonteCoffee_modified_Pd/PdDynamicAdvParams.txt', 'r') as fread:
+    PD_EV_CONSTANTS.update(json.load(fread))
 
 
 class COAdsEvent(EventBase):

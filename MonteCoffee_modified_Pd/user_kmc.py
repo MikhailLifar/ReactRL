@@ -325,9 +325,10 @@ class NeighborKMC(NeighborKMCBase):
         where_co = np.where(surface == 1)
         where_o = np.where(surface == 2)
 
-        ax.scatter(*where_co, c='r', marker='o', label='CO')
-        ax.scatter(*where_o, c='b', marker='o', label='O')
-        ax.set_title(f'surface state, time {self.t}')
+        marker_size = 0.8 * 16 / (m + n)
+        ax.scatter(*where_co, c='r', marker='o', label='CO', s=marker_size)
+        ax.scatter(*where_o, c='b', marker='o', label='O', s=marker_size)
+        ax.set_title(f'Kinetic Monte Carlo simulation\nsurface state, time {self.t:.5f}')
         ax.xaxis.set_visible(False)
         ax.yaxis.set_visible(False)
         fig.legend(loc='outside lower center', ncol=2, fancybox=True)

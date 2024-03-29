@@ -100,7 +100,7 @@ DEFAULT_PARAMS = {
                         )
         },
         'MCKMC': {
-            'model_class': KMC_CO_O2_Pt_Model,
+            'model_class': MCKMCModel,
             'to_model_constructor': dict(
                 surf_shape=(5, 5, 1),
                 log_on=True,
