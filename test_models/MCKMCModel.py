@@ -1,12 +1,14 @@
 import sys
 import os
 import random
+import json
 
 # import numpy as np
 import matplotlib.pyplot as plt
 import warnings
 
 import h5py
+import numpy as np
 
 from ase.build import fcc111
 
@@ -20,7 +22,8 @@ from MonteCoffee_changed.NeighborKMC.base.logging import Log
 from MonteCoffee_modified_Pd.user_sites import Site
 from MonteCoffee_modified_Pd.user_system import System
 from MonteCoffee_modified_Pd.user_events import (OAdsEvent, ODesEvent,
-                                                 COAdsEvent, CODesEvent, COOxEvent, CODiffEvent, ODiffEvent)
+                                                 COAdsEvent, CODesEvent, COOxEvent, CODiffEvent, ODiffEvent,
+                                                 PD_EV_CONSTANTS)
 from .BaseModel import *
 
 
@@ -44,8 +47,10 @@ class MCKMCModel(BaseModel, NeighborKMCBase):
     LOGS_FOLD_PATH = '/home/mikhail/RL_22_07_MicroFluidDroplets/repos/MonteCoffee_modified_Pd/PC_logs'
 
     def __init__(self,
-                 surf_shape, log_on: bool = False, snapshotDir=None,
-                 diffusion_on=False,
+                 surf_shape, log_on: bool = False,
+                 snapshotDir=None, snapshotPeriod=0.5,
+                 diffusion_level=0.,
+                 init_covs=None,
                  **params):
         """
         The Model is based on the NeighborKMC class from Pt(111) example from MonteCoffee package
@@ -55,7 +60,10 @@ class MCKMCModel(BaseModel, NeighborKMCBase):
         :param parameters:
         """
         BaseModel.__init__(self, params)
-        if diffusion_on:
+        if diffusion_level > 5.e-2:
+            file_id = f'{diffusion_level + 1.e-6:.2f}'
+            with open(f'./data/PdDynamicAdvParams_diff({file_id}).txt') as fread:
+                PD_EV_CONSTANTS.update(json.load(fread))  # TODO crutch parameterization, prune to errors
             self.events_clss = [COAdsEvent, CODesEvent, OAdsEvent, ODesEvent, CODiffEvent, ODiffEvent, COOxEvent]
             self.reverse_events_dict = {0: 1, 2: 3, 4: 4, 5: 5}
         else:
@@ -76,7 +84,12 @@ class MCKMCModel(BaseModel, NeighborKMCBase):
         neighbour_cutoff = a / np.sqrt(2.) + 0.05  # Nearest neighbor cutoff
         Pt_surface_ase_obj = fcc111("Pd", a=a, size=surf_shape)
         # Create a site for each surface-atom:
-        sites = [Site(stype=0, covered=0, ind=i) for i in range(len(Pt_surface_ase_obj))]
+        Nsites = len(Pt_surface_ase_obj)
+        if init_covs is None:
+            sites = [Site(stype=0, covered=0, ind=i) for i in range(Nsites)]
+        else:
+            init_site_covs = np.random.choice(np.arange(len(init_covs)), size=Nsites, p=init_covs)
+            sites = [Site(stype=0, covered=cov, ind=i) for i, cov in enumerate(init_site_covs)]
         # Instantiate a system, events, and simulation.
         system = System(atoms=Pt_surface_ase_obj, sites=sites, shape=surf_shape)
         # Set the global neighborlist based on distances:
@@ -125,7 +138,7 @@ class MCKMCModel(BaseModel, NeighborKMCBase):
         self.snapshotDir = snapshotDir
         if self.snapshotDir is None:
             warnings.warn('MCKMC: Snapshots are not saved')
-        self.snapshotPeriod = 0.5
+        self.snapshotPeriod = snapshotPeriod
         self.snapshotTime = 0.
 
         # self.rescaleN = self.ne

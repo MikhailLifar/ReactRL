@@ -323,11 +323,87 @@ def benchmark_runs(PC_obj: ProcessController, out_path: str, rate_or_count: str,
                          xlim=[0., None], ylim=[-0.1, None], )
 
 
+def MCKMC_DE_compatibility_test():
+    PC_obj = PC_setup.general_PC_setup('MCKMC', ('to_model_constructor', {'surf_shape': (25, 25, 1),
+                                                                          'log_on': True,
+                                                                          'snapshotDir': './PC_plots/MCKMC/de_compatibility',
+                                                                          }))
+    PC_DE = PC_setup.general_PC_setup('LibudaG')
+    PC_DE.process_to_control.set_params({'C_A_inhibit_B': 1., 'C_B_inhibit_A': 0.3,
+                                          'thetaA_max': 0.5, 'thetaB_max': 0.25,
+                                          'rate_des_A': 0.1, 'rate_react': 0.1,
+                                          })
+    PC_DE.process_to_control.set_params({'thetaA_init': 0., 'thetaB_init': 0., })
+
+    # O2 then CO
+    PC_obj.reset()
+    PC_DE.reset()
+
+    PC_obj.set_controlled((1.e-4, 0.))
+    PC_obj.time_forward(10.)
+    PC_obj.set_controlled((0., 1.e-4))
+    PC_obj.time_forward(10.)
+    PC_obj.get_and_plot('./PC_plots/MCKMC/de_compatibility/MCKMC_O2_then_CO.png')
+
+    PC_DE.set_controlled((1., 0.))
+    PC_DE.time_forward(10.)
+    PC_DE.set_controlled((0., 1.))
+    PC_DE.time_forward(10.)
+    PC_DE.get_and_plot('./PC_plots/MCKMC/de_compatibility/DE_O2_then_CO.png')
+
+
+def MCKMC_one_turn_steady_state_tries():
+    diffusion_level = 0.
+
+    res_dir = './PC_plots/MCKMC/diffusion_influence'
+    O2_CO_dir = f'{res_dir}/O2_then_CO_d({diffusion_level:.2f})'
+    CO_O2_dir = f'{res_dir}/CO_then_O2_d({diffusion_level:.2f})'
+    os.makedirs(res_dir, exist_ok=True)
+    os.makedirs(O2_CO_dir, exist_ok=True)
+    os.makedirs(CO_O2_dir, exist_ok=True)
+
+    # O2, then CO
+    PC_obj = PC_setup.general_PC_setup('MCKMC', ('to_model_constructor', {'surf_shape': (50, 50, 1),
+                                                                          'log_on': False,
+                                                                          'snapshotDir': O2_CO_dir,
+                                                                          'diffusion_level': diffusion_level,
+                                                                          }))
+
+    PC_obj.reset()
+    PC_obj.set_controlled((1.e-4, 0.))
+    PC_obj.time_forward(10.)
+    PC_obj.set_controlled((0., 1.e-4))
+    PC_obj.time_forward(10.)
+    PC_obj.get_and_plot(f'{O2_CO_dir}/O2_then_CO.png')
+
+    # CO then O2
+    # PC_obj = PC_setup.general_PC_setup('MCKMC', ('to_model_constructor', {'surf_shape': (25, 25, 1),
+    #                                                                       'log_on': True,
+    #                                                                       'snapshotDir': './PC_plots/MCKMC/de_compatibility',
+    #                                                                       'init_covs': (0.05, 0.95, 0.),
+    #                                                                       }))
+    PC_obj.reset()
+    PC_obj.process_to_control.snapshotDir = CO_O2_dir
+    PC_obj.set_controlled((0., 1.e-4))
+    PC_obj.time_forward(10.)
+    PC_obj.set_controlled((1.e-4, 0.))
+    PC_obj.time_forward(10.)
+    PC_obj.get_and_plot(f'{CO_O2_dir}/CO_then_O2.png')
+
+    # # stationary
+    # PC_obj = PC_setup.general_PC_setup('MCKMC', ('to_model_constructor', {'surf_shape': (25, 25, 1),
+    #                                                                       'log_on': True,
+    #                                                                       'snapshotDir': './PC_plots/MCKMC/de_compatibility',
+    #                                                                       }))
+    # PC_obj.reset()
+
+
 def MCKMC_dynamic_advantage_test():
     # DYNAMIC ADV TESTS
     shape = (50, 50, 1)
     PC_obj = PC_setup.general_PC_setup('MCKMC', ('to_model_constructor', {'surf_shape': shape,
                                                                           'snapshotDir': './repos/MonteCoffee_modified_Pd/snapshots/PC_runned',
+                                                                          'snapshotPeriod': 0.2,
                                                                           }))
     PC_obj.reset()
 
@@ -340,7 +416,7 @@ def MCKMC_dynamic_advantage_test():
     CO_control = options[COidx - 1]
 
     # limit times
-    t_start, t_end = 140., 220.
+    t_start, t_end = 141., 220.
     idx = (times >= t_start) & (times <= t_end)
     times = times[idx] - t_start
     O_control = O_control[idx]
@@ -362,34 +438,6 @@ def MCKMC_dynamic_advantage_test():
         PC_obj.set_controlled((O_val, CO_val))
         PC_obj.time_forward(t - PC_obj.time)
     PC_obj.get_and_plot('repos/MonteCoffee_modified_Pd/snapshots/PC_runned/MCKMC.png')
-
-
-def MCKMC_DE_compatibility_test():
-    PC_obj = PC_setup.general_PC_setup('MCKMC', ('to_model_constructor', {'surf_shape': (25, 25, 1),
-                                                                          'log_on': True,
-                                                                          'snapshotDir': './PC_plots/MCKMC/de_compatibility',
-                                                                          }))
-    PC_DE = PC_setup.general_PC_setup('LibudaG')
-    PC_DE.process_to_control.set_params({'C_A_inhibit_B': 1., 'C_B_inhibit_A': 0.3,
-                                          'thetaA_max': 0.5, 'thetaB_max': 0.25,
-                                          'rate_des_A': 0.1, 'rate_react': 0.1,
-                                          })
-    PC_DE.process_to_control.set_params({'thetaA_init': 0., 'thetaB_init': 0., })
-
-    PC_obj.reset()
-    PC_DE.reset()
-
-    PC_obj.set_controlled((1.e-4, 0.))
-    PC_obj.time_forward(10.)
-    PC_obj.set_controlled((0., 1.e-4))
-    PC_obj.time_forward(10.)
-    PC_obj.get_and_plot('./PC_plots/MCKMC/de_compatibility/MCKMC.png')
-
-    PC_DE.set_controlled((1., 0.))
-    PC_DE.time_forward(10.)
-    PC_DE.set_controlled((0., 1.))
-    PC_DE.time_forward(10.)
-    PC_DE.get_and_plot('./PC_plots/MCKMC/de_compatibility/DE.png')
 
 
 def Ziff_model_poisoning_speed_test():
@@ -905,7 +953,8 @@ def main():
 
     # Libuda2001_original_simulation()
 
-    MCKMC_dynamic_advantage_test()
+    # MCKMC_dynamic_advantage_test()
+    MCKMC_one_turn_steady_state_tries()
 
     # Ziff_model_poisoning_speed_test()
     # ZGB_snapshots()
