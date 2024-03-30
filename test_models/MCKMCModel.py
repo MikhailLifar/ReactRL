@@ -38,18 +38,6 @@ class MCKMCModel(BaseModel, NeighborKMCBase):
     bottom['output']['CO2_rate'] = bottom['output']['CO2_count'] = 0.  # count is a bad option because it depends on the size and
     # top['input']['CO'] = top['input']['O2'] = 3.e+3
 
-    # KMC parameters
-    events_clss = [COAdsEvent, CODesEvent, OAdsEvent, ODesEvent,
-                   CODiffEvent, ODiffEvent,
-                   COOxEvent]
-    reverse_events_duct = {0: 1, 2: 3,
-                           4: 4, 5: 5
-                           }
-    kmc_parameters_dict = {'pCO': 1.e-4, 'pO2': 1.e-4, 'T': 440.,
-                           'Name': 'COOx Pt(111) reaction simulation',
-                           'reverses ': reverse_events_duct,
-                           'Events': events_clss}
-
     model_name = 'KMC_CO_O2_Pt'
 
     # LOGS_FOLD_PATH = '/home/mikhail/RL_22_07_MicroFluidDroplets/kMClogs_clean_regulary'
@@ -57,6 +45,7 @@ class MCKMCModel(BaseModel, NeighborKMCBase):
 
     def __init__(self,
                  surf_shape, log_on: bool = False, snapshotDir=None,
+                 diffusion_on=False,
                  **params):
         """
         The Model is based on the NeighborKMC class from Pt(111) example from MonteCoffee package
@@ -66,6 +55,16 @@ class MCKMCModel(BaseModel, NeighborKMCBase):
         :param parameters:
         """
         BaseModel.__init__(self, params)
+        if diffusion_on:
+            self.events_clss = [COAdsEvent, CODesEvent, OAdsEvent, ODesEvent, CODiffEvent, ODiffEvent, COOxEvent]
+            self.reverse_events_dict = {0: 1, 2: 3, 4: 4, 5: 5}
+        else:
+            self.events_clss = [COAdsEvent, CODesEvent, OAdsEvent, ODesEvent, COOxEvent]
+            self.reverse_events_dict = {0: 1, 2: 3}
+        self.kmc_parameters_dict = {'pCO': 1.e-4, 'pO2': 1.e-4, 'T': 440.,
+                                    'Name': 'COOx Pt(111) reaction simulation',
+                                    'reverses ': self.reverse_events_dict,
+                                    'Events': self.events_clss}
 
         for p in params:
             if p in self.kmc_parameters_dict:
@@ -73,9 +72,8 @@ class MCKMCModel(BaseModel, NeighborKMCBase):
 
         random.seed(0)
         # INITIALIZE SYSTEM OBJECT
-        a = 4.00  # Lattice Parameter (not related to DFT!) # is it relevant for Pd?
+        a = 4.00  # Lattice Parameter (not related to DFT!) # TODO is it relevant for Pd?
         neighbour_cutoff = a / np.sqrt(2.) + 0.05  # Nearest neighbor cutoff
-        # Pt_surface_ase_obj = fcc111("Pt", a=a, size=surf_shape)
         Pt_surface_ase_obj = fcc111("Pd", a=a, size=surf_shape)
         # Create a site for each surface-atom:
         sites = [Site(stype=0, covered=0, ind=i) for i in range(len(Pt_surface_ase_obj))]
@@ -87,13 +85,14 @@ class MCKMCModel(BaseModel, NeighborKMCBase):
         # EVENTS
         self.events = [ev(self.kmc_parameters_dict) for ev in self.events_clss]
         self.reverses = None  # Set later
-        self.load_reverses(self.reverse_events_duct)
+        self.load_reverses(self.reverse_events_dict)
         self.evs_exec = np.zeros(len(self.events))
         # self.system_evolution = [[] for i in range(4)]
 
         # SIMULATION
         NeighborKMCBase.__init__(self, system=system, kmc_parameters=self.kmc_parameters_dict,
                                  options_dir=OPTIONS_PATH)
+        self.timeOffset = 0.  # needed to account for difference between PC and KMC time
 
         self.size = np.prod(surf_shape)
         self.params['surf_shape'] = 'x'.join(map(str, surf_shape))
@@ -184,12 +183,14 @@ class MCKMCModel(BaseModel, NeighborKMCBase):
             e.recompute()
 
         # perform time step
+        covs = self.system.get_coverages(self.Nspecies)
         t0 = self.t
-        while self.t - t0 < delta_t:
+        while self.t + self.timeOffset - t0 < delta_t:
 
-            kmc_dt = self.frm_step(throw_exception=False, tstep_up_bound=2*delta_t)
+            kmc_dt = self.frm_step(throw_exception=False, tstep_up_bound=delta_t)
 
             covs = self.system.get_coverages(self.Nspecies)
+            self.events[2].active = covs[2] < 0.5  # TODO crutch to achieve not complete oxygen coverage
             if covs[2] == 1.:
                 warnings.warn('The surface is completely occupied by oxygen')
 
@@ -228,6 +229,8 @@ class MCKMCModel(BaseModel, NeighborKMCBase):
                     self.plotSnapshot(f'{self.snapshotDir}/snapshot_t({self.t}).png')
                     self.snapshotTime = 0.
 
+        self.timeOffset = self.t + self.timeOffset - t0 - delta_t
+
         if self.t - t0 > 0.1 * delta_t:
             if self.t - t0 > delta_t:
                 warnings.warn('!!!Simulation step is too large!!!')
@@ -248,17 +251,7 @@ class MCKMCModel(BaseModel, NeighborKMCBase):
 
         count = self.evs_exec[-1] - self.COxO_prev_count
         self.COxO_prev_count += count
-        # TODO: Crutch to avoid training crushing
-        if count > self.limits['output'][3][1]:
-            warnings.warn('The number of COxO events is higher than upper bound! Try to increase the latter.')
-            count = self.limits['output'][3][1]
-
         rate = count / self.size / delta_t
-        # TODO: Crutch to avoid training crushing
-        if rate > self.limits['output'][0][1]:
-            warnings.warn('The rate is higher than upper bound! Try to increase the latter.')
-            rate = self.limits['output'][0][1]
-
         self.model_output = np.array([rate, data_slice[0], data_slice[1], count])
         return self.model_output
 

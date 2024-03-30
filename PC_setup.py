@@ -274,7 +274,7 @@ DEFAULT_PLOT_SPECS = {
     ],
     'MCKMC': [
         # input
-        {'names': ('O2', 'CO'), 'groups': 'input', 'styles': (None, ),
+        {'names': ('O2', 'CO'), 'groups': 'input', 'styles': (None, None),
          'to_fname': '_input',
          'to_plot_to_f': {
              'xlabel': 'Time, s', 'ylabel': 'Pressure',

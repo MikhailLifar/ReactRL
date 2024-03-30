@@ -46,7 +46,7 @@ IO2 = 2.06218774e-46  # O2 moment of inertia
 s0CO = 0.9  # Sticking coefficient of CO
 s0O = 0.1  # Sticking coefficient of O2
 
-Asite = 1. / ((4.E-10) ** 2.*np.sqrt(3.)/4.)  # area of a site in m^2
+Asite = 1. / ((4.E-10) ** 2.*np.sqrt(3.)/4.)  # area of a site in m^2 # TODO is it relevant for Pd?
 
 
 def main():
