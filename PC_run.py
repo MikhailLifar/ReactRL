@@ -323,87 +323,50 @@ def benchmark_runs(PC_obj: ProcessController, out_path: str, rate_or_count: str,
                          xlim=[0., None], ylim=[-0.1, None], )
 
 
-def MCKMC_simple_tests():
-    # size = [20, 20]
-    # PC_obj = ProcessController(KMC_CO_O2_Pt_Model((*size, 1), log_on=True, O2_top=1.1e-4, CO_top=1.1e-4,),
-    #                            target_func_to_maximize=get_target_func('CO2_value'),
-    #                            RESOLUTION=1)
-    # PC_obj.set_metrics(('CO2', CO2_integral),)
-    # PC_obj.analyser_dt = 1
-    # PC_obj.set_plot_params(input_lims=[-1e-5, 1.1e-4], input_ax_name='Pressure, Pa',
-    #                        output_lims=[-1e-2, 0.06], output_ax_name='CO2 formation rate, $(Pt atom * sec)^{-1}$')
-    # postfix = f'{size[0]}x{size[1]}'
-    # for T in (300., 400., 440., 500., 600.):
-    #     run_dir = f'PC_plots/KMC/Basic/{int(T)}K_{postfix}'
-    #     os.mkdir(run_dir)
-    #     PC_obj.process_to_control.cls_parameters['T'] = T
-    #     Libuda2001_CO_cutoff_policy(PC_obj, run_dir, 0.25, 0.5, 0.75)
+def MCKMC_dynamic_advantage_test():
+    # DYNAMIC ADV TESTS
+    shape = (50, 50, 1)
+    PC_obj = PC_setup.general_PC_setup('MCKMC', ('to_model_constructor', {'surf_shape': shape,
+                                                                          'snapshotDir': './repos/MonteCoffee_modified_Pd/snapshots/PC_runned',
+                                                                          }))
+    PC_obj.reset()
 
-    # TEST IF COMPARABLE WITH ORIGINAL
-    # size = [20, 20]
-    # PC_obj = ProcessController(KMC_CO_O2_Pt_Model((*size, 1), log_on=True,
-    #                                               O2_top=1.e5, CO_top=1.1e5,
-    #                                               CO2_rate_top=1.4e6, CO2_count_top=1.e4,
-    #                                               T=373.),
-    #                            analyser_dt=1.e-6,
-    #                            target_func_to_maximize=get_target_func('CO2_count'),
-    #                            RESOLUTION=1,  # always should be 1 if we use KMC, otherwise we will get wrong results!
-    #                            )
+    options, _ = lib.read_plottof_csv('231002_sudden_discovery/rl_agent_sol.csv', ret_ops=True)
+    Oidx = options[2::3].index('inputB') * 3 + 2
+    COidx = options[2::3].index('inputA') * 3 + 2
+
+    times = options[Oidx - 2]
+    O_control = options[Oidx - 1]
+    CO_control = options[COidx - 1]
+
+    # limit times
+    t_start, t_end = 140., 220.
+    idx = (times >= t_start) & (times <= t_end)
+    times = times[idx] - t_start
+    O_control = O_control[idx]
+    CO_control = CO_control[idx]
+
+    O_control *= 1.e-4
+    CO_control *= 1.e-4
+
+    Ostart = O_control[0]
+    COstart = CO_control[0]
+
+    PC_obj.set_controlled((Ostart, COstart))
+    turning_points = np.where(np.abs(O_control[1:] - O_control[:-1]) > 1.e-5)[0] + 1
+    step_end_times = times[turning_points - 1]
+
+    PC_obj.time_forward(step_end_times[0])
+    step_end_times = np.array(step_end_times[1:].tolist() + [times[-1]])
+    for O_val, CO_val, t in zip(O_control[turning_points], CO_control[turning_points], step_end_times):
+        PC_obj.set_controlled((O_val, CO_val))
+        PC_obj.time_forward(t - PC_obj.time)
+    PC_obj.get_and_plot('repos/MonteCoffee_modified_Pd/snapshots/PC_runned/MCKMC.png')
 
 
-
-    # PC_obj.analyser_dt = 1.e-7
-    # PC_obj.reset()
-    # for i in range(4):
-    #     PC_obj.set_controlled((1E3, 2E3))
-    #     PC_obj.time_forward(10.e-5)
-    #     PC_obj.set_controlled((10E3, 1E3))
-    #     PC_obj.time_forward(10.e-5)
-    # PC_obj.get_and_plot(f'PC_plots/KMC/Basic/debug_dynamic.png',
-    #                     plot_params={'time_segment': [0., None], 'additional_plot': ['thetaCO', 'thetaO'],
-    #                                  'plot_mode': 'separately', 'out_names': ['CO2']})
-
-    # RUN UNDER CONDITIONS FOR RL
-    # PC_obj.reset()
-    # PC_obj.set_controlled((5E3, 5E3))
-
-    # BENCHMARK
-    # benchmark_runs(PC_obj, './PC_plots/model_benchmarks', 'count')
-
-    # # DYNAMIC ADV TESTS
-    # PC_obj = PC_setup.general_PC_setup('MCKMC', ('to_model_constructor', {'surf_shape': (25, 25, 1),
-    #                                                                       'snapshotDir': './repos/MonteCoffee_modified_Pd/snapshots/PC_runned',
-    #                                                                       }))
-    # PC_obj.reset()
-    # dt = 10.
-    #
-    # options, _ = lib.read_plottof_csv('231002_sudden_discovery/rl_agent_sol.csv', ret_ops=True)
-    # Oidx = options[2::3].index('inputB') * 3 + 2
-    # COidx = options[2::3].index('inputA') * 3 + 2
-    #
-    # times = options[Oidx - 2]
-    # O_control = options[Oidx - 1]
-    # CO_control = options[COidx - 1]
-    # O_control *= 1.e-4
-    # CO_control *= 1.e-4
-    #
-    # Ostart = O_control[0]
-    # COstart = CO_control[0]
-    #
-    # PC_obj.set_controlled((Ostart, COstart))
-    # turning_points = np.where(np.abs(O_control[1:] - O_control[:-1]) > 1.e-5)[0] + 1
-    # step_end_times = times[turning_points - 1]
-    #
-    # PC_obj.time_forward(step_end_times[0])
-    # step_end_times = np.array(step_end_times[1:].tolist() + [times[-1]])
-    # for O_val, CO_val, t in zip(O_control[turning_points], CO_control[turning_points], step_end_times):
-    #     PC_obj.set_controlled((O_val, CO_val))
-    #     PC_obj.time_forward(t - PC_obj.time)
-    # PC_obj.get_and_plot('repos/MonteCoffee_modified_Pd/snapshots/PC_runned/MCKMC.png')
-
-    # DE COMPATIBILITY TEST
+def MCKMC_DE_compatibility_test():
     PC_obj = PC_setup.general_PC_setup('MCKMC', ('to_model_constructor', {'surf_shape': (25, 25, 1),
-                                                                          'log_on': False,
+                                                                          'log_on': True,
                                                                           'snapshotDir': './PC_plots/MCKMC/de_compatibility',
                                                                           }))
     PC_DE = PC_setup.general_PC_setup('LibudaG')
@@ -942,7 +905,7 @@ def main():
 
     # Libuda2001_original_simulation()
 
-    MCKMC_simple_tests()
+    MCKMC_dynamic_advantage_test()
 
     # Ziff_model_poisoning_speed_test()
     # ZGB_snapshots()

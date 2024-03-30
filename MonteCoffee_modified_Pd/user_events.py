@@ -123,13 +123,13 @@ class OAdsEvent(EventBase):
 
     def possible(self, system, site, other_site):
         if system.sites[site].covered == 0 and system.sites[other_site].covered == 0:
-            return True
+            return self.active
         else:
             return False
 
     def get_rate(self, system, site, other_site):
         R = (PD_EV_CONSTANTS['s0O'] * self.params['pO2']) / (PD_EV_CONSTANTS['Asite'] * np.sqrt(2. * np.pi * mO2 * kB * eV2J * self.params['T']))
-        return self.active * self.alpha * R
+        return self.alpha * R
 
     def do_event(self, system, site, other_site):
         # Cover it with O, which is species number 2.

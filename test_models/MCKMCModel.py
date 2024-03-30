@@ -177,20 +177,28 @@ class MCKMCModel(BaseModel, NeighborKMCBase):
 
     def update(self, data_slice, delta_t, save_for_plot=False):
         # set pressures
-        self.kmc_parameters['pO2'] = data_slice[0]
-        self.kmc_parameters['pCO'] = data_slice[1]
-        for e in self.events:
-            e.recompute()
+        pO2, pCO = data_slice
+        if abs(self.kmc_parameters['pO2'] - pO2) + abs(self.kmc_parameters['pCO'] - pCO) > 1.e-10:
+            self.kmc_parameters['pO2'] = pO2
+            self.kmc_parameters['pCO'] = pCO
+            for e in self.events:
+                e.recompute()
+            self.frm_init()
+
+        covs = self.system.get_coverages(self.Nspecies)
 
         # perform time step
-        covs = self.system.get_coverages(self.Nspecies)
         t0 = self.t
         while self.t + self.timeOffset - t0 < delta_t:
-
             kmc_dt = self.frm_step(throw_exception=False, tstep_up_bound=delta_t)
-
             covs = self.system.get_coverages(self.Nspecies)
-            self.events[2].active = covs[2] < 0.5  # TODO crutch to achieve not complete oxygen coverage
+
+            # TODO huge and costly crutch to achieve not complete oxygen coverage
+            if (covs[2] > 0.3 and self.events[2].active) or \
+                    (covs[2] < 0.25 and not self.events[2].active):
+                self.events[2].active = covs[2] < 0.25
+                self.frm_init()
+
             if covs[2] == 1.:
                 warnings.warn('The surface is completely occupied by oxygen')
 
