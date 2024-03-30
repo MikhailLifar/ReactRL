@@ -44,19 +44,19 @@ class MCKMCModel(BaseModel, NeighborKMCBase):
     model_name = 'KMC_CO_O2_Pt'
 
     # LOGS_FOLD_PATH = '/home/mikhail/RL_22_07_MicroFluidDroplets/kMClogs_clean_regulary'
-    LOGS_FOLD_PATH = '/home/mikhail/RL_22_07_MicroFluidDroplets/repos/MonteCoffee_modified_Pd/PC_logs'
 
     def __init__(self,
-                 surf_shape, log_on: bool = False,
+                 surf_shape,
                  snapshotDir=None, snapshotPeriod=0.5,
                  diffusion_level=0.,
                  init_covs=None,
+                 logDir=None,
                  **params):
         """
         The Model is based on the NeighborKMC class from Pt(111) example from MonteCoffee package
 
         :param surf_shape:
-        :param log_on:
+        :param logDir:
         :param parameters:
         """
         BaseModel.__init__(self, params)
@@ -77,6 +77,8 @@ class MCKMCModel(BaseModel, NeighborKMCBase):
         for p in params:
             if p in self.kmc_parameters_dict:
                 self.kmc_parameters_dict[p] = params[p]
+
+        self.logDir = logDir
 
         random.seed(0)
         # INITIALIZE SYSTEM OBJECT
@@ -127,8 +129,6 @@ class MCKMCModel(BaseModel, NeighborKMCBase):
         self.plot = {'thetaCO': covCO, 'thetaO': covO}
 
         self.add_info = self.get_add_info()
-
-        self.log_on = log_on
 
         self.log = None
         self.stepN_CNT = 0
@@ -215,7 +215,7 @@ class MCKMCModel(BaseModel, NeighborKMCBase):
             if covs[2] == 1.:
                 warnings.warn('The surface is completely occupied by oxygen')
 
-            if self.log_on:
+            if self.logDir is not None:
 
                 # LOGGING. SHOULD BE INSIDE WHILE LOOP
                 # Log every self.LogSteps step.
@@ -277,7 +277,7 @@ class MCKMCModel(BaseModel, NeighborKMCBase):
         return self.model_output
 
     def reset(self):
-        if self.log_on:
+        if self.logDir is not None:
             if self.log:
                 self.finalize()
 
@@ -293,10 +293,10 @@ class MCKMCModel(BaseModel, NeighborKMCBase):
                               "Number of site-types (stypes)": len(list(set([m.stype for m in self.system.sites])))
                               })
             accelparams = {"on": self.use_scaling_algorithm, "Ns": self.Ns, "Nf": self.Nf, "ne": self.ne}
-            self.log = Log(logparams, accelparams, logs_fold_path=self.LOGS_FOLD_PATH)
+            self.log = Log(logparams, accelparams, logs_fold_path=self.logDir)
 
             # Save txt files with site information:
-            foldpath = self.LOGS_FOLD_PATH
+            foldpath = self.logDir
             np.savetxt(f'{foldpath}/time.txt', [])
             np.savetxt(f'{foldpath}/coverages.txt', [])
             np.savetxt(f'{foldpath}/evs_exec.txt', [])
@@ -371,4 +371,4 @@ class MCKMCModel(BaseModel, NeighborKMCBase):
 
         """
 
-        Log.save_txt(self, foldpath=self.LOGS_FOLD_PATH)
+        Log.save_txt(self, foldpath=self.logDir)

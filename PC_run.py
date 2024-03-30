@@ -354,6 +354,7 @@ def MCKMC_DE_compatibility_test():
 
 def MCKMC_one_turn_steady_state_tries():
     diffusion_level = 0.
+    shape = (5, 5, 1)
 
     res_dir = './PC_plots/MCKMC/diffusion_influence'
     O2_CO_dir = f'{res_dir}/O2_then_CO_d({diffusion_level:.2f})'
@@ -363,8 +364,8 @@ def MCKMC_one_turn_steady_state_tries():
     os.makedirs(CO_O2_dir, exist_ok=True)
 
     # O2, then CO
-    PC_obj = PC_setup.general_PC_setup('MCKMC', ('to_model_constructor', {'surf_shape': (50, 50, 1),
-                                                                          'log_on': False,
+    PC_obj = PC_setup.general_PC_setup('MCKMC', ('to_model_constructor', {'surf_shape': shape,
+                                                                          'logDir': O2_CO_dir,
                                                                           'snapshotDir': O2_CO_dir,
                                                                           'diffusion_level': diffusion_level,
                                                                           }))
@@ -382,8 +383,12 @@ def MCKMC_one_turn_steady_state_tries():
     #                                                                       'snapshotDir': './PC_plots/MCKMC/de_compatibility',
     #                                                                       'init_covs': (0.05, 0.95, 0.),
     #                                                                       }))
+    PC_obj = PC_setup.general_PC_setup('MCKMC', ('to_model_constructor', {'surf_shape': shape,
+                                                                          'logDir': CO_O2_dir,
+                                                                          'snapshotDir': CO_O2_dir,
+                                                                          'diffusion_level': diffusion_level,
+                                                                          }))
     PC_obj.reset()
-    PC_obj.process_to_control.snapshotDir = CO_O2_dir
     PC_obj.set_controlled((0., 1.e-4))
     PC_obj.time_forward(10.)
     PC_obj.set_controlled((1.e-4, 0.))

@@ -103,7 +103,6 @@ DEFAULT_PARAMS = {
             'model_class': MCKMCModel,
             'to_model_constructor': dict(
                 surf_shape=(5, 5, 1),
-                log_on=True,
                 O2_top=1.e-4, CO_top=1.e-4,
                 CO2_rate_top=1.4e2, CO2_count_top=1.e2,
                 T=440.,
