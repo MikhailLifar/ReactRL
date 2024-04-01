@@ -170,15 +170,20 @@ class MCKMCModel(BaseModel, NeighborKMCBase):
             for j in range(n):
                 surface[i][j] = self.system.sites[i * n + j].covered
 
+        filename, _ = os.path.splitext(filepath)
+        np.save(f'{filename}.npy', surface)
+
         fig, ax = plt.subplots(figsize=(m * 16 / (m + n), n * 16 / (m + n)))
 
         where_co = np.where(surface == 1)
         where_o = np.where(surface == 2)
+        covs = self.system.get_coverages(self.Nspecies)
 
         marker_size = 200. * 16 / (m + n)
         ax.scatter(*where_co, c='r', marker='o', label='CO', s=marker_size)
         ax.scatter(*where_o, c='b', marker='o', label='O', s=marker_size)
-        ax.set_title(f'Kinetic Monte Carlo simulation\nsurface state, time {self.t:.5f}')
+        ax.set_title(f'Kinetic Monte Carlo simulation, surface state\n'
+                     f'time: {self.t:.5f}; covs: free {covs[0]:.2f}, O {covs[2]:.2f}, CO {covs[1]:.2f}')
         ax.xaxis.set_visible(False)
         ax.yaxis.set_visible(False)
         fig.legend(loc='outside lower center', ncol=2, fancybox=True)

@@ -113,7 +113,7 @@ def custom_experiment():
     pass
 
 
-def test_PC_with_Libuda():
+def PC_with_Libuda_test():
 
     # PC = ProcessController(LibudaModelWithDegradation(init_cond={'thetaO': 0.25, 'thetaCO': 0.5}, Ts=440),
     #                        target_func_to_maximize=CO2_value)
