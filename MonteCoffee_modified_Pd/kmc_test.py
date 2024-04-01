@@ -11,7 +11,7 @@ from ase.io import write
 from ase.build import fcc111
 
 import sys, os
-sys.path.append('/home/mikhail/RL_22_07_MicroFluidDroplets')
+sys.path.append(f'{os.path.expanduser("~")}/RL_22_07_MicroFluidDroplets')
 # sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from user_sites import Site
@@ -172,7 +172,7 @@ def runDynamicAdvParameters():
         'CODiff', 'ODiff', 'COOx'
     ]
 
-    diffusion_target = 10.0
+    diffusion_target = 1.e-7
     rates_target = {
         'COAds': 0.17582,
         'CODes': 0.1,
@@ -195,7 +195,7 @@ def runDynamicAdvParameters():
     PD_EV_CONSTANTS['EdiffO'] = fsolve(F, (0.8, ), args=('EdiffO', 'ODiff', rates_target['ODiff']))[0]
     PD_EV_CONSTANTS['Ea_const'] = fsolve(F, (PD_EV_CONSTANTS['Ea_const'], ), args=('Ea_const', 'COOx', rates_target['COOx']))[0]
     print(PD_EV_CONSTANTS)
-    with open(f'/home/mikhail/RL_22_07_MicroFluidDroplets/data/PdDynamicAdvParams_diff({diffusion_target:.2f}).txt', 'w') as fwrite:
+    with open(f'{os.path.expanduser("~")}/RL_22_07_MicroFluidDroplets/data/PdDynamicAdvParams_diff({diffusion_target:.2f}).txt', 'w') as fwrite:
         json.dump(PD_EV_CONSTANTS, fwrite)
 
     # Run the simulation.

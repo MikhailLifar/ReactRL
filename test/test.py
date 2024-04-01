@@ -9,7 +9,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 import sys
-sys.path.append('/home/mikhail/RL_22_07_MicroFluidDroplets/repos')
+sys.path.append(f'{os.path.expanduser("~")}/RL_22_07_MicroFluidDroplets/repos')
 
 from test_models import TestModel, generate_max_rank_matr
 

@@ -13,8 +13,8 @@ import numpy as np
 from ase.build import fcc111
 
 # TODO: This 'append' statements don't look well
-sys.path.append('/home/mikhail/RL_22_07_MicroFluidDroplets')
-OPTIONS_PATH = '/home/mikhail/RL_22_07_MicroFluidDroplets/repos/MonteCoffee_modified_Pd'
+sys.path.append(f'{os.path.expanduser("~")}/RL_22_07_MicroFluidDroplets')
+OPTIONS_PATH = f'{os.path.expanduser("~")}/RL_22_07_MicroFluidDroplets/repos/MonteCoffee_modified_Pd'
 sys.path.append(OPTIONS_PATH)
 
 from MonteCoffee_changed.NeighborKMC.base.kmc import NeighborKMCBase
@@ -42,8 +42,6 @@ class MCKMCModel(BaseModel, NeighborKMCBase):
     # top['input']['CO'] = top['input']['O2'] = 3.e+3
 
     model_name = 'KMC_CO_O2_Pt'
-
-    # LOGS_FOLD_PATH = '/home/mikhail/RL_22_07_MicroFluidDroplets/kMClogs_clean_regulary'
 
     def __init__(self,
                  surf_shape,
