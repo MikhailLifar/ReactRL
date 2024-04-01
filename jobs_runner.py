@@ -30,7 +30,7 @@ def main():
     #PC_obj = PC_setup.general_PC_setup('LibudaGWithT',
                                        #('to_model_constructor', {'params': {}}),
                                        #)
-    PC_obj = PC_setup.general_PC_setup('LibudaG')
+    # PC_obj = PC_setup.general_PC_setup('LibudaG')
     # PC_obj = PC_setup.general_PC_setup('LibudaGWithT')
 
     # PC_obj.process_to_control.set_params({'C_A_inhibit_B': 1., 'C_B_inhibit_A': 1.,
@@ -48,13 +48,38 @@ def main():
     #                                       'thetaA_max': 0.5, 'thetaB_max': 0.5,
     #                                       'rate_ads_A': 0.14895, 'rate_ads_B': 0.06594 * 4,
     #                                       })  # Libuda eqns CO RTP
-    c_b_a = 0.01  # (0.01, 0.1, 1.)
-    rate_react = 0.1  # (0.001, 0.01, 0.1, 1.)
-    PC_obj.process_to_control.set_params({'thetaA_init': 0., 'thetaB_init': 0.,
-                                          'rate_ads_A': 0.1, 'rate_ads_B': 0.1,
-                                          'rate_des_A': 0.1, 'rate_react': rate_react,  # 0.1
-                                          'C_B_inhibit_A': c_b_a,
-                                          })  # low des, react rates
+    # c_b_a = 0.01  # (0.01, 0.1, 1.)
+    # rate_react = 0.1  # (0.001, 0.01, 0.1, 1.)
+    # PC_obj.process_to_control.set_params({'thetaA_init': 0., 'thetaB_init': 0.,
+    #                                       'rate_ads_A': 0.1, 'rate_ads_B': 0.1,
+    #                                       'rate_des_A': 0.1, 'rate_react': rate_react,  # 0.1
+    #                                       'C_B_inhibit_A': c_b_a,
+    #                                       })  # low des, react rates
+
+    # MCKMC
+    run_jobs_list(
+        MCKMC_policy_iteration,
+        **jobs_list_from_grid(
+            np.linspace(0., 1., 26),
+            [0.3, 0.9],
+            [0., 0.1, 1.],
+            names=('xCO', 'covOLimit', 'diffusion_level')
+        ),
+        names_groups=(),
+        PC=PC_setup.general_PC_setup('LibudaG'),
+        const_params={
+            'surfShape': (5, 5, 1),
+            'snapshotPeriod': 0.1,
+            't_end': 10.,
+            'analyser_dt': 1.,
+        },
+        unique_folder=False,
+        separate_folds=False,
+        out_fold_path='./PC_plots/MCKMC/240401_steady_state',
+        python_interpreter='/opt/anaconda_py38_1/bin/python',
+        cluster_command_ops=False,
+        at_same_time=300,
+    )
     
     # LibudaGWithT
     # diff temperatures steady-state
@@ -375,44 +400,44 @@ def main():
     #     at_same_time=110,
     # )
 
-    # # Sergey's approach / rate vs frequency, CO part is equal to O2 part
-    points_num = 100  # 49, 25
-    variants = np.linspace(10., -10., points_num).reshape(-1, 1)
-    # variants = np.hstack((np.linspace(0., optimal_ratio, int(points_num * optimal_ratio)),
-    #                       np.linspace(optimal_ratio, 1., points_num - int(points_num * optimal_ratio)))).reshape(-1, 1)
-
-    def transform_from_log_omega(d):
-        T = 2 ** (-d['log_omega'])
-        d.update({'inputB_t1': T / 2, 'inputB_t2': T / 2, 'inputA_t1': T / 2, 'inputA_t2': T / 2, 'episode_time': 100 * T})
-
-    run_jobs_list(
-        **(get_for_common_variations({'inputA': TwoStepPolicy({'1': 0., '2': 1.}),
-                                      'inputB': TwoStepPolicy({'1': 1., '2': 0.})},  # low rates
-                                     # {'inputA': TwoStepPolicy({'1': 0.47, '2': 1., 't1': 1., 't2': 1.}),
-                                     #  'inputB': ConstantPolicy()},  # Sergey's
-                                     'log_omega', {'name': 'mean_reaction_rate', 'column': 0},
-                                     transform_params=transform_from_log_omega,
-                                     additional_names=('thetaB', 'thetaA'),
-                                     take_from_the_end=0.5,
-                                     kwargs_to_sum_plot={'ylim': (0., 0.6), 'twin_ylim': (0., 0.015 * rate_react / 0.1), },
-                                     )),
-        params_variants=variants.tolist(),
-        names=('log_omega', ),
-        names_groups=(),
-        const_params={'calc_dt': lambda x: x / 1000,    # 1000, 10_000
-                      'preprocess': {'in_values': {'inputB': 0.5, 'inputA': 0.5, },
-                                     'time': 1000.,
-                                     'dt': 1.},
-                      },
-        sort_iterations_by='mean_reaction_rate',
-        PC=PC_obj,
-        repeat=1,
-        out_fold_path=f'PC_plots/LibudaG/diff_react_rate/231030_c_b_a({c_b_a:.3g})_rate_vs_freq',
-        separate_folds=False,
-        cluster_command_ops=False,
-        python_interpreter='../RL_10_21/venv/bin/python',
-        at_same_time=100,
-    )
+    # # # Sergey's approach / rate vs frequency, CO part is equal to O2 part
+    # points_num = 100  # 49, 25
+    # variants = np.linspace(10., -10., points_num).reshape(-1, 1)
+    # # variants = np.hstack((np.linspace(0., optimal_ratio, int(points_num * optimal_ratio)),
+    # #                       np.linspace(optimal_ratio, 1., points_num - int(points_num * optimal_ratio)))).reshape(-1, 1)
+    #
+    # def transform_from_log_omega(d):
+    #     T = 2 ** (-d['log_omega'])
+    #     d.update({'inputB_t1': T / 2, 'inputB_t2': T / 2, 'inputA_t1': T / 2, 'inputA_t2': T / 2, 'episode_time': 100 * T})
+    #
+    # run_jobs_list(
+    #     **(get_for_common_variations({'inputA': TwoStepPolicy({'1': 0., '2': 1.}),
+    #                                   'inputB': TwoStepPolicy({'1': 1., '2': 0.})},  # low rates
+    #                                  # {'inputA': TwoStepPolicy({'1': 0.47, '2': 1., 't1': 1., 't2': 1.}),
+    #                                  #  'inputB': ConstantPolicy()},  # Sergey's
+    #                                  'log_omega', {'name': 'mean_reaction_rate', 'column': 0},
+    #                                  transform_params=transform_from_log_omega,
+    #                                  additional_names=('thetaB', 'thetaA'),
+    #                                  take_from_the_end=0.5,
+    #                                  kwargs_to_sum_plot={'ylim': (0., 0.6), 'twin_ylim': (0., 0.015 * rate_react / 0.1), },
+    #                                  )),
+    #     params_variants=variants.tolist(),
+    #     names=('log_omega', ),
+    #     names_groups=(),
+    #     const_params={'calc_dt': lambda x: x / 1000,    # 1000, 10_000
+    #                   'preprocess': {'in_values': {'inputB': 0.5, 'inputA': 0.5, },
+    #                                  'time': 1000.,
+    #                                  'dt': 1.},
+    #                   },
+    #     sort_iterations_by='mean_reaction_rate',
+    #     PC=PC_obj,
+    #     repeat=1,
+    #     out_fold_path=f'PC_plots/LibudaG/diff_react_rate/231030_c_b_a({c_b_a:.3g})_rate_vs_freq',
+    #     separate_folds=False,
+    #     cluster_command_ops=False,
+    #     python_interpreter='../RL_10_21/venv/bin/python',
+    #     at_same_time=100,
+    # )
 
     # ZGB k
     ## benchmark

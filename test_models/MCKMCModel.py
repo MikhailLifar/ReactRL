@@ -45,10 +45,12 @@ class MCKMCModel(BaseModel, NeighborKMCBase):
 
     def __init__(self,
                  surf_shape,
-                 snapshotDir=None, snapshotPeriod=0.5,
-                 diffusion_level=0.,
-                 init_covs=None,
                  logDir=None,
+                 saveLog=False,
+                 snapshotPeriod=None,
+                 diffusion_level=0.,
+                 covOLimit=0.3,
+                 init_covs=None,
                  **params):
         """
         The Model is based on the NeighborKMC class from Pt(111) example from MonteCoffee package
@@ -76,8 +78,6 @@ class MCKMCModel(BaseModel, NeighborKMCBase):
             if p in self.kmc_parameters_dict:
                 self.kmc_parameters_dict[p] = params[p]
 
-        self.logDir = logDir
-
         random.seed(0)
         # INITIALIZE SYSTEM OBJECT
         a = 4.00  # Lattice Parameter (not related to DFT!) # TODO is it relevant for Pd?
@@ -94,6 +94,7 @@ class MCKMCModel(BaseModel, NeighborKMCBase):
         system = System(atoms=Pt_surface_ase_obj, sites=sites, shape=surf_shape)
         # Set the global neighborlist based on distances:
         system.set_neighbors(neighbour_cutoff, pbc=True)
+        self.covOLimit = covOLimit
 
         # EVENTS
         self.events = [ev(self.kmc_parameters_dict) for ev in self.events_clss]
@@ -128,15 +129,16 @@ class MCKMCModel(BaseModel, NeighborKMCBase):
 
         self.add_info = self.get_add_info()
 
+        self.logDir = logDir
+        self.saveLog = saveLog or (self.logDir is not None)
+
         self.log = None
         self.stepN_CNT = 0
         self.stepNMC = 0
         self.stepSaveN = 0
 
-        self.snapshotDir = snapshotDir
-        if self.snapshotDir is None:
-            warnings.warn('MCKMC: Snapshots are not saved')
         self.snapshotPeriod = snapshotPeriod
+        assert (self.snapshotPeriod is None) or (self.logDir is not None)
         self.snapshotTime = 0.
 
         # self.rescaleN = self.ne
@@ -210,15 +212,15 @@ class MCKMCModel(BaseModel, NeighborKMCBase):
             covs = self.system.get_coverages(self.Nspecies)
 
             # TODO huge and costly crutch to achieve not complete oxygen coverage
-            if (covs[2] > 0.3 and self.events[2].active) or \
-                    (covs[2] < 0.25 and not self.events[2].active):
-                self.events[2].active = covs[2] < 0.25
+            if (covs[2] > self.covOLimit and self.events[2].active) or \
+                    (covs[2] < self.covOLimit - 0.05 and not self.events[2].active):
+                self.events[2].active = covs[2] < self.covOLimit - 0.05
                 self.frm_init()
 
             if covs[2] == 1.:
                 warnings.warn('The surface is completely occupied by oxygen')
 
-            if self.logDir is not None:
+            if self.saveLog:
 
                 # LOGGING. SHOULD BE INSIDE WHILE LOOP
                 # Log every self.LogSteps step.
@@ -247,10 +249,10 @@ class MCKMCModel(BaseModel, NeighborKMCBase):
                 self.stepNMC += 1
 
             # snapshot every snapshotPeriod s
-            if self.snapshotDir is not None:
+            if self.snapshotPeriod is not None:
                 self.snapshotTime += kmc_dt
                 if self.snapshotTime > self.snapshotPeriod:
-                    self.plotSnapshot(f'{self.snapshotDir}/snapshot_t({self.t}).png')
+                    self.plotSnapshot(f'{self.logDir}/snapshot_t({self.t}).png')
                     self.snapshotTime = 0.
 
         self.timeOffset = self.t + self.timeOffset - t0 - delta_t
@@ -280,7 +282,7 @@ class MCKMCModel(BaseModel, NeighborKMCBase):
         return self.model_output
 
     def reset(self):
-        if self.logDir is not None:
+        if self.saveLog:
             if self.log:
                 self.finalize()
 

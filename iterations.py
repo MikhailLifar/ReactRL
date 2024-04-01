@@ -6,6 +6,7 @@ import pandas as pd
 
 import lib
 from PC_run import SBP_constant_ratio_and_max_rate
+from MCKMC_run import MCKMC_run_policy
 
 
 def get_common_1d_summarize(variable_name, names_to_plot, x_tolerance=1.e-5,
@@ -306,3 +307,14 @@ def repeat_periods_calc_rate(PC, params: dict, foldpath, it_arg):
         fwrite.write(f'rate standard deviation: {rate_std}\n')
 
     return {'rate_mean': rate_mean, 'rate_std': rate_std}
+
+
+def MCKMC_policy_iteration(PC, params: dict, foldpath, it_arg):
+    datapath = './PC_plots/LibudaG/230923_rates_original_steady_state/'
+    params['logDir'] = f'{foldpath}/steady_state_d({params["xCO"]:.2f})_{it_arg}'
+    fname = [f for f in os.listdir(datapath) if (f'{params["xCO"]:.2f}' in f) and (f.endswith('all_data.csv'))][0]
+    params['plottoffile'] = f'{datapath}/{fname}'
+    del params['xCO']
+    R = MCKMC_run_policy(**params)
+
+    return {'CO2return': R}
