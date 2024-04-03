@@ -288,26 +288,26 @@ def main():
     #               at_same_time=30,
     #               )
 
+    # REFERENCE, NM FOR DIFFERENT RATES, STEADY-STATE
     episode_time = 1000.
-    variants = [pow(10., x) for x in np.linspace(-2., 1., 4)]
-    # k2, k4 = PC_obj.process_to_control['rate_des_A'], PC_obj.process_to_control['rate_react']
+    # variants = [pow(10., x) for x in np.linspace(-2., 1., 4)]
+    variants = [1.e-2, 2.e-2, 1.e-1, 2.e-1, 1., 2., 10.]
 
     run_jobs_list(**get_for_param_opt_iterations(func_to_optimize_policy,
                                                  optimize_bounds={'inputB_value': (0., 1.), 'inputA_value': (0., 1.)},
                                                  ),
-                  **merge_job_lists(
-                      jobs_list_from_grid(variants, variants, names=('model:rate_ads_A', 'model:rate_ads_B')),
-                      jobs_list_from_grid(variants, variants, names=('model:rate_des_A', 'model:rate_react')),
-                      ),
-                  # params_variants=[(k2 * i, k4 / i) for i in range(1, 6)] + [(k2 / i, k4 * i) for i in range(2, 6)],
-                  # names=('model:rate_des_A', 'model:rate_react'),
+                  # **merge_job_lists(
+                  #     jobs_list_from_grid(variants, variants, names=('model:rate_ads_A', 'model:rate_ads_B')),
+                  #     jobs_list_from_grid(variants, variants, names=('model:rate_des_A', 'model:rate_react')),
+                  #     ),
+                  **jobs_list_from_grid(variants, variants, names=('model:rate_des_A', 'model:rate_react')),
                   const_params={
                       'to_func_to_optimize': {
                           'PC_obj': PC_obj,
                           'policy_obj': ConstantPolicy(),
                           'episode_len': episode_time,
                           'time_step': episode_time / 1000,
-                          't_start_count_from': 750.
+                          't_start_count_from': 760.
                       },
                       'to_iter_optimize': {
                           'method': 'Nelder-Mead', 'try_num': 5,
@@ -316,11 +316,12 @@ def main():
                           'cut_left': False, 'cut_right': False,
                       },
                   },
+                  sort_iterations_by='min_fun',
                   PC=PC_obj,
                   repeat=1,
                   cluster_command_ops=False,
                   python_interpreter='../RL_10_21/venv/bin/python',
-                  out_fold_path='./optimize_out/LibudaG/231120_stationary_diff_rates_try3',
+                  out_fold_path='./optimize_out/LibudaG/240402_stationary_diff_rates',
                   at_same_time=110,
                   )
 

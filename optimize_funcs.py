@@ -54,6 +54,7 @@ def iter_optimize(func_for_optimize, optimize_bounds, try_num=10, method=None, o
     def func_for_optimize1(vector):
         return func_for_optimize(convert_to_dict(vector))
 
+    min_fun = np.inf
     with open(f'{out_folder}/results.txt', 'w') as fout:
         points = np.array(list(itertools.product(*([[0., 1.]] * dim))))
         points[1], points[-1] = points[-1], points[1]
@@ -83,6 +84,10 @@ def iter_optimize(func_for_optimize, optimize_bounds, try_num=10, method=None, o
                 if 'ind_picture' in call_after_opt_params:
                     call_after_opt_params['ind_picture'] = try_ind
                 func_for_optimize(convert_to_dict(res.x), **call_after_opt_params)
+
+            min_fun = min(res.fun, min_fun)
+
+    return min_fun
 
 
 def optimize_different_methods(func_for_optimize, optimize_bounds,
@@ -227,13 +232,13 @@ def get_for_param_opt_iterations(func_to_optimize, optimize_bounds):
                     setattr(PC, attr_name, d[attr_name])
                     PC.target_func_name = d['target_func_name']
 
-        iter_optimize(func_to_optimize(**(params['to_func_to_optimize'])),
-                      optimize_bounds=optimize_bounds,
-                      **(params['to_iter_optimize']),
-                      out_folder=foldpath,
-                      unique_folder=False)
+        min_fun = iter_optimize(func_to_optimize(**(params['to_func_to_optimize'])),
+                                optimize_bounds=optimize_bounds,
+                                **(params['to_iter_optimize']),
+                                out_folder=foldpath,
+                                unique_folder=False)
 
-        return {}
+        return {'min_fun': min_fun}
 
     return {'iteration_function': parametric_optimization_iteration,
             'names_groups': ('model', 'to_func_to_optimize', 'to_iter_optimize'),
