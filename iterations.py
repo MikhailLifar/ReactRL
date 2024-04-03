@@ -310,11 +310,16 @@ def repeat_periods_calc_rate(PC, params: dict, foldpath, it_arg):
 
 
 def MCKMC_policy_iteration(PC, params: dict, foldpath, it_arg):
-    datapath = './PC_plots/LibudaG/230923_rates_original_steady_state/'
-    params['logDir'] = f'{foldpath}/steady_state_d({params["xCO"]:.2f})_{it_arg}'
-    fname = [f for f in os.listdir(datapath) if (f'{params["xCO"]:.2f}' in f) and (f.endswith('all_data.csv'))][0]
-    params['plottoffile'] = f'{datapath}/{fname}'
-    del params['xCO']
+    if 'plottoffile' not in params:
+        # TODO crutch here
+        datapath = './PC_plots/LibudaG/230923_rates_original_steady_state/'
+        fname = [f for f in os.listdir(datapath) if (f'{params["xCO"]:.2f}' in f) and (f.endswith('all_data.csv'))][0]
+        params['plottoffile'] = f'{datapath}/{fname}'
+        del params['xCO']
+        params['logDir'] = f'{foldpath}/steady_state_d({params["xCO"]:.2f})_{it_arg}'
+    else:
+        plottof_name = os.path.splitext(os.path.split(params['plottoffile'])[1])[0]
+        params['logDir'] = f'{foldpath}/_{plottof_name}_{it_arg}'
     R = MCKMC_run_policy(**params)
 
     return {'CO2return': R}

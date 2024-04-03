@@ -190,7 +190,14 @@ def MCKMC_run_policy(logDir,
     else:
         PC_obj.time_forward(times[-1])
 
-    R = PC_obj.get_and_plot(f'{logDir}/MCKMC.png')
+    PC_obj.get_and_plot(f'{logDir}/MCKMC.png')
+    R = None
+    if PC_obj.target_func is not None:
+        R = PC_obj.integrate_along_history(target_mode=True,
+                                           time_segment=None)
+    elif PC_obj.long_term_target is not None:
+        R = PC_obj.get_long_term_target()
+
     return R
 
 

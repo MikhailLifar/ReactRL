@@ -57,13 +57,17 @@ def main():
     #                                       })  # low des, react rates
 
     # MCKMC
+    # DYN ADV POLICY AND OPT STEADY STATE POLICY
     run_jobs_list(
         MCKMC_policy_iteration,
         **jobs_list_from_grid(
-            np.linspace(0., 1., 26),
+            [
+                './231002_sudden_discovery/rl_agent_sol.csv',
+                './231002_sudden_discovery/nelder_mead_sol.csv',
+            ],
             [0.3, 0.9],
             [0., 0.1, 1.],
-            names=('xCO', 'covOLimit', 'diffusion_level')
+            names=('plottoffile', 'covOLimit', 'diffusion_level')
         ),
         names_groups=(),
         PC=PC_setup.general_PC_setup('LibudaG'),
@@ -75,11 +79,36 @@ def main():
         },
         unique_folder=False,
         separate_folds=False,
-        out_fold_path='./PC_plots/MCKMC/240401_steady_state',
+        out_fold_path='./PC_plots/MCKMC/240403_RL_NM_opt_sols',
         python_interpreter='/opt/anaconda_py38_1/bin/python',
         cluster_command_ops=False,
         at_same_time=300,
     )
+
+    # STEADY-STATE
+    # run_jobs_list(
+    #     MCKMC_policy_iteration,
+    #     **jobs_list_from_grid(
+    #         np.linspace(0., 1., 26),
+    #         [0.3, 0.9],
+    #         [0., 0.1, 1.],
+    #         names=('xCO', 'covOLimit', 'diffusion_level')
+    #     ),
+    #     names_groups=(),
+    #     PC=PC_setup.general_PC_setup('LibudaG'),
+    #     const_params={
+    #         'surfShape': (5, 5, 1),
+    #         'snapshotPeriod': 0.1,
+    #         't_end': 10.,
+    #         'analyser_dt': 1.,
+    #     },
+    #     unique_folder=False,
+    #     separate_folds=False,
+    #     out_fold_path='./PC_plots/MCKMC/240401_steady_state',
+    #     python_interpreter='/opt/anaconda_py38_1/bin/python',
+    #     cluster_command_ops=False,
+    #     at_same_time=300,
+    # )
     
     # LibudaGWithT
     # diff temperatures steady-state
