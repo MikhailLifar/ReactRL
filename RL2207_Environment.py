@@ -62,7 +62,7 @@ class State:
                                  if name in dynamic_normalization['names']]
             self.dyn_norm_idx = np.array(self.dyn_norm_idx)
             self.dyn_norm_bounds = np.zeros((2, len(self.dyn_norm_idx)))
-            self.dyn_norm_bounds[1] += 1.e-5
+            self.dyn_norm_bounds[1] += dynamic_normalization.get('eps', 1.e-7)
             self.dyn_norm_alpha = dynamic_normalization.get('alpha', 0.2)
 
         # TODO functionality may be extended to support more narrow bounds
@@ -148,8 +148,25 @@ def get_state_obj(string, PC: ProcessController, **kwargs):
 #     raise NotImplementedError
 
 
+class DynamicRewardNormalizer:
+    def __init__(self, alpha=0.2, lower=0., eps=1.e-7):
+        self.alpha = alpha
+        self.lower = lower
+        self.upper = self.lower + eps
+
+    def __call__(self, rew):
+        # TODO: could we get from discontinuous norm update to smooth?
+        # update normalization params
+        if rew < self.lower:
+            self.lower = rew * (1. - self.alpha * np.sign(rew))
+        if rew > self.upper:
+            self.upper = rew * (1. + self.alpha * np.sign(rew))
+        return (rew - self.lower) / (self.upper - self.lower)
+
+
 class RL2207_Environment(Environment):
-    def __init__(self, PC: ProcessController,
+    def __init__(self,
+                 PC: ProcessController,
                  state_string,
                  state_args: dict = None,
                  action_spec: [Dict, str] = 'continuous',
@@ -235,9 +252,10 @@ class RL2207_Environment(Environment):
         if kwargs['target_type'] == 'episode':
             self.target_type = 'episode'
 
-        # TODO try to generalize normalize_coef evaluation
-        if 'rate_estimate' in kwargs:
-            self.rate_estimate = kwargs['rate_estimate']
+        # TODO: make dyn and fixed reward normalization optional, as for the state
+        # if 'rate_estimate' in kwargs:
+        #     self.rate_estimate = kwargs['rate_estimate']
+        self.rewNormalizer = DynamicRewardNormalizer()
 
         # self.save_policy = False
         # self.policy_df = pd.DataFrame(columns=[*self.in_gas_names, 'time_steps'])
@@ -253,7 +271,7 @@ class RL2207_Environment(Environment):
                         f'episode_time: {self.episode_time}\n' \
                         f'time_step: {time_step}\n'
 
-        assert self.rate_estimate >= 0
+        # assert self.rate_estimate >= 0
 
     def assign_reward(self, reward_spec: [str, callable]):
         if reward_spec is None:
@@ -350,7 +368,10 @@ class RL2207_Environment(Environment):
     def execute(self, actions):
         next_state = self.update_env(actions)
         terminal = self.terminal()
+
         reward = self.reward()
+        reward = self.rewNormalizer(reward) * self.last_actual_time_step / self.episode_time
+
         return next_state, terminal, reward
 
     def reset(self, num_parallel=None):

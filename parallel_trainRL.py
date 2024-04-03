@@ -284,85 +284,46 @@ def main():
     #               at_same_time=110,
     #               )
 
-    # EXPERIMENTAl vary rates, var time step
-    variants = [pow(10., x) for x in np.linspace(-2., 1., 4)]
-
-    episode_time = 240.
-    # time step range, let's say, from 1. to 100.
-    # my time_step action scheme: min_value + a1 * pow(10, 1) + a2 * pow(10, 2)
-
-    def time_step(act):
-        return 1. + np.max(act[-2:]) * 10 ** (1 + np.argmax(act[-2:]))
-
-    variable_time_step_len = {'type': 'continuous',
-                              'transform_action': lambda x: x[:-2],
-                              'shape': 4,
-                              'info': 'control O2, CO and chose time step itself'}
-
-    run_jobs_list(**get_for_RL_iterations(),
-                  **merge_job_lists(
-                      jobs_list_from_grid(variants, variants, names=('model:rate_ads_A', 'model:rate_ads_B')),
-                      jobs_list_from_grid(variants, variants, names=('model:rate_des_A', 'model:rate_react')),
-                      ),
-                  const_params={
-                      'n_episodes': 40,
-                      'agent_name': 'vpg',
-                      'env': {
-                              'episode_time': episode_time,
-                              'time_step': time_step,
-                              # 'names_to_state': ['B', 'A', 'outputC'],
-                              # 'state_spec': {'rows': 3, 'use_differences': False},
-                              'state_string': 'LG:(CO2&O2&CO)x(points)',
-                              'state_args': {
-                                  'points': 3,
-                                  'step': 3.,
-                                  'dynamic_normalization': {'names': ['outputC'], 'alpha': 0.2},
-                              },
-                              'action_spec': variable_time_step_len,
-                              'reward_spec': 'each_step_base',
-                              'input_dt': 0.1,
-                              'target_type': 'one_row',
-                              'init_callback': PC_run.get_estimate_rate_callback(),
-                             },
-                      'agent': {},
-                      'model': {},
-                  },
-                  PC=PC_obj,
-                  repeat=3,
-                  sort_iterations_by='deterministic_test::max_on_test',
-                  cluster_command_ops=False,
-                  python_interpreter='../RL_10_21/venv/bin/python',
-                  out_fold_path='./run_RL_out/LibudaG/231227_new_state_var_time_step',
-                  at_same_time=110,
-                  )
-
-    # CONVENTIONAl vary rates
+    # # EXPERIMENTAl vary rates, var time step
     # variants = [pow(10., x) for x in np.linspace(-2., 1., 4)]
+    #
     # episode_time = 240.
-    # time_step = 10.
+    # # time step range, let's say, from 1. to 100.
+    # # my time_step action scheme: min_value + a1 * pow(10, 1) + a2 * pow(10, 2)
+    #
+    # def time_step(act):
+    #     return 1. + np.max(act[-2:]) * 10 ** (1 + np.argmax(act[-2:]))
+    #
+    # variable_time_step_len = {'type': 'continuous',
+    #                           'transform_action': lambda x: x[:-2],
+    #                           'shape': 4,
+    #                           'info': 'control O2, CO and chose time step itself'}
     #
     # run_jobs_list(**get_for_RL_iterations(),
     #               **merge_job_lists(
     #                   jobs_list_from_grid(variants, variants, names=('model:rate_ads_A', 'model:rate_ads_B')),
     #                   jobs_list_from_grid(variants, variants, names=('model:rate_des_A', 'model:rate_react')),
-    #               ),
+    #                   ),
     #               const_params={
     #                   'n_episodes': 40,
     #                   'agent_name': 'vpg',
     #                   'env': {
-    #                       'episode_time': episode_time,
-    #                       'time_step': time_step,
-    #                       'names_to_state': ['B', 'A', 'outputC'],
-    #                       'state_spec': {'rows': 3, 'use_differences': False},
-    #                       # 'reward_spec': 'each_step_base',
-    #                       'reward_spec': 'full_ep_base',
-    #                       'input_dt': 0.1,
-    #                       # 'target_type': 'one_row',
-    #                       'target_type': 'episode',
-    #                       'dynamic_normalization': {'names': ['outputC'], 'alpha': 0.2},
-    #                       # 'init_callback': PC_run.get_estimate_rate_callback(),
-    #                       'normalize_coef': 0.5,
-    #                   },
+    #                           'episode_time': episode_time,
+    #                           'time_step': time_step,
+    #                           # 'names_to_state': ['B', 'A', 'outputC'],
+    #                           # 'state_spec': {'rows': 3, 'use_differences': False},
+    #                           'state_string': 'LG:(CO2&O2&CO)x(points)',
+    #                           'state_args': {
+    #                               'points': 3,
+    #                               'step': 3.,
+    #                               'dynamic_normalization': {'names': ['outputC'], 'alpha': 0.2},
+    #                           },
+    #                           'action_spec': variable_time_step_len,
+    #                           'reward_spec': 'each_step_base',
+    #                           'input_dt': 0.1,
+    #                           'target_type': 'one_row',
+    #                           'init_callback': PC_run.get_estimate_rate_callback(),
+    #                          },
     #                   'agent': {},
     #                   'model': {},
     #               },
@@ -371,11 +332,56 @@ def main():
     #               sort_iterations_by='deterministic_test::max_on_test',
     #               cluster_command_ops=False,
     #               python_interpreter='../RL_10_21/venv/bin/python',
-    #               out_fold_path='./run_RL_out/LibudaG/231215_gauss_x_co_conv',
+    #               out_fold_path='./run_RL_out/LibudaG/231227_new_state_var_time_step',
     #               at_same_time=110,
     #               )
 
-    # Reference == vanilla Libuda optimization
+    # REFERENCE, RL FOR DIFF RATES, STEADY-STATE
+    # variants = [pow(10., x) for x in np.linspace(-2., 1., 4)]
+    variants = [1.e-2, 2.e-2, 1.e-1, 2.e-1, 1., 2., 10.]
+    episode_time = 240.
+    time_step = 10.
+
+    run_jobs_list(**get_for_RL_iterations(),
+                  # **merge_job_lists(
+                  #     jobs_list_from_grid(variants, variants, names=('model:rate_ads_A', 'model:rate_ads_B')),
+                  #     jobs_list_from_grid(variants, variants, names=('model:rate_des_A', 'model:rate_react')),
+                  # ),
+                  **jobs_list_from_grid(variants, variants, names=('model:rate_des_A', 'model:rate_react')),
+                  const_params={
+                      'n_episodes': 40,
+                      'agent_name': 'vpg',
+                      'env': {
+                          'episode_time': episode_time,
+                          'time_step': time_step,
+                          'state_string': 'LG:(CO2&O2&CO)x(points)',
+                          'state_args': {'points': 2,
+                                         'step': 10.,
+                                         'dynamic_normalization': {
+                                             'names': ['outputC'],
+                                             'alpha': 0.2
+                                             }
+                                         },
+                          'reward_spec': 'each_step_base',
+                          # 'reward_spec': 'full_ep_base',
+                          'input_dt': 0.1,
+                          'target_type': 'one_row',
+                          # 'target_type': 'episode',
+                          'normalize_coef': 0.5,
+                      },
+                      'agent': {},
+                      'model': {},
+                  },
+                  PC=PC_obj,
+                  repeat=3,
+                  sort_iterations_by='deterministic_test::max_on_test',
+                  cluster_command_ops=False,
+                  python_interpreter='../RL_10_21/venv/bin/python',
+                  out_fold_path='./run_RL_out/LibudaG/240403_diff_rates',
+                  at_same_time=200,
+                  )
+
+    # REFERENCE, vanilla Libuda optimization
     # vary_x_co = {'type': 'continuous',
     #              'transform_action': lambda x: np.array([x[0], 1. - x[0]]),
     #              'shape': 1,
