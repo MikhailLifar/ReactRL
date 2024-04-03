@@ -69,10 +69,10 @@ def get_compressed_along_folder(folder_path, names_to_copy: tuple,
                 print(f'Error! directory: {d}')
 
 
-def choose_from_folder(folder_path, subfolder_path,
-                       valid_file_key: callable = lambda s: True,
-                       choose_typo: str = 'max',
-                       take_key: callable = lambda s: s):
+def choose_from_dir(folder_path, subfolder_path,
+                    valid_file_key: callable = lambda s: True,
+                    selection_type: str = 'max',
+                    take_key: callable = lambda s: s):
     if subfolder_path is None:
         subfolder_path = ''
     if subfolder_path != '':
@@ -80,24 +80,24 @@ def choose_from_folder(folder_path, subfolder_path,
     in_dir = [name for name in os.listdir(f'{folder_path}{subfolder_path}')
               if valid_file_key(name)]
     in_dir.sort()
-    if choose_typo == 'max':
+    if selection_type == 'max':
         outfile = max(in_dir, key=take_key)
         return f'{folder_path}{subfolder_path}/{outfile}'
-    elif choose_typo == 'one_file':
+    elif selection_type == 'one_file':
         outfile, = in_dir
         return f'{folder_path}{subfolder_path}/{outfile}'
     else:
         raise NotImplementedError
 
 
-def collect_along_folder(folder_path,
-                         subfolder_path=None,
-                         choose_folder_key: callable = lambda s: True,
-                         choose_file_key: callable = lambda s: True,
-                         take_key: callable = lambda s: s,
-                         dest_name: str = 'collected'):
-    if not os.path.exists(f'{folder_path}/{dest_name}'):
-        os.makedirs(f'{folder_path}/{dest_name}')
+def collect_along_dir(dirpath,
+                      subdirName=None,
+                      choose_dir_key: callable = lambda s: True,
+                      choose_file_key: callable = lambda s: True,
+                      take_key: callable = lambda s: s,
+                      dest_dir_name: str = 'collected'):
+    if not os.path.exists(f'{dirpath}/{dest_dir_name}'):
+        os.makedirs(f'{dirpath}/{dest_dir_name}')
     else:
         print('Collected folder already exists.')
         add = input('Do you want add new files? If yes, type "yes" or "y" ')
@@ -106,20 +106,20 @@ def collect_along_folder(folder_path,
         else:
             print('Collection canceled')
             return
-    dirs = [name for name in os.listdir(folder_path) if choose_folder_key(name)]
+    dirs = [name for name in os.listdir(dirpath) if choose_dir_key(name)]
     for d in dirs:
         try:
-            file_path = choose_from_folder(f'{folder_path}/{d}', subfolder_path,
-                                           choose_file_key, take_key=take_key)
+            file_path = choose_from_dir(f'{dirpath}/{d}', subdirName,
+                                        choose_file_key, take_key=take_key)
             if os.path.isfile(file_path):
-                shutil.copy2(file_path, f'{folder_path}/{dest_name}/{d}!{os.path.split(file_path)[1]}')
-        except FileNotFoundError:
+                shutil.copy2(file_path, f'{dirpath}/{dest_dir_name}/{d}!{os.path.split(file_path)[1]}')
+        except (FileNotFoundError, ValueError):
             print(f'Error with folder: {d}')
 
 
-def collect_training_results(folder, subfolder_path='testing_deterministic', dest_name='collected'):
-    get_time_along_many(folder, quantile=0.98,
-                        choose_subfold_key=lambda s: s[0] == '_' and s[1].isdigit(),)
+def collect_training_results(dirpath, subdirName='testing_deterministic', dest_name='collected'):
+    get_time_along_many(dirpath, quantile=0.98,
+                        choose_subfold_key=lambda s: s[0] == '_' and s[1].isdigit(), )
     for name_part in (
             '_all_data',
             #'_in',
@@ -129,38 +129,59 @@ def collect_training_results(folder, subfolder_path='testing_deterministic', des
             '_output',
             #'_target',
                       ):
-        collect_along_folder(folder,
-                             subfolder_path,
-                             choose_folder_key=lambda s: s[0] == '_' and s[1].isdigit(),
-                             choose_file_key=lambda s: s[0].isdigit() and name_part in s,
-                             take_key=lambda s: float(s[:s.find('c')]),
-                             dest_name=dest_name)
+        collect_along_dir(dirpath,
+                          subdirName,
+                          choose_dir_key=lambda s: s[0] == '_' and s[1].isdigit(),
+                          choose_file_key=lambda s: s[0].isdigit() and name_part in s,
+                          take_key=lambda s: float(s[:s.find('c')]),
+                          dest_dir_name=dest_name)
+
+
+def collectMCKMCcalcs(dirpath):
+    file_endings = (
+        '_input.png',
+        '_output.png',
+        '_add.png',
+        '_all_data.csv',
+    )
+    for fe in file_endings:
+        collect_along_dir(
+            dirpath,
+            choose_dir_key=lambda s: s.startswith('_') and s[-1].isdigit(),
+            choose_file_key=lambda s: s.startswith('MCKMC') and s.endswith(fe),
+            dest_dir_name='collected',
+        )
 
 
 if __name__ == '__main__':
+    # RL RES PROCESSING
     # get_compressed_along_folder('run_RL_out/train_greed/220708_diff_state',
     #                             names_to_copy=('agent', 'testing_deterministic',
     #                                      'output_by_step.png', 'integral_by_step.csv'),
     #                             key=lambda s: s[0] == '_')
 
-    folds = [
-             #'220805_Libuda_more_CO_allowed',
-             #'221103_Pd_CO2_sub_outs_I_01',
-             #'221107_Pd_CO2_sub_outs_I_05',
-             #'221223_turn_off_control',
-             #'LibudaG/230707_vary_O2_CO_is_arbitrary',
-             #'LibudaG/230713_CO(t)_RTP_shorter_period',
-             #'LibudaG/230725_different_rates',
-             #'LibudaG/230928_T1(440)_T2(560)_ignorant_agent',
-             #'LibudaG/REFERENCE/231002_low_des_react_rates/',
-             #'LibudaG/REFERENCE/230725_different_rates/',
-             'LibudaG/231120_CORTP_NoSampling_dynrates/',
-             ]
-    for fold in folds:
-        collect_training_results(f'run_RL_out/{fold}')
+    # folds = [
+    #          #'220805_Libuda_more_CO_allowed',
+    #          #'221103_Pd_CO2_sub_outs_I_01',
+    #          #'221107_Pd_CO2_sub_outs_I_05',
+    #          #'221223_turn_off_control',
+    #          #'LibudaG/230707_vary_O2_CO_is_arbitrary',
+    #          #'LibudaG/230713_CO(t)_RTP_shorter_period',
+    #          #'LibudaG/230725_different_rates',
+    #          #'LibudaG/230928_T1(440)_T2(560)_ignorant_agent',
+    #          #'LibudaG/REFERENCE/231002_low_des_react_rates/',
+    #          #'LibudaG/REFERENCE/230725_different_rates/',
+    #          'LibudaG/231120_CORTP_NoSampling_dynrates/',
+    #          ]
+    # for fold in folds:
+    #     collect_training_results(f'run_RL_out/{fold}')
 
     # collect_along_folder('run_RL_out/train_greed/220708_diff_state',
     #                      choose_folder_key=lambda s: s[0] == '_' and s[1].isdigit(),
     #                      choose_file_key=lambda s: 'by_step' in s and '.csv' in s,
     #                      dest_name='collected_integral_curves')
-    pass
+
+    # MCKMC RES PROCESSING
+    dirpath = './PC_plots/MCKMC/240401_steady_state'
+    collectMCKMCcalcs(dirpath)
+

@@ -367,7 +367,6 @@ def main():
                           'input_dt': 0.1,
                           'target_type': 'one_row',
                           # 'target_type': 'episode',
-                          'normalize_coef': 0.5,
                       },
                       'agent': {},
                       'model': {},
