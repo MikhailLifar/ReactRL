@@ -32,6 +32,7 @@ def main():
                                        #)
     # PC_obj = PC_setup.general_PC_setup('LibudaG')
     # PC_obj = PC_setup.general_PC_setup('LibudaGWithT')
+    PC_obj = PC_setup.general_PC_setup('MCKMC')
 
     # PC_obj.process_to_control.set_params({'C_A_inhibit_B': 1., 'C_B_inhibit_A': 1.,
     #                                       'thetaA_init': 0., 'thetaB_init': 0.,
@@ -56,34 +57,130 @@ def main():
     #                                       'C_B_inhibit_A': c_b_a,
     #                                       })  # low des, react rates
 
+    # dynamic advantage params
+    # PC_obj.process_to_control.set_params({'C_A_inhibit_B': 1., 'C_B_inhibit_A': 0.3,
+    #                                       'thetaA_max': 0.5, 'thetaB_max': 0.25,
+    #                                       'rate_ads_A': 0.14895, 'rate_ads_B': 0.06594, 'rate_des_B': 0.,
+    #                                       'rate_des_A': 0.07162, 'rate_react': 5.98734,
+    #                                       })
+    # PC_obj.process_to_control.set_params({'thetaA_init': 0., 'thetaB_init': 0., })
+
     # MCKMC
-    # DYN ADV POLICY AND OPT STEADY STATE POLICY
+    # x picture
+    episode_time = 100.
+    variants = np.linspace(0., 1., 41).reshape(-1, 1)
+    variants = np.hstack((variants, -1 * variants + 1))
+
+    # run_jobs_list(
+    #     **(get_for_common_variations({
+    #         'CO': ConstantPolicy(),
+    #         'O2': ConstantPolicy()
+    #     },
+    #         'CO_value',
+    #         {'name': 'mean_reaction_rate', 'column': 0},
+    #         additional_names=('thetaO', 'thetaCO'),
+    #         take_from_the_end=0.33,
+    #     )),
+    #     params_variants=variants,
+    #     names=('CO_value', 'O2_value'),
+    #     names_groups=(),
+    #     const_params={
+    #         'episode_time': episode_time,
+    #         'calc_dt': lambda x: x / 200,
+    #     },
+    #     sort_iterations_by='mean_reaction_rate',
+    #     PC=PC_obj,
+    #     repeat=1,
+    #     out_fold_path=f'./PC_plots/MCKMC/240404_dyn_adv_rates_steady_state',
+    #     separate_folds=False,
+    #     cluster_command_ops=False,
+    #     python_interpreter='/opt/anaconda_py38_1/bin/python',
+    #     at_same_time=100,
+    # )
+
     run_jobs_list(
         MCKMC_policy_iteration,
         **jobs_list_from_grid(
             [
-                './231002_sudden_discovery/rl_agent_sol.csv',
-                './231002_sudden_discovery/nelder_mead_sol.csv',
+                f'{x:.2f}' for x in np.linspace(0., 1., 41)
             ],
             [0.3, 0.9],
-            [0., 0.1, 1.],
-            names=('plottoffile', 'covOLimit', 'diffusion_level')
+            # [0., 0.1, 1.],
+            [0.,],
+            names=('take_policy_key', 'covOLimit', 'diffusion_level')
         ),
         names_groups=(),
-        PC=PC_setup.general_PC_setup('LibudaG'),
+        PC=PC_obj,
         const_params={
+            'datapath': './PC_plots/LibudaG/240404_dyn_adv_rates_steady_state',
+            'int_segment': [67., 100.],
+            'prefix': 'steady_state',
             'surfShape': (5, 5, 1),
             'snapshotPeriod': 0.1,
-            't_end': 10.,
             'analyser_dt': 1.,
         },
         unique_folder=False,
         separate_folds=False,
-        out_fold_path='./PC_plots/MCKMC/240403_RL_NM_opt_sols',
+        out_fold_path='./PC_plots/MCKMC/240404_steady_state',
         python_interpreter='/opt/anaconda_py38_1/bin/python',
         cluster_command_ops=False,
         at_same_time=300,
     )
+
+    # TURNS
+    # run_jobs_list(
+    #     MCKMC_policy_iteration,
+    #     **jobs_list_from_grid(
+    #         [
+    #             './data/traj_for_MCKMC/o2_then_co.csv',
+    #             './data/traj_for_MCKMC/co_then_o2.csv',
+    #         ],
+    #         [0.3, 0.9],
+    #         [0., 0.1, 1.],
+    #         names=('plottoffile', 'covOLimit', 'diffusion_level')
+    #     ),
+    #     names_groups=(),
+    #     PC=PC_setup.general_PC_setup('LibudaG'),
+    #     const_params={
+    #         'surfShape': (5, 5, 1),
+    #         'snapshotPeriod': 0.1,
+    #         'analyser_dt': 1.,
+    #     },
+    #     unique_folder=False,
+    #     separate_folds=False,
+    #     out_fold_path='./PC_plots/MCKMC/240403_turns',
+    #     python_interpreter='/opt/anaconda_py38_1/bin/python',
+    #     cluster_command_ops=False,
+    #     at_same_time=300,
+    # )
+
+    # DYN ADV POLICY AND OPT STEADY STATE POLICY
+    # run_jobs_list(
+    #     MCKMC_policy_iteration,
+    #     **jobs_list_from_grid(
+    #         [
+    #             './231002_sudden_discovery/rl_agent_sol.csv',
+    #             './231002_sudden_discovery/nelder_mead_sol.csv',
+    #         ],
+    #         [0.3, 0.9],
+    #         [0., 0.1, 1.],
+    #         names=('plottoffile', 'covOLimit', 'diffusion_level')
+    #     ),
+    #     names_groups=(),
+    #     PC=PC_setup.general_PC_setup('LibudaG'),
+    #     const_params={
+    #         'surfShape': (5, 5, 1),
+    #         'snapshotPeriod': 0.1,
+    #         't_end': 10.,
+    #         'analyser_dt': 1.,
+    #     },
+    #     unique_folder=False,
+    #     separate_folds=False,
+    #     out_fold_path='./PC_plots/MCKMC/240403_RL_NM_opt_sols',
+    #     python_interpreter='/opt/anaconda_py38_1/bin/python',
+    #     cluster_command_ops=False,
+    #     at_same_time=300,
+    # )
 
     # STEADY-STATE
     # run_jobs_list(
@@ -349,6 +446,38 @@ def main():
     # variants = new_params
     
     # LibudaG
+    # STEADY-STATE
+    # episode_time = 1000.
+    # variants = np.linspace(0., 1., 41).reshape(-1, 1)
+    # variants = np.hstack((variants, -1 * variants + 1)).tolist()
+    #
+    # run_jobs_list(
+    #     **(get_for_common_variations({
+    #             'inputA': ConstantPolicy(),
+    #             'inputB': ConstantPolicy()
+    #         },
+    #         'inputA_value',
+    #         {'name': 'mean_reaction_rate', 'column': 0},
+    #         additional_names=('thetaB', 'thetaA'),
+    #         take_from_the_end=0.33,
+    #     )),
+    #     params_variants=variants,
+    #     names=('inputA_value', 'inputB_value'),
+    #     names_groups=(),
+    #     const_params={
+    #         'episode_time': episode_time,
+    #         'calc_dt': lambda x: x / 1000,
+    #     },
+    #     sort_iterations_by='mean_reaction_rate',
+    #     PC=PC_obj,
+    #     repeat=1,
+    #     out_fold_path=f'PC_plots/LibudaG/240404_dyn_adv_rates_steady_state',
+    #     separate_folds=False,
+    #     cluster_command_ops=False,
+    #     python_interpreter='/opt/anaconda_py38_1/bin/python',
+    #     at_same_time=100,
+    # )
+
     # return, ratio on rates dependence
     # points_num = 40  # 30, 40
     # variants = np.linspace(0.01, 10., points_num)

@@ -195,7 +195,7 @@ class MCKMCModel(BaseModel, NeighborKMCBase):
 
     def update(self, data_slice, delta_t, save_for_plot=False):
         # set pressures
-        pO2, pCO = data_slice
+        pO2, pCO = 1.e-4 * data_slice  # TODO DO NOT FORGET THIS
         if abs(self.kmc_parameters['pO2'] - pO2) + abs(self.kmc_parameters['pCO'] - pCO) > 1.e-10:
             self.kmc_parameters['pO2'] = pO2
             self.kmc_parameters['pCO'] = pCO

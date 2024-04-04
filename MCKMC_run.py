@@ -21,9 +21,9 @@ def MCKMC_DE_compatibility_test():
     PC_obj.reset()
     PC_DE.reset()
 
-    PC_obj.set_controlled((1.e-4, 0.))
+    PC_obj.set_controlled((1., 0.))
     PC_obj.time_forward(10.)
-    PC_obj.set_controlled((0., 1.e-4))
+    PC_obj.set_controlled((0., 1.))
     PC_obj.time_forward(10.)
     PC_obj.get_and_plot('./PC_plots/MCKMC/de_compatibility/MCKMC_O2_then_CO.png')
 
@@ -53,9 +53,9 @@ def MCKMC_one_turn_steady_state_tries():
                                                                           }))
 
     PC_obj.reset()
-    PC_obj.set_controlled((1.e-4, 0.))
+    PC_obj.set_controlled((1., 0.))
     PC_obj.time_forward(10.)
-    PC_obj.set_controlled((0., 1.e-4))
+    PC_obj.set_controlled((0., 1.))
     PC_obj.time_forward(10.)
     PC_obj.get_and_plot(f'{O2_CO_dir}/O2_then_CO.png')
 
@@ -71,9 +71,9 @@ def MCKMC_one_turn_steady_state_tries():
                                                                           'diffusion_level': diffusion_level,
                                                                           }))
     PC_obj.reset()
-    PC_obj.set_controlled((0., 1.e-4))
+    PC_obj.set_controlled((0., 1.))
     PC_obj.time_forward(10.)
-    PC_obj.set_controlled((1.e-4, 0.))
+    PC_obj.set_controlled((1., 0.))
     PC_obj.time_forward(10.)
     PC_obj.get_and_plot(f'{CO_O2_dir}/CO_then_O2.png')
 
@@ -109,9 +109,6 @@ def MCKMC_dynamic_advantage_test():
     O_control = O_control[idx]
     CO_control = CO_control[idx]
 
-    O_control *= 1.e-4
-    CO_control *= 1.e-4
-
     Ostart = O_control[0]
     COstart = CO_control[0]
 
@@ -134,6 +131,7 @@ def MCKMC_run_policy(logDir,
                      diffusion_level=0.,
                      covOLimit = 0.3,
                      analyser_dt=1.,
+                     int_segment=None,
                      ):
 
     os.makedirs(logDir, exist_ok=True)
@@ -170,9 +168,6 @@ def MCKMC_run_policy(logDir,
     O_control = O_control[idx]
     CO_control = CO_control[idx]
 
-    O_control *= 1.e-4
-    CO_control *= 1.e-4
-
     Ostart = O_control[0]
     COstart = CO_control[0]
 
@@ -194,9 +189,9 @@ def MCKMC_run_policy(logDir,
     R = None
     if PC_obj.target_func is not None:
         R = PC_obj.integrate_along_history(target_mode=True,
-                                           time_segment=None)
+                                           time_segment=int_segment)
     elif PC_obj.long_term_target is not None:
-        R = PC_obj.get_long_term_target()
+        R = PC_obj.get_long_term_target(time_segment=int_segment)
 
     return R
 

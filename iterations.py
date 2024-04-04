@@ -312,11 +312,15 @@ def repeat_periods_calc_rate(PC, params: dict, foldpath, it_arg):
 def MCKMC_policy_iteration(PC, params: dict, foldpath, it_arg):
     if 'plottoffile' not in params:
         # TODO crutch here
-        datapath = './PC_plots/LibudaG/230923_rates_original_steady_state/'
-        fname = [f for f in os.listdir(datapath) if (f'{params["xCO"]:.2f}' in f) and (f.endswith('all_data.csv'))][0]
+        # datapath = './PC_plots/LibudaG/230923_rates_original_steady_state/'
+        datapath = params['datapath']
+        key = params['take_policy_key']
+        fname = [f for f in os.listdir(datapath) if (key in f) and (f.endswith('all_data.csv'))][0]
         params['plottoffile'] = f'{datapath}/{fname}'
-        del params['xCO']
-        params['logDir'] = f'{foldpath}/steady_state_d({params["xCO"]:.2f})_{it_arg}'
+        params['logDir'] = f'{foldpath}/{params["prefix"]}_{it_arg}'
+        del params['datapath']
+        del params['take_policy_key']
+        del params['prefix']
     else:
         plottof_name = os.path.splitext(os.path.split(params['plottoffile'])[1])[0]
         params['logDir'] = f'{foldpath}/_{plottof_name}_{it_arg}'

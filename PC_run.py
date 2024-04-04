@@ -393,8 +393,7 @@ def transition_speed_test():
         PC_obj.time_forward(period)
         PC_obj.set_controlled(point2)
         PC_obj.time_forward(period)
-        PC_obj.set_controlled(point1)
-        PC_obj.time_forward(period)
+
         PC_obj.get_process_output()
         PC_obj.plot(plot_filepath)
 
@@ -412,18 +411,27 @@ def transition_speed_test():
 
     # LibudaG, diff rates
     PC_obj = PC_setup.general_PC_setup('LibudaG', ('to_model_constructor', {'params': {}}))
-    PC_obj.process_to_control.set_params({'C_A_inhibit_B': 1., 'C_B_inhibit_A': 1.,
+    # PC_obj.process_to_control.set_params({'C_A_inhibit_B': 1., 'C_B_inhibit_A': 1.,
+    #                                       'thetaA_init': 0., 'thetaB_init': 0.,
+    #                                       'thetaA_max': 0.5, 'thetaB_max': 0.25, })
+    PC_obj.process_to_control.set_params({'C_A_inhibit_B': 1., 'C_B_inhibit_A': 0.3,
+                                          'thetaA_max': 0.5, 'thetaB_max': 0.25,
                                           'thetaA_init': 0., 'thetaB_init': 0.,
-                                          'thetaA_max': 0.5, 'thetaB_max': 0.5, })
+                                          'rate_ads_A': 0.14895, 'rate_ads_B': 0.06594, 'rate_des_B': 0.,
+                                          'rate_des_A': 0.1, 'rate_react': 0.1,
+                                          })
     folder = 'PC_plots/LibudaG/230715_transition_speed'
 
-    PC_obj.process_to_control.set_params({f'rate_{suff}': 0.05 for suff in ('ads_A', 'des_A', 'ads_B', 'des_B', 'react')})
-    transition_test([1., 0.], [0., 1.], 200, f'{folder}/all_rates_005.png')
+    # PC_obj.process_to_control.set_params({f'rate_{suff}': 0.05 for suff in ('ads_A', 'des_A', 'ads_B', 'des_B', 'react')})
+    # transition_test([1., 0.], [0., 1.], 200., f'{folder}/all_rates_005_o2_co.png')
+    # transition_test([0., 1.], [1., 0.], 200., f'{folder}/all_rates_005_co_o2.png')
 
-    PC_obj.process_to_control.set_params({f'rate_{suff}': 1. for suff in ('ads_A', 'des_A', 'ads_B', 'des_B', 'react')})
-    transition_test([1., 0.], [0., 1.], 10, f'{folder}/all_rates_1.png')
+    # PC_obj.process_to_control.set_params({f'rate_{suff}': 1. for suff in ('ads_A', 'des_A', 'ads_B', 'des_B', 'react')})
+    # transition_test([1., 0.], [0., 1.], 10., f'{folder}/all_rates_1_o2_co.png')
+    # transition_test([0., 1.], [1., 0.], 10., f'{folder}/all_rates_1_co_o2.png')
 
-    pass
+    transition_test([1., 0.], [0., 1.], 30., f'{folder}/dyn_adv_rates_o2_co.png')
+    transition_test([0., 1.], [1., 0.], 30., f'{folder}/dyn_adv_rates_co_o2.png')
 
 
 def temperature_dependence_analysis():
@@ -816,11 +824,9 @@ def steady_state_plot_anltc(PC_obj: ProcessController, start_point, end_point, n
 
 
 def main():
-    # custom_experiment()
-
-    # test_PC_with_Libuda()
-
     # check_func_to_optimize()
+
+    transition_speed_test()
 
     # count_conversion_given_exp('run_RL_out/important_results/220928_T25_diff_lims/O2_40_CO_10/8_copy.csv',
     #                            LibudaModel(Ts=273+25))

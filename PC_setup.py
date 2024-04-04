@@ -103,7 +103,7 @@ DEFAULT_PARAMS = {
             'model_class': MCKMCModel,
             'to_model_constructor': dict(
                 surf_shape=(5, 5, 1),
-                O2_top=1.e-4, CO_top=1.e-4,
+                O2_top=1., CO_top=1.,
                 CO2_rate_top=1.4e2, CO2_count_top=1.e2,
                 T=440.,
             ),
@@ -277,7 +277,7 @@ DEFAULT_PLOT_SPECS = {
          'to_fname': '_input',
          'to_plot_to_f': {
              'xlabel': 'Time, s', 'ylabel': 'Pressure',
-             'ylim': [-5.e-6, 1.e-4 + 5.e-6],
+             'ylim': [-5.e-2, 1. + 5.e-2],
              'save_csv': True,
          }},
         # add
@@ -293,7 +293,7 @@ DEFAULT_PLOT_SPECS = {
          'to_fname': '_output',
          'to_plot_to_f': {
              'xlabel': 'Time, s', 'ylabel': 'reaction rate',
-             'ylim': [-5.e-2, 1. + 5.e-2],
+             'ylim': [-5.e-3, 0.1 + 5.e-3],
              'save_csv': True,
                      }},
     ],
