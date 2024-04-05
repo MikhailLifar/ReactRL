@@ -7,12 +7,12 @@ import pandas as pd
 import lib
 from PC_run import SBP_constant_ratio_and_max_rate
 from MCKMC_run import MCKMC_run_policy
+import json
 
 
 def get_common_1d_summarize(variable_name, names_to_plot, x_tolerance=1.e-5,
                             **kwargs):
-    import json
-    import lib
+
 
     def common_summarize(foldpath):
         x_arr, data = [], []
@@ -309,21 +309,66 @@ def repeat_periods_calc_rate(PC, params: dict, foldpath, it_arg):
     return {'rate_mean': rate_mean, 'rate_std': rate_std}
 
 
-def MCKMC_policy_iteration(PC, params: dict, foldpath, it_arg):
-    if 'plottoffile' not in params:
-        # TODO crutch here
-        # datapath = './PC_plots/LibudaG/230923_rates_original_steady_state/'
-        datapath = params['datapath']
-        key = params['take_policy_key']
-        fname = [f for f in os.listdir(datapath) if (key in f) and (f.endswith('all_data.csv'))][0]
-        params['plottoffile'] = f'{datapath}/{fname}'
-        params['logDir'] = f'{foldpath}/{params["prefix"]}_{it_arg}'
-        del params['datapath']
-        del params['take_policy_key']
-        del params['prefix']
-    else:
-        plottof_name = os.path.splitext(os.path.split(params['plottoffile'])[1])[0]
-        params['logDir'] = f'{foldpath}/_{plottof_name}_{it_arg}'
-    R = MCKMC_run_policy(**params)
+def get_for_MCKMC_mimic_iteration():
 
-    return {'CO2return': R}
+    def _iteration(PC, params: dict, foldpath, it_arg):
+        if 'plottoffile' not in params:
+            datapath = params['datapath']
+            key = params['take_policy_key']
+            fname = [f for f in os.listdir(datapath) if (key in f) and (f.endswith('all_data.csv'))][0]
+            params['plottoffile'] = f'{datapath}/{fname}'
+            params['logDir'] = f'{foldpath}/{params["prefix"]}_{it_arg}'
+            del params['datapath']
+            del params['take_policy_key']
+            del params['prefix']
+        else:
+            plottof_name = os.path.splitext(os.path.split(params['plottoffile'])[1])[0]
+            params['logDir'] = f'{foldpath}/_{plottof_name}_{it_arg}'
+        R = MCKMC_run_policy(**params)
+
+        return {'CO2return': R,
+                'outDataPath': f'{params["LogDir"]}/MCKMC_all_data.csv'}
+
+    # def _summarize(dirpath):
+    #     x_arr, data = [], []
+    #     for fname in filter(lambda name: name.endswith('.json'), sorted(os.listdir(dirpath))):
+    #         with open(f'{dirpath}/{fname}', 'r') as fread:
+    #             d = json.load(fread)
+    #             ret_d = d['return']
+    #             # complicated lists expansion due to possible duplicates of x values
+    #             x_ax_value = d['variables']['plottofname']
+    #             idx = next(filter(lambda i: abs(x_ax_value - x_arr[i]) < x_tolerance, range(len(x_arr))), None)
+    #             if idx is None:
+    #                 data.append([[ret_d[name] for name in names_to_plot]])
+    #                 x_arr.append(x_ax_value)
+    #             else:
+    #                 data[idx].append([ret_d[name] for name in names_to_plot])
+    #
+    #     for i, matr in enumerate(data):
+    #         data[i] = np.mean(data[i], axis=0)
+    #     x_arr, data = np.array(x_arr), np.array(data)
+    #     idxs = np.argsort(x_arr)
+    #     x_arr, data = x_arr[idxs], data[idxs]
+    #
+    #     styles = [
+    #         {'linestyle': 'solid', 'marker': 'h', 'c': 'purple', 'twin': True, },
+    #         {'linestyle': (0, (1, 1)), 'marker': 'x', 'c': 'blue'},
+    #         {'linestyle': (0, (5, 5)), 'marker': '+', 'c': 'red'},
+    #     ]
+    #
+    #     to_plot = []
+    #     for i, name in enumerate(names_to_plot):
+    #         styles[i].update({'label': name})
+    #         to_plot += [x_arr, data[:, i], styles[i]]
+    #
+    #     lib.plot_to_file(*to_plot,
+    #                      fileName=f'{dirpath}/{kwargs.get("filename", "summarize.png")}',
+    #                      xlabel=f'{variable_name}', ylabel=kwargs.get('ylabel', '?'),
+    #                      title=kwargs.get('title', 'summary'),
+    #                      ylim=kwargs.get('ylim', (0, None)),
+    #                      twin_params={'ylabel': names_to_plot[0], 'ylim': kwargs.get('twin_ylim', (0, None))})
+
+    return {
+        'iteration_function': _iteration,
+        'separate_folds': False,
+    }

@@ -397,6 +397,8 @@ def plot_show_save_map(data, filepath, xticks=None, yticks=None, show: bool = Fa
                 **(kwargs['map_kwargs']))
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
+    if 'title' in kwargs:
+        ax.set_title(kwargs['title'])
 
     if xbounds is not None:
         xmin, xmax = xbounds
