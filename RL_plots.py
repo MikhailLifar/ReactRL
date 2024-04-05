@@ -1,18 +1,18 @@
+from itertools import product
 import copy
 import os.path
 
-import matplotlib
+import pandas as pd
 import numpy as np
 
+import matplotlib
 matplotlib.use('Agg')
 
 import matplotlib.ticker as ticker
 from matplotlib.ticker import FormatStrFormatter as FormatObj
 from matplotlib.ticker import MultipleLocator
-
 import matplotlib.pyplot as plt
-
-import pandas as pd
+import seaborn
 
 import lib
 from lib import read_plottof_csv
@@ -41,7 +41,7 @@ matplotlib.rcParams.update(
      'mathtext.default': 'regular'})
 
 PLOT_FOLDER = './ARTICLE/article_figures'
-DATA_FOLDER = './ARTICLE/data'
+DATA_DIR = './ARTICLE/data'
 
 LABEL_A = 'CO'
 LABEL_B = '$O_2$'
@@ -701,7 +701,7 @@ def input_output_plot(ax_input, ax_output, df_NM, df_RL,
 
 
 def exp1_steady_state_map(exp_id):
-    datapath = f'{DATA_FOLDER}/{exp_id}/analytic_steady_state.npy'
+    datapath = f'{DATA_DIR}/{exp_id}/analytic_steady_state.npy'
     data = np.load(datapath)
 
     lib.plot_show_save_map(data, (0., 1.), (0., 1.), f'{PLOT_FOLDER}/{exp_id}/exp1_steady_state_map.png',
@@ -710,8 +710,8 @@ def exp1_steady_state_map(exp_id):
 
 
 def exp2_reverse_steady_state_maps(exp_id):
-    pathB = f'{DATA_FOLDER}/{exp_id}/press_from_covs_pB.npy'
-    pathA = f'{DATA_FOLDER}/{exp_id}/press_from_covs_pA.npy'
+    pathB = f'{DATA_DIR}/{exp_id}/press_from_covs_pB.npy'
+    pathA = f'{DATA_DIR}/{exp_id}/press_from_covs_pA.npy'
     pB, pA = np.load(pathB), np.load(pathA)
 
     mask = ~((pB >= 0.) & (pB <= 1.) & (pA >= 0.) & (pA <= 1.))
@@ -731,7 +731,7 @@ def exp2_reverse_steady_state_maps(exp_id):
 def fig_2_learning_curve():
     # _, df = read_plottof_csv(datapath, ret_df=True)
     # data = [df['agent metric x'].to_numpy(), df['agent metric y'].to_numpy()]
-    datapath = f'{DATA_FOLDER}/fig2/fig2_curve.csv'
+    datapath = f'{DATA_DIR}/fig2/fig2_curve.csv'
     plotname = 'fig2.png'
     df = pd.read_csv(datapath, index_col=False, sep=';')
     data = [np.arange(df.shape[0]) + 1, df['n_integral'].to_numpy()]
@@ -760,7 +760,7 @@ def fig_2_learning_curve():
 
 
 def fig_3_one_rate_sets():
-    data_folder = f'{DATA_FOLDER}/fig3_one_rate_set'
+    data_folder = f'{DATA_DIR}/fig3_one_rate_set'
     fig, axs = plt.subplots(2, 1, figsize=(FIG_SIZE_MAIN[0] * 0.6, FIG_SIZE_MAIN[1]))  # (1.5 * FIG_SIZE_MAIN[0], 1.8 * FIG_SIZE_MAIN[1])
 
     list_NM = sorted(os.listdir(f'{data_folder}/NM'))
@@ -826,10 +826,10 @@ def fig_3_one_rate_sets():
 
 
 def fig4_covs_axis_plot_v3():
-    pathB = f'{DATA_FOLDER}/libuda_react_div60/press_from_covs_pB.npy'
-    pathA = f'{DATA_FOLDER}/libuda_react_div60/press_from_covs_pA.npy'
-    path_dynamic = f'{DATA_FOLDER}/dynamic_advantage_rates/dynamic_sol.csv'
-    path_stationary_NM = f'{DATA_FOLDER}/dynamic_advantage_rates/NM_sol.csv'
+    pathB = f'{DATA_DIR}/libuda_react_div60/press_from_covs_pB.npy'
+    pathA = f'{DATA_DIR}/libuda_react_div60/press_from_covs_pA.npy'
+    path_dynamic = f'{DATA_DIR}/dynamic_advantage_rates/dynamic_sol.csv'
+    path_stationary_NM = f'{DATA_DIR}/dynamic_advantage_rates/NM_sol.csv'
 
     pB, pA = np.load(pathB), np.load(pathA)
     mask = ~((pB >= 0.) & (pB <= 1.) & (pA >= 0.) & (pA <= 1.))
@@ -916,7 +916,7 @@ def fig4_covs_axis_plot_v3():
 def fig_5_dyn_demo():
     plots_num = 2
     fig, axs = plt.subplots(2, plots_num, figsize=FIG_SIZE_MAIN)  # (27, 13)
-    foldpath = f'{DATA_FOLDER}/fig5_v2'
+    foldpath = f'{DATA_DIR}/fig5_v2'
 
     fnames = sorted(os.listdir(foldpath))
 
@@ -941,7 +941,7 @@ def fig_6_stchdemolrg():
     plots_num = 2
     fig, axs = plt.subplots(2, plots_num, figsize=FIG_SIZE_MAIN)
 
-    foldpath = f'{DATA_FOLDER}/fig6'
+    foldpath = f'{DATA_DIR}/fig6'
     for i, fname in enumerate(sorted(os.listdir(foldpath))):
         _, df = read_plottof_csv(f'{foldpath}/{fname}', ret_df=True)
         input_output_plot(axs[0, i], axs[1, i], None, df, xtop=100., twin_label=(i == 1),
@@ -955,6 +955,24 @@ def fig_6_stchdemolrg():
         axs[1, i].set_xlabel('Time, s')
 
     savefig(fig, f'{PLOT_FOLDER}/fig6.png')
+
+
+def fig_n1():
+    data = pd.read_excel(f'{DATA_DIR}/NM_rates.xlsx')
+    variants = np.sort(data['model::rate_des_A'].unique()).tolist()
+    n = len(variants)
+
+    M = np.zeros((n, n))
+    for i in range(n):
+        for j in range(n):
+            M[i, j] = data.loc[(data['model::rate_react'] == variants[i]) \
+                               & (data['model::rate_des_A'] == variants[j]), 'reaction_rate']
+    M = M[::-1]
+
+    lib.plot_show_save_map(M, f'{PLOT_FOLDER}/fign1_nm_rates.png',
+                           xticks=variants, yticks=variants[::-1],
+                           xlabel='desorption rate', ylabel='reaction rate',
+                           map_kwargs={})
 
 
 # def fig_8():
@@ -1001,7 +1019,7 @@ def fig_6_stchdemolrg():
 
 
 def fig_S1():
-    data_path = f'{DATA_FOLDER}/figS1/figS1.csv'
+    data_path = f'{DATA_DIR}/figS1/figS1.csv'
     _, df = lib.read_plottof_csv(data_path, ret_df=True)
 
     data = [df['outputC x'], df['outputC y']]
@@ -1021,7 +1039,7 @@ def fig_S1():
 
 
 def ananikov_thesis():
-    data_folder = f'{DATA_FOLDER}/ananikov'
+    data_folder = f'{DATA_DIR}/ananikov'
     fig0, ax0 = plt.subplots(figsize=(12 / 3 * 2, 12 / 3 * 2))
     fig1, ax1 = plt.subplots(figsize=(12 / 3 * 2, 12 / 3 * 2))
 
@@ -1066,9 +1084,11 @@ def main() -> None:
     # for fname in os.listdir(data_folder):
     #     ananikov_sol_plot(f'{data_folder}/{fname}', f'{PLOT_FOLDER}/ananikov/task1', xtop=240.)
 
-    data_folder = f'{PLOT_FOLDER}/ananikov/task2_data'
-    for fname in os.listdir(data_folder):
-        ananikov_sol_plot(f'{data_folder}/{fname}', f'{PLOT_FOLDER}/ananikov/task2', xtop=100.)
+    # data_folder = f'{PLOT_FOLDER}/ananikov/task2_data'
+    # for fname in os.listdir(data_folder):
+    #     ananikov_sol_plot(f'{data_folder}/{fname}', f'{PLOT_FOLDER}/ananikov/task2', xtop=100.)
+
+    fig_n1()
 
     # exp1_steady_state_map('exp_libuda_react_div60')
     # exp2_reverse_steady_state_maps('exp_libuda_react_div60')

@@ -367,7 +367,7 @@ def plot_from_file(*lbls_fmts, csvFileName: str,
     plot_to_file(*ops, **plottof_ops)
 
 
-def plot_show_save_map(data, xbounds, ybounds, filepath, show: bool = False, save_data=True,
+def plot_show_save_map(data, filepath, xticks=None, yticks=None, show: bool = False, save_data=True,
                        xlabel='?', ylabel='?', cbounds=None, **kwargs):
 
     if cbounds is None:
@@ -375,30 +375,43 @@ def plot_show_save_map(data, xbounds, ybounds, filepath, show: bool = False, sav
 
     fig, ax = plt.subplots(figsize=kwargs.get('figsize', None))
 
-    data_to_heatmap = pd.DataFrame(data=data,
-                                   # index=yticks,
-                                   # columns=xticks,
-                                   )
+    ybounds = xbounds = None
+    if isinstance(xticks, dict):
+        xbounds = [xticks['min'], xticks['max']]
+        xticks = None
+    if isinstance(yticks, dict):
+        ybounds = [yticks['min'], yticks['max']]
+        yticks = None
+
+    if not isinstance(data, pd.DataFrame):
+        data = pd.DataFrame(data=data,
+                            index=yticks,
+                            columns=xticks,
+                            )
     fname, ext = os.path.splitext(filepath)
     if save_data:
-        data_to_heatmap.to_csv(f'{fname}.csv', index=False)
+        data.to_csv(f'{fname}.csv', index=False)
 
-    sns.heatmap(data_to_heatmap, ax=ax, vmin=cbounds[0], vmax=cbounds[1],
-                cmap=kwargs.get('cmap', 'magma'),
-                cbar_kws={'label': kwargs.get('color_ax_label', None)},)
+    sns.heatmap(data, ax=ax, vmin=cbounds[0], vmax=cbounds[1],
+                cbar_kws={'label': kwargs.get('color_ax_label', None)},
+                **(kwargs['map_kwargs']))
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
 
-    xmin, xmax = xbounds
-    ymin, ymax = ybounds
-    ax.xaxis.set_major_locator(ticker.MultipleLocator(data.shape[1] / 10))
-    ax.yaxis.set_major_locator(ticker.MultipleLocator(data.shape[0] / 10))
-    ax.xaxis.set_major_formatter(lambda x, pos: f'{x / data.shape[1] * (xmax - xmin) + xmin:.2f}')
-    ax.yaxis.set_major_formatter(lambda y, pos: f'{y / data.shape[0] * (ymax - ymin) + ymin:.2f}')
+    if xbounds is not None:
+        xmin, xmax = xbounds
+        ax.xaxis.set_major_locator(ticker.MultipleLocator(data.shape[1] / 10))
+        ax.xaxis.set_major_formatter(lambda x, pos: f'{x / data.shape[1] * (xmax - xmin) + xmin:.2f}')
+    if ybounds is not None:
+        ymin, ymax = ybounds
+        ax.yaxis.set_major_locator(ticker.MultipleLocator(data.shape[0] / 10))
+        ax.yaxis.set_major_formatter(lambda y, pos: f'{y / data.shape[0] * (ymax - ymin) + ymin:.2f}')
 
     if show:
         plt.show()
     fig.savefig(filepath, dpi=400, bbox_inches='tight')
+    plt.close(fig)
+
 
 
 """

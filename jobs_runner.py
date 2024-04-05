@@ -67,44 +67,14 @@ def main():
 
     # MCKMC
     # x picture
-    episode_time = 100.
-    variants = np.linspace(0., 1., 41).reshape(-1, 1)
-    variants = np.hstack((variants, -1 * variants + 1))
-
-    # run_jobs_list(
-    #     **(get_for_common_variations({
-    #         'CO': ConstantPolicy(),
-    #         'O2': ConstantPolicy()
-    #     },
-    #         'CO_value',
-    #         {'name': 'mean_reaction_rate', 'column': 0},
-    #         additional_names=('thetaO', 'thetaCO'),
-    #         take_from_the_end=0.33,
-    #     )),
-    #     params_variants=variants,
-    #     names=('CO_value', 'O2_value'),
-    #     names_groups=(),
-    #     const_params={
-    #         'episode_time': episode_time,
-    #         'calc_dt': lambda x: x / 200,
-    #     },
-    #     sort_iterations_by='mean_reaction_rate',
-    #     PC=PC_obj,
-    #     repeat=1,
-    #     out_fold_path=f'./PC_plots/MCKMC/240404_dyn_adv_rates_steady_state',
-    #     separate_folds=False,
-    #     cluster_command_ops=False,
-    #     python_interpreter='/opt/anaconda_py38_1/bin/python',
-    #     at_same_time=100,
-    # )
-
     run_jobs_list(
         MCKMC_policy_iteration,
         **jobs_list_from_grid(
             [
                 f'{x:.2f}' for x in np.linspace(0., 1., 41)
             ],
-            [0.3, 0.9],
+            # [0.3, 0.9],
+            [0.3,],
             # [0., 0.1, 1.],
             [0.,],
             names=('take_policy_key', 'covOLimit', 'diffusion_level')
@@ -113,7 +83,8 @@ def main():
         PC=PC_obj,
         const_params={
             'datapath': './PC_plots/LibudaG/240404_dyn_adv_rates_steady_state',
-            'int_segment': [67., 100.],
+            't_end': 30.,
+            'int_segment': [20., 30.],
             'prefix': 'steady_state',
             'surfShape': (5, 5, 1),
             'snapshotPeriod': 0.1,
@@ -121,7 +92,7 @@ def main():
         },
         unique_folder=False,
         separate_folds=False,
-        out_fold_path='./PC_plots/MCKMC/240404_steady_state',
+        out_fold_path='./PC_plots/MCKMC/240404_local_cov_limit',
         python_interpreter='/opt/anaconda_py38_1/bin/python',
         cluster_command_ops=False,
         at_same_time=300,

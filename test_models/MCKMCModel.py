@@ -211,11 +211,11 @@ class MCKMCModel(BaseModel, NeighborKMCBase):
             kmc_dt = self.frm_step(throw_exception=False, tstep_up_bound=delta_t)
             covs = self.system.get_coverages(self.Nspecies)
 
-            # TODO huge and costly crutch to achieve not complete oxygen coverage
-            if (covs[2] > self.covOLimit and self.events[2].active) or \
-                    (covs[2] < self.covOLimit - 0.05 and not self.events[2].active):
-                self.events[2].active = covs[2] < self.covOLimit - 0.05
-                self.frm_init()
+            # # global O coverage restriction
+            # if (covs[2] > self.covOLimit and self.events[2].active) or \
+            #         (covs[2] < self.covOLimit - 0.05 and not self.events[2].active):
+            #     self.events[2].active = covs[2] < self.covOLimit - 0.05
+            #     self.frm_init()
 
             if covs[2] == 1.:
                 warnings.warn('The surface is completely occupied by oxygen')

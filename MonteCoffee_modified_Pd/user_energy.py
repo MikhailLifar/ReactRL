@@ -102,3 +102,9 @@ def get_repulsion(cov_self, cov_NN, stype):
 
     return 0.  # TODO repulsion could be returned later
 
+
+# local coverage restriction
+def get_repulsion_to_limit_covO(cov_NN):
+    cond = sum([1 for j in cov_NN if j == 2]) / len(cov_NN)
+    return 1. * (cond >= 0.3)
+

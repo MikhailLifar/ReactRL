@@ -20,7 +20,7 @@ from user_constants import mCO, mO2, Asite, modes_COads, \
     modes_Oads, modes_TS_COOx, modes_COgas, modes_O2gas, kB, eV2J, s0CO, s0O, h
 
 from user_energy import EadsCO, EadsO, get_Ea, \
-    get_repulsion, EdiffCO, EdiffO
+    get_repulsion, EdiffCO, EdiffO, get_repulsion_to_limit_covO
 
 
 PD_EV_CONSTANTS = {
@@ -129,7 +129,8 @@ class OAdsEvent(EventBase):
             return False
 
     def get_rate(self, system, site, other_site):
-        R = (PD_EV_CONSTANTS['s0O'] * self.params['pO2']) / (PD_EV_CONSTANTS['Asite'] * np.sqrt(2. * np.pi * mO2 * kB * eV2J * self.params['T']))
+        R = (PD_EV_CONSTANTS['s0O'] * self.params['pO2']) /\
+            (PD_EV_CONSTANTS['Asite'] * np.sqrt(2. * np.pi * mO2 * kB * eV2J * self.params['T']))
         return self.alpha * R
 
     def do_event(self, system, site, other_site):
@@ -172,7 +173,11 @@ class ODesEvent(EventBase):
     def get_rate(self, system, site, other_site):
         Ncovs = system.get_ncovs(site)
         Ncovsother = system.get_ncovs(other_site)
-        E2O = max(2. * PD_EV_CONSTANTS['EadsO'] - get_repulsion(2, Ncovs, 0) - get_repulsion(2, Ncovsother, 0), 0.)
+        # E2O = max(2. * PD_EV_CONSTANTS['EadsO'] - get_repulsion(2, Ncovs, 0) - get_repulsion(2, Ncovsother, 0), 0.)
+        E2O = max(2. * PD_EV_CONSTANTS['EadsO'] \
+                  - get_repulsion_to_limit_covO(Ncovs) \
+                  - get_repulsion_to_limit_covO(Ncovsother),
+                  0.)
         Rf = (PD_EV_CONSTANTS['s0O'] * self.params['pO2']) / (PD_EV_CONSTANTS['Asite'] * np.sqrt(2. * np.pi * mO2 * kB * eV2J * self.params['T']))
         K = self.dZ * np.exp(E2O / (kB * self.params['T']))
         return self.alpha * Rf / K
