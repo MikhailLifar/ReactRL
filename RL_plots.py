@@ -957,7 +957,7 @@ def fig_6_stchdemolrg():
     savefig(fig, f'{PLOT_FOLDER}/fig6.png')
 
 
-def fig_n1():
+def fig_n1_nm_rates():
     data = pd.read_excel(f'{DATA_DIR}/NM_rates.xlsx')
     variants = np.sort(data['model::rate_des_A'].unique()).tolist()
     n = len(variants)
@@ -973,6 +973,34 @@ def fig_n1():
                            xticks=variants, yticks=variants[::-1],
                            xlabel='desorption rate', ylabel='reaction rate',
                            map_kwargs={})
+
+
+def fig_n2_integral_curves():
+    _, dataRL = lib.read_plottof_csv(f'{DATA_DIR}/dynamic_advantage_rates/dynamic_sol.csv', ret_df=True)
+    _, dataNM = lib.read_plottof_csv(f'{DATA_DIR}/dynamic_advantage_rates/NM_sol.csv', ret_df=True)
+
+    time_RL = dataRL['outputC x'].to_numpy()
+    rate_RL = dataRL['outputC y'].to_numpy()
+    integral_output_RL = np.cumsum( (rate_RL[1:] + rate_RL[:-1]) * (time_RL[1:] - time_RL[:-1]) / 2 )
+    time_1_RL = (time_RL[1:] + time_RL[:-1]) / 2
+
+    time_NM = dataNM['outputC x'].to_numpy()
+    rate_NM = dataNM['outputC y'].to_numpy()
+    integral_output_NM = np.cumsum( (rate_NM[1:] + rate_NM[:-1]) * (time_NM[1:] - time_NM[:-1]) / 2 )
+    time_1_NM = (time_NM[1:] + time_NM[:-1]) / 2
+
+    fig, ax = plt.subplots(figsize=FIG_SIZE_MAIN)
+
+    plot_several_lines_uni([time_1_RL, integral_output_RL], ax=ax,
+                           to_styles={1: {'c': 'g', 'label': 'integral output, RL', 'linestyle': 'solid'}})
+    plot_several_lines_uni([time_1_NM, integral_output_NM], ax=ax,
+                           to_styles={1: {'c': 'b', 'label': 'integral output, NM', 'linestyle': 'solid'}})
+
+    ax.set_title('Nelder-Mead vs RL integral CO2 return')
+    ax.set_xlabel('Time, s')
+    ax.set_ylabel('Integral CO2 return')
+
+    savefig(fig, f'{PLOT_FOLDER}/fig_n2_integral_curves.png')
 
 
 # def fig_8():
@@ -1088,7 +1116,8 @@ def main() -> None:
     # for fname in os.listdir(data_folder):
     #     ananikov_sol_plot(f'{data_folder}/{fname}', f'{PLOT_FOLDER}/ananikov/task2', xtop=100.)
 
-    fig_n1()
+    # fig_n1_nm_rates()
+    fig_n2_integral_curves()
 
     # exp1_steady_state_map('exp_libuda_react_div60')
     # exp2_reverse_steady_state_maps('exp_libuda_react_div60')
