@@ -971,7 +971,9 @@ def fig_n1_nm_rates():
 
     lib.plot_show_save_map(M, f'{PLOT_FOLDER}/fign1_nm_rates.png',
                            xticks=variants, yticks=variants[::-1],
-                           xlabel='desorption rate', ylabel='reaction rate',
+                           xlabel='K2', ylabel='K5',
+                           color_ax_label='reaction rate',
+                           title='NM obtained steady-state regimes',
                            map_kwargs={})
 
 
@@ -1116,8 +1118,8 @@ def main() -> None:
     # for fname in os.listdir(data_folder):
     #     ananikov_sol_plot(f'{data_folder}/{fname}', f'{PLOT_FOLDER}/ananikov/task2', xtop=100.)
 
-    # fig_n1_nm_rates()
-    fig_n2_integral_curves()
+    fig_n1_nm_rates()
+    # fig_n2_integral_curves()
 
     # exp1_steady_state_map('exp_libuda_react_div60')
     # exp2_reverse_steady_state_maps('exp_libuda_react_div60')

@@ -324,10 +324,10 @@ def get_for_MCKMC_mimic_iteration():
         else:
             plottof_name = os.path.splitext(os.path.split(params['plottoffile'])[1])[0]
             params['logDir'] = f'{foldpath}/_{plottof_name}_{it_arg}'
-        R = MCKMC_run_policy(**params)
+        ret = MCKMC_run_policy(**params)
+        ret.update({'outDataPath': f'{params["logDir"]}/MCKMC_all_data.csv'})
 
-        return {'CO2return': R,
-                'outDataPath': f'{params["LogDir"]}/MCKMC_all_data.csv'}
+        return ret
 
     # def _summarize(dirpath):
     #     x_arr, data = [], []

@@ -185,15 +185,27 @@ def MCKMC_run_policy(logDir,
     else:
         PC_obj.time_forward(times[-1])
 
-    PC_obj.get_and_plot(f'{logDir}/MCKMC.png')
-    R = None
+    ret = {}
+    output_dt, output = PC_obj.get_process_output()
+    ret['mean_CO2_rate'] = output[:, 0]
+    for name in ('thetaO', 'thetaCO'):
+        ret[name] = PC_obj.additional_graph[name][:ret['mean_CO2_rate'].size]
+
+    if int_segment is not None:
+        idx = (int_segment[0] <= output_dt) & (output_dt <= int_segment[1])
+    else:
+        idx = np.full_like(output[:, 0], True, dtype='bool')
+    for k, v in ret.items():
+        ret[k] = np.mean(v[idx])
+
+    PC_obj.plot(f'{logDir}/MCKMC.png')
     if PC_obj.target_func is not None:
-        R = PC_obj.integrate_along_history(target_mode=True,
+        ret['return'] = PC_obj.integrate_along_history(target_mode=True,
                                            time_segment=int_segment)
     elif PC_obj.long_term_target is not None:
-        R = PC_obj.get_long_term_target(time_segment=int_segment)
+        ret['return'] = PC_obj.get_long_term_target(time_segment=int_segment)
 
-    return R
+    return ret
 
 
 if __name__ == '__main__':

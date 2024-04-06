@@ -68,7 +68,7 @@ def main():
     # MCKMC
     # x picture
     run_jobs_list(
-        MCKMC_policy_iteration,
+        **get_for_MCKMC_mimic_iteration(),
         **jobs_list_from_grid(
             [
                 f'{x:.2f}' for x in np.linspace(0., 1., 41)
@@ -91,8 +91,7 @@ def main():
             'analyser_dt': 1.,
         },
         unique_folder=False,
-        separate_folds=False,
-        out_fold_path='./PC_plots/MCKMC/240404_local_cov_limit',
+        out_fold_path='./PC_plots/MCKMC/240405_debug',
         python_interpreter='/opt/anaconda_py38_1/bin/python',
         cluster_command_ops=False,
         at_same_time=300,
