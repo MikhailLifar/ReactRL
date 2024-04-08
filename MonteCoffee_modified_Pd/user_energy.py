@@ -104,7 +104,8 @@ def get_repulsion(cov_self, cov_NN, stype):
 
 
 # local coverage restriction
-def get_repulsion_to_limit_covO(cov_NN):
-    cond = sum([1 for j in cov_NN if j == 2]) / len(cov_NN)
-    return 1. * (cond >= 0.3)
+def get_repulsion_to_limit_covO(cov_NN, OORepLim, OCORepLim):
+    covCONN = sum([j == 1 for j in cov_NN]) / len(cov_NN)
+    covONN = sum([j == 2 for j in cov_NN]) / len(cov_NN)
+    return 1. * ((covONN >= OORepLim) or (covCONN >= OCORepLim))
 

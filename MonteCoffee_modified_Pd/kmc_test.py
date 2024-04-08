@@ -172,12 +172,12 @@ def runDynamicAdvParameters():
         'CODiff', 'ODiff', 'COOx'
     ]
 
-    diffusion_target = 1.e-7
+    diffusion_target = 10.
     rates_target = {
-        'COAds': 0.17582,
+        'COAds': 0.14895,
         'CODes': 0.1,
-        'OAds': 0.074495,
-        'ODes': 1.e-6,
+        'OAds': 0.06594,
+        'ODes': 1.e-7,
         'CODiff': diffusion_target,
         'ODiff': diffusion_target,  # TODO - questionable, may be better different diffusion for both species
         'COOx': 0.1,
@@ -187,21 +187,21 @@ def runDynamicAdvParameters():
         PD_EV_CONSTANTS[param_name] = param_v
         return sim.events[evs_order.index(ev_type)].get_rate(sim.system, 0, 0) - target_rate
 
-    # PD_EV_CONSTANTS['s0CO'] = fsolve(F, (0.9, ), args=('s0CO', 'COAds', rates_target['COAds']))[0]
-    # PD_EV_CONSTANTS['EadsCO'] = fsolve(F, (1.36, ), args=('EadsCO', 'CODes', rates_target['CODes']))[0]
-    # PD_EV_CONSTANTS['s0O'] = fsolve(F, (0.1, ), args=('s0O', 'OAds', rates_target['OAds']))[0]
-    # PD_EV_CONSTANTS['EadsO'] = fsolve(F, (1.36, ), args=('EadsO', 'ODes', rates_target['ODes']))[0]
-    # PD_EV_CONSTANTS['EdiffCO'] = fsolve(F, (0.8, ), args=('EdiffCO', 'CODiff', rates_target['CODiff']))[0]
-    # PD_EV_CONSTANTS['EdiffO'] = fsolve(F, (0.8, ), args=('EdiffO', 'ODiff', rates_target['ODiff']))[0]
-    # PD_EV_CONSTANTS['Ea_const'] = fsolve(F, (PD_EV_CONSTANTS['Ea_const'], ), args=('Ea_const', 'COOx', rates_target['COOx']))[0]
-    # print(PD_EV_CONSTANTS)
-    # with open(f'{os.path.expanduser("~")}/RL_22_07_MicroFluidDroplets/data/PdDynamicAdvParams_diff({diffusion_target:.2f}).txt', 'w') as fwrite:
-    #     json.dump(PD_EV_CONSTANTS, fwrite)
+    PD_EV_CONSTANTS['s0CO'] = fsolve(F, (0.9, ), args=('s0CO', 'COAds', rates_target['COAds']))[0]
+    PD_EV_CONSTANTS['EadsCO'] = fsolve(F, (1.36, ), args=('EadsCO', 'CODes', rates_target['CODes']))[0]
+    PD_EV_CONSTANTS['s0O'] = fsolve(F, (0.1, ), args=('s0O', 'OAds', rates_target['OAds']))[0]
+    PD_EV_CONSTANTS['EadsO'] = fsolve(F, (1.36, ), args=('EadsO', 'ODes', rates_target['ODes']))[0]
+    PD_EV_CONSTANTS['EdiffCO'] = fsolve(F, (0.8, ), args=('EdiffCO', 'CODiff', rates_target['CODiff']))[0]
+    PD_EV_CONSTANTS['EdiffO'] = fsolve(F, (0.8, ), args=('EdiffO', 'ODiff', rates_target['ODiff']))[0]
+    PD_EV_CONSTANTS['Ea_const'] = fsolve(F, (PD_EV_CONSTANTS['Ea_const'], ), args=('Ea_const', 'COOx', rates_target['COOx']))[0]
+    print(PD_EV_CONSTANTS)
+    with open(f'{os.path.expanduser("~")}/RL_22_07_MicroFluidDroplets/data/PdDynamicAdvParams_diff({diffusion_target:.2f}).txt', 'w') as fwrite:
+        json.dump(PD_EV_CONSTANTS, fwrite)
 
-    with open( os.path.expanduser('~/RL_22_07_MicroFluidDroplets/data/PdDynamicAdvParams_diff(0.00).txt'), 'r') as fread:
-        PD_EV_CONSTANTS.update(json.load(fread))
-    for e in sim.events:
-        print(type(e), e.get_rate(p, 0, 0))
+    # with open( os.path.expanduser('~/RL_22_07_MicroFluidDroplets/data/PdDynamicAdvParams_diff(0.00).txt'), 'r') as fread:
+    #     PD_EV_CONSTANTS.update(json.load(fread))
+    # for e in sim.events:
+    #     print(type(e), e.get_rate(p, 0, 0))
 
     # Run the simulation.
     # sim.run_kmc(100.)

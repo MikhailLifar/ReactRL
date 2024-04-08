@@ -32,9 +32,11 @@ PD_EV_CONSTANTS = {
     'EdiffCO': EdiffCO,
     'EdiffO': EdiffO,
     'Ea_const': 0.168 + 0.47238,
+    'OORepLim': 0.3,
+    'OCORepLim': 1.1,  # no limit
 }
 # TODO ugly structured code
-with open(f'{os.path.expanduser("~")}/RL_22_07_MicroFluidDroplets/data/PdDynamicAdvParams_diff(0.00).txt', 'r') as fread:
+with open(os.path.expanduser("~/RL_22_07_MicroFluidDroplets/data/PdDynamicAdvParams_diff(0.00).txt"), 'r') as fread:
     PD_EV_CONSTANTS.update(json.load(fread))
 
 
@@ -175,10 +177,11 @@ class ODesEvent(EventBase):
         Ncovsother = system.get_ncovs(other_site)
         # E2O = max(2. * PD_EV_CONSTANTS['EadsO'] - get_repulsion(2, Ncovs, 0) - get_repulsion(2, Ncovsother, 0), 0.)
         E2O = max(2. * PD_EV_CONSTANTS['EadsO'] \
-                  - get_repulsion_to_limit_covO(Ncovs) \
-                  - get_repulsion_to_limit_covO(Ncovsother),
+                  - get_repulsion_to_limit_covO(Ncovs, PD_EV_CONSTANTS['OORepLim'], PD_EV_CONSTANTS['OCORepLim'])
+                  - get_repulsion_to_limit_covO(Ncovsother, PD_EV_CONSTANTS['OORepLim'], PD_EV_CONSTANTS['OCORepLim']),
                   0.)
-        Rf = (PD_EV_CONSTANTS['s0O'] * self.params['pO2']) / (PD_EV_CONSTANTS['Asite'] * np.sqrt(2. * np.pi * mO2 * kB * eV2J * self.params['T']))
+        Rf = (PD_EV_CONSTANTS['s0O'] * self.params['pO2']) \
+             / (PD_EV_CONSTANTS['Asite'] * np.sqrt(2. * np.pi * mO2 * kB * eV2J * self.params['T']))
         K = self.dZ * np.exp(E2O / (kB * self.params['T']))
         return self.alpha * Rf / K
 

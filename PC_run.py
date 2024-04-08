@@ -823,10 +823,31 @@ def steady_state_plot_anltc(PC_obj: ProcessController, start_point, end_point, n
     plt.close(fig)
 
 
-def main():
-    # check_func_to_optimize()
+def SBP_LibudaG_run():
+    periods = [2., 5., 10., 20.]
+    reps = [50, 20, 10, 5]
+    PC_obj = PC_setup.general_PC_setup('LibudaG')
+    PC_obj.process_to_control.set_params({'C_A_inhibit_B': 1., 'C_B_inhibit_A': 0.3,
+                                          'thetaA_max': 0.5, 'thetaB_max': 0.25,
+                                          'rate_ads_A': 0.14895, 'rate_ads_B': 0.06594, 'rate_des_B': 0.,
+                                          'rate_des_A': 0.1, 'rate_react': 0.1,
+                                          })
+    PC_obj.process_to_control.set_params({'thetaA_init': 0., 'thetaB_init': 0., })
 
-    transition_speed_test()
+    for T, r in zip(periods, reps):
+        PC_obj.reset()
+        for _ in range(r):
+            PC_obj.set_controlled((1., 0.))
+            PC_obj.time_forward(T)
+            PC_obj.set_controlled((0., 1.))
+            PC_obj.time_forward(T)
+        PC_obj.get_and_plot(f'./PC_plots/LibudaG/240408_SBP/T({T:.1f}).png')
+
+
+def main():
+    # transition_speed_test()
+
+    SBP_LibudaG_run()
 
     # count_conversion_given_exp('run_RL_out/important_results/220928_T25_diff_lims/O2_40_CO_10/8_copy.csv',
     #                            LibudaModel(Ts=273+25))

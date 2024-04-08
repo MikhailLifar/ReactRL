@@ -5,6 +5,16 @@ import lib
 import PC_setup
 
 
+def compatibility_test():
+    PC_obj = PC_setup.general_PC_setup('MCKMC', ('to_model_constructor',
+                                                 {'logDir': './PC_plots/MCKMC/compatibility_test'}),
+                                                ('to_PC_constructor', {'analyser_dt': 100.}))
+    PC_obj.reset()
+    PC_obj.set_controlled((1., 1.))
+    PC_obj.time_forward(1000.)
+    PC_obj.get_process_output()
+
+
 def MCKMC_DE_compatibility_test():
     PC_obj = PC_setup.general_PC_setup('MCKMC', ('to_model_constructor', {'surf_shape': (25, 25, 1),
                                                                           'log_on': True,
@@ -85,51 +95,13 @@ def MCKMC_one_turn_steady_state_tries():
     # PC_obj.reset()
 
 
-def MCKMC_dynamic_advantage_test():
-    # DYNAMIC ADV TESTS
-    shape = (50, 50, 1)
-    PC_obj = PC_setup.general_PC_setup('MCKMC', ('to_model_constructor', {'surf_shape': shape,
-                                                                          'snapshotDir': './repos/MonteCoffee_modified_Pd/snapshots/PC_runned',
-                                                                          'snapshotPeriod': 0.2,
-                                                                          }))
-    PC_obj.reset()
-
-    options, _ = lib.read_plottof_csv('231002_sudden_discovery/rl_agent_sol.csv', ret_ops=True)
-    Oidx = options[2::3].index('inputB') * 3 + 2
-    COidx = options[2::3].index('inputA') * 3 + 2
-
-    times = options[Oidx - 2]
-    O_control = options[Oidx - 1]
-    CO_control = options[COidx - 1]
-
-    # limit times
-    t_start, t_end = 141., 220.
-    idx = (times >= t_start) & (times <= t_end)
-    times = times[idx] - t_start
-    O_control = O_control[idx]
-    CO_control = CO_control[idx]
-
-    Ostart = O_control[0]
-    COstart = CO_control[0]
-
-    PC_obj.set_controlled((Ostart, COstart))
-    turning_points = np.where(np.abs(O_control[1:] - O_control[:-1]) > 1.e-5)[0] + 1
-    step_end_times = times[turning_points - 1]
-
-    PC_obj.time_forward(step_end_times[0])
-    step_end_times = np.array(step_end_times[1:].tolist() + [times[-1]])
-    for O_val, CO_val, t in zip(O_control[turning_points], CO_control[turning_points], step_end_times):
-        PC_obj.set_controlled((O_val, CO_val))
-        PC_obj.time_forward(t - PC_obj.time)
-    PC_obj.get_and_plot('repos/MonteCoffee_modified_Pd/snapshots/PC_runned/MCKMC.png')
-
-
 def MCKMC_run_policy(logDir,
                      snapshotPeriod,
                      plottoffile, t_start=None, t_end=None,
                      surfShape=(5, 5, 1),
                      diffusion_level=0.,
-                     covOLimit = 0.3,
+                     OORepLim = 0.3,
+                     OCORepLim = 1.1,
                      analyser_dt=1.,
                      int_segment=None,
                      ):
@@ -140,7 +112,8 @@ def MCKMC_run_policy(logDir,
                                        ('to_model_constructor', {
                                            'surf_shape': surfShape,
                                            'diffusion_level': diffusion_level,
-                                           'covOLimit': covOLimit,
+                                           'OORepLim': OORepLim,
+                                           'OCORepLim': OCORepLim,
                                            'logDir': logDir,
                                            'saveLog': logDir is not None,
                                            'snapshotPeriod': snapshotPeriod,
@@ -210,9 +183,11 @@ def MCKMC_run_policy(logDir,
 
 if __name__ == '__main__':
     # MCKMC_one_turn_steady_state_tries()
-    MCKMC_run_policy('./DEBUG/MCKMCDebug/runPolicy/try0',
-                     snapshotPeriod=0.2,
-                     plottoffile='./PC_plots/LibudaG/230923_rates_original_steady_state/'
-                                 'common_variations_x(0.40)_40_all_data.csv',
-                     t_end=30.,
-                     )
+    # MCKMC_run_policy('./DEBUG/MCKMCDebug/runPolicy/try0',
+    #                  snapshotPeriod=0.2,
+    #                  plottoffile='./PC_plots/LibudaG/230923_rates_original_steady_state/'
+    #                              'common_variations_x(0.40)_40_all_data.csv',
+    #                  t_end=30.,
+    #                  )
+
+    compatibility_test()

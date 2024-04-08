@@ -66,6 +66,35 @@ def main():
     # PC_obj.process_to_control.set_params({'thetaA_init': 0., 'thetaB_init': 0., })
 
     # MCKMC
+    # SBP
+    # run_jobs_list(
+    #     **get_for_MCKMC_mimic_iteration(),
+    #     **jobs_list_from_grid(
+    #         [
+    #             f'{T:.1f}' for T in (2., 5., 10., 20.)
+    #         ],
+    #         # [0., 0.1, 1.],
+    #         [0., ],
+    #         names=('take_policy_key', 'diffusion_level')
+    #     ),
+    #     names_groups=(),
+    #     PC=PC_obj,
+    #     const_params={
+    #         'datapath': './PC_plots/LibudaG/240408_SBP',
+    #         't_end': 20.,
+    #         # 'int_segment': [0., 100.],
+    #         'prefix': 'SBP',
+    #         'surfShape': (5, 5, 1),
+    #         'snapshotPeriod': 0.1,
+    #         'analyser_dt': 1.,
+    #     },
+    #     unique_folder=False,
+    #     out_fold_path='./PC_plots/MCKMC/240408_debug',
+    #     python_interpreter='/opt/anaconda_py38_1/bin/python',
+    #     cluster_command_ops=False,
+    #     at_same_time=300,
+    # )
+
     # x picture
     run_jobs_list(
         **get_for_MCKMC_mimic_iteration(),
@@ -73,25 +102,24 @@ def main():
             [
                 f'{x:.2f}' for x in np.linspace(0., 1., 41)
             ],
-            # [0.3, 0.9],
-            [0.3,],
             # [0., 0.1, 1.],
             [0.,],
-            names=('take_policy_key', 'covOLimit', 'diffusion_level')
+            names=('take_policy_key', 'diffusion_level')
         ),
         names_groups=(),
         PC=PC_obj,
         const_params={
+            'OCORepLim': 0.3,
             'datapath': './PC_plots/LibudaG/240404_dyn_adv_rates_steady_state',
             't_end': 30.,
             'int_segment': [20., 30.],
             'prefix': 'steady_state',
-            'surfShape': (5, 5, 1),
+            'surfShape': (10, 10, 1),
             'snapshotPeriod': 0.1,
             'analyser_dt': 1.,
         },
         unique_folder=False,
-        out_fold_path='./PC_plots/MCKMC/240405_debug',
+        out_fold_path='./PC_plots/MCKMC/240408_OCORepLim03',
         python_interpreter='/opt/anaconda_py38_1/bin/python',
         cluster_command_ops=False,
         at_same_time=300,

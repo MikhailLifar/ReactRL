@@ -46,10 +46,10 @@ class MCKMCModel(BaseModel, NeighborKMCBase):
     def __init__(self,
                  surf_shape,
                  logDir=None,
-                 saveLog=False,
                  snapshotPeriod=None,
                  diffusion_level=0.,
-                 covOLimit=0.3,
+                 OORepLim=0.3,
+                 OCORepLim=1.1,
                  init_covs=None,
                  **params):
         """
@@ -69,6 +69,7 @@ class MCKMCModel(BaseModel, NeighborKMCBase):
         else:
             self.events_clss = [COAdsEvent, CODesEvent, OAdsEvent, ODesEvent, COOxEvent]
             self.reverse_events_dict = {0: 1, 2: 3}
+        PD_EV_CONSTANTS.update({'OORepLim': OORepLim, 'OCORepLim': OCORepLim})
         self.kmc_parameters_dict = {'pCO': 1.e-4, 'pO2': 1.e-4, 'T': 440.,
                                     'Name': 'COOx Pt(111) reaction simulation',
                                     'reverses ': self.reverse_events_dict,
@@ -94,7 +95,6 @@ class MCKMCModel(BaseModel, NeighborKMCBase):
         system = System(atoms=Pt_surface_ase_obj, sites=sites, shape=surf_shape)
         # Set the global neighborlist based on distances:
         system.set_neighbors(neighbour_cutoff, pbc=True)
-        self.covOLimit = covOLimit
 
         # EVENTS
         self.events = [ev(self.kmc_parameters_dict) for ev in self.events_clss]
@@ -130,7 +130,7 @@ class MCKMCModel(BaseModel, NeighborKMCBase):
         self.add_info = self.get_add_info()
 
         self.logDir = logDir
-        self.saveLog = saveLog or (self.logDir is not None)
+        self.saveLog = self.logDir is not None
 
         self.log = None
         self.stepN_CNT = 0
@@ -210,12 +210,6 @@ class MCKMCModel(BaseModel, NeighborKMCBase):
         while self.t + self.timeOffset - t0 < delta_t:
             kmc_dt = self.frm_step(throw_exception=False, tstep_up_bound=delta_t)
             covs = self.system.get_coverages(self.Nspecies)
-
-            # # global O coverage restriction
-            # if (covs[2] > self.covOLimit and self.events[2].active) or \
-            #         (covs[2] < self.covOLimit - 0.05 and not self.events[2].active):
-            #     self.events[2].active = covs[2] < self.covOLimit - 0.05
-            #     self.frm_init()
 
             if covs[2] == 1.:
                 warnings.warn('The surface is completely occupied by oxygen')
@@ -299,6 +293,10 @@ class MCKMCModel(BaseModel, NeighborKMCBase):
                               })
             accelparams = {"on": self.use_scaling_algorithm, "Ns": self.Ns, "Nf": self.Nf, "ne": self.ne}
             self.log = Log(logparams, accelparams, logs_fold_path=self.logDir)
+
+            self.log.write_line('Rates\n')
+            for e in self.events:
+                self.log.write_line(f'{type(e)}: {e.get_rate(self.system, 0, 0)}\n')
 
             # Save txt files with site information:
             foldpath = self.logDir
