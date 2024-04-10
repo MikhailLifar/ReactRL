@@ -326,6 +326,30 @@ def read_plottof_csv(datapath, ret_ops=False, ret_df=False, create_standard: boo
     return plot_ops, df
 
 
+def read_control_from_plottof(plottoffile, control_names, t_start=None, t_end=None,):
+    options, _ = read_plottof_csv(plottoffile, ret_ops=True)
+    opIndex = dict()
+    for name in control_names:
+        opIndex[name] = options[2::3].index(name) * 3 + 2
+
+    times = options[opIndex[control_names[0]] - 2]
+    contorlSeqs = dict()
+    for name in control_names:
+        contorlSeqs[name] = options[opIndex[name] - 1]
+
+    # limit times
+    if t_start is None:
+        t_start = times[0]
+    if t_end is None:
+        t_end = times[-1]
+    idx = (times >= t_start) & (times <= t_end)
+    times = times[idx] - t_start
+    for name in control_names:
+        contorlSeqs[name] = contorlSeqs[name][idx]
+
+    return times, contorlSeqs
+
+
 def plot_from_file(*lbls_fmts, csvFileName: str,
                    chose_labels: list = None,
                    transforms=None, x_transform=None,

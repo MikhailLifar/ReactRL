@@ -957,24 +957,60 @@ def fig_6_stchdemolrg():
     savefig(fig, f'{PLOT_FOLDER}/fig6.png')
 
 
-def fig_n1_nm_rates():
-    data = pd.read_excel(f'{DATA_DIR}/NM_rates.xlsx')
-    variants = np.sort(data['model::rate_des_A'].unique()).tolist()
+def fig_n1_k2k5_grid():
+    dataNM = pd.read_excel(f'{DATA_DIR}/K2K5_grid_res/NM_rates.xlsx')
+    dataRL = pd.read_excel(f'{DATA_DIR}/K2K5_grid_res/RL_rates.xlsx')
+    variants = np.sort(dataNM['model::rate_des_A'].unique()).tolist()
     n = len(variants)
 
-    M = np.zeros((n, n))
+    ratesNM = np.zeros((n, n))
     for i in range(n):
         for j in range(n):
-            M[i, j] = data.loc[(data['model::rate_react'] == variants[i]) \
-                               & (data['model::rate_des_A'] == variants[j]), 'reaction_rate']
-    M = M[::-1]
+            ratesNM[i, j] = dataNM.loc[(dataNM['model::rate_react'] == variants[i]) \
+                               & (dataNM['model::rate_des_A'] == variants[j]), 'reaction_rate']
+    ratesNM = ratesNM[::-1]
 
-    lib.plot_show_save_map(M, f'{PLOT_FOLDER}/fign1_nm_rates.png',
+    ratesRL = np.zeros((n, n))
+    for i in range(n):
+        for j in range(n):
+            ratesRL[i, j] = np.max(dataRL.loc[(dataRL['model::rate_react'] == variants[i]) \
+                                       & (dataRL['model::rate_des_A'] == variants[j]), 'reaction_rate'])
+    ratesRL = ratesRL[::-1]
+
+    lib.plot_show_save_map(ratesNM, f'{PLOT_FOLDER}/fign1_nm_rates.png',
                            xticks=variants, yticks=variants[::-1],
                            xlabel='K2', ylabel='K5',
                            color_ax_label='reaction rate',
                            title='NM obtained steady-state regimes',
-                           map_kwargs={})
+                           map_kwargs={},
+                           save_data=False)
+
+    lib.plot_show_save_map(ratesRL, f'{PLOT_FOLDER}/fign1_rl_rates.png',
+                           xticks=variants, yticks=variants[::-1],
+                           xlabel='K2', ylabel='K5',
+                           color_ax_label='reaction rate',
+                           title='RL obtained steady-state regimes',
+                           map_kwargs={},
+                           save_data=False)
+
+    ratio = ratesRL / ratesNM
+    for pcnt in 0.01, 0.02, 0.03, 0.05:
+        ternary_ratio = (ratio > 1. - pcnt).astype('float') + (ratio > 1. + pcnt).astype('float') - 1.
+        lib.plot_show_save_map(ternary_ratio, f'{PLOT_FOLDER}/fign1_ratio_ternarized_{pcnt:.2f}.png',
+                               xticks=variants, yticks=variants[::-1],
+                               xlabel='K2', ylabel='K5',
+                               color_ax_label=f'(RL/NM > 1-{pcnt:.2f}) + (RL/NM > 1+{pcnt:.2f})',
+                               title='ratio RL obtained to NM obtained, ternarized',
+                               map_kwargs={},
+                               save_data=False)
+
+        lib.plot_show_save_map(ratio * (ratio > 1. + pcnt), f'{PLOT_FOLDER}/fign1_ratio_{pcnt:.2f}.png',
+                               xticks=variants, yticks=variants[::-1],
+                               xlabel='K2', ylabel='K5',
+                               color_ax_label=f'RL/NM * [RL > 1+{pcnt:.2f}]',
+                               title=f'ratio RL obtained to NM obtained, non-zero if RL is adv > 1+{pcnt:.2f}',
+                               map_kwargs={},
+                               save_data=False)
 
 
 def fig_n2_integral_curves():
@@ -1118,7 +1154,7 @@ def main() -> None:
     # for fname in os.listdir(data_folder):
     #     ananikov_sol_plot(f'{data_folder}/{fname}', f'{PLOT_FOLDER}/ananikov/task2', xtop=100.)
 
-    fig_n1_nm_rates()
+    fig_n1_k2k5_grid()
     # fig_n2_integral_curves()
 
     # exp1_steady_state_map('exp_libuda_react_div60')

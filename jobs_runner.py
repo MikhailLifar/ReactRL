@@ -30,9 +30,9 @@ def main():
     #PC_obj = PC_setup.general_PC_setup('LibudaGWithT',
                                        #('to_model_constructor', {'params': {}}),
                                        #)
-    # PC_obj = PC_setup.general_PC_setup('LibudaG')
+    PC_obj = PC_setup.general_PC_setup('LibudaG')
     # PC_obj = PC_setup.general_PC_setup('LibudaGWithT')
-    PC_obj = PC_setup.general_PC_setup('MCKMC')
+    # PC_obj = PC_setup.general_PC_setup('MCKMC')
 
     # PC_obj.process_to_control.set_params({'C_A_inhibit_B': 1., 'C_B_inhibit_A': 1.,
     #                                       'thetaA_init': 0., 'thetaB_init': 0.,
@@ -58,12 +58,12 @@ def main():
     #                                       })  # low des, react rates
 
     # dynamic advantage params
-    # PC_obj.process_to_control.set_params({'C_A_inhibit_B': 1., 'C_B_inhibit_A': 0.3,
-    #                                       'thetaA_max': 0.5, 'thetaB_max': 0.25,
-    #                                       'rate_ads_A': 0.14895, 'rate_ads_B': 0.06594, 'rate_des_B': 0.,
-    #                                       'rate_des_A': 0.07162, 'rate_react': 5.98734,
-    #                                       })
-    # PC_obj.process_to_control.set_params({'thetaA_init': 0., 'thetaB_init': 0., })
+    PC_obj.process_to_control.set_params({'C_A_inhibit_B': 1., 'C_B_inhibit_A': 0.3,
+                                          'thetaA_max': 0.5, 'thetaB_max': 0.25,
+                                          'rate_ads_A': 0.14895, 'rate_ads_B': 0.06594, 'rate_des_B': 0.,
+                                          'rate_des_A': 0.1, 'rate_react': 0.1,
+                                          })
+    PC_obj.process_to_control.set_params({'thetaA_init': 0., 'thetaB_init': 0., })
 
     # MCKMC
     # SBP
@@ -95,35 +95,35 @@ def main():
     #     at_same_time=300,
     # )
 
-    # x picture
-    run_jobs_list(
-        **get_for_MCKMC_mimic_iteration(),
-        **jobs_list_from_grid(
-            [
-                f'{x:.2f}' for x in np.linspace(0., 1., 41)
-            ],
-            # [0., 0.1, 1.],
-            [0.,],
-            names=('take_policy_key', 'diffusion_level')
-        ),
-        names_groups=(),
-        PC=PC_obj,
-        const_params={
-            'OCORepLim': 0.3,
-            'datapath': './PC_plots/LibudaG/240404_dyn_adv_rates_steady_state',
-            't_end': 30.,
-            'int_segment': [20., 30.],
-            'prefix': 'steady_state',
-            'surfShape': (10, 10, 1),
-            'snapshotPeriod': 0.1,
-            'analyser_dt': 1.,
-        },
-        unique_folder=False,
-        out_fold_path='./PC_plots/MCKMC/240408_OCORepLim03',
-        python_interpreter='/opt/anaconda_py38_1/bin/python',
-        cluster_command_ops=False,
-        at_same_time=300,
-    )
+    # # x picture
+    # run_jobs_list(
+    #     **get_for_MCKMC_mimic_iteration(),
+    #     **jobs_list_from_grid(
+    #         [
+    #             f'{x:.2f}' for x in np.linspace(0., 1., 41)
+    #         ],
+    #         # [0., 0.1, 1.],
+    #         [0.,],
+    #         names=('take_policy_key', 'diffusion_level')
+    #     ),
+    #     names_groups=(),
+    #     PC=PC_obj,
+    #     const_params={
+    #         'OCORepLim': 0.3,
+    #         'datapath': './PC_plots/LibudaG/240404_dyn_adv_rates_steady_state',
+    #         't_end': 30.,
+    #         'int_segment': [20., 30.],
+    #         'prefix': 'steady_state',
+    #         'surfShape': (10, 10, 1),
+    #         'snapshotPeriod': 0.1,
+    #         'analyser_dt': 1.,
+    #     },
+    #     unique_folder=False,
+    #     out_fold_path='./PC_plots/MCKMC/240408_OCORepLim03',
+    #     python_interpreter='/opt/anaconda_py38_1/bin/python',
+    #     cluster_command_ops=False,
+    #     at_same_time=300,
+    # )
 
     # TURNS
     # run_jobs_list(
@@ -445,36 +445,36 @@ def main():
     
     # LibudaG
     # STEADY-STATE
-    # episode_time = 1000.
-    # variants = np.linspace(0., 1., 41).reshape(-1, 1)
-    # variants = np.hstack((variants, -1 * variants + 1)).tolist()
-    #
-    # run_jobs_list(
-    #     **(get_for_common_variations({
-    #             'inputA': ConstantPolicy(),
-    #             'inputB': ConstantPolicy()
-    #         },
-    #         'inputA_value',
-    #         {'name': 'mean_reaction_rate', 'column': 0},
-    #         additional_names=('thetaB', 'thetaA'),
-    #         take_from_the_end=0.33,
-    #     )),
-    #     params_variants=variants,
-    #     names=('inputA_value', 'inputB_value'),
-    #     names_groups=(),
-    #     const_params={
-    #         'episode_time': episode_time,
-    #         'calc_dt': lambda x: x / 1000,
-    #     },
-    #     sort_iterations_by='mean_reaction_rate',
-    #     PC=PC_obj,
-    #     repeat=1,
-    #     out_fold_path=f'PC_plots/LibudaG/240404_dyn_adv_rates_steady_state',
-    #     separate_folds=False,
-    #     cluster_command_ops=False,
-    #     python_interpreter='/opt/anaconda_py38_1/bin/python',
-    #     at_same_time=100,
-    # )
+    episode_time = 1000.
+    variants = np.linspace(0., 1., 41).reshape(-1, 1)
+    variants = np.hstack((variants, -1 * variants + 1)).tolist()
+
+    run_jobs_list(
+        **(get_for_common_variations({
+                'inputA': ConstantPolicy(),
+                'inputB': ConstantPolicy()
+            },
+            'inputA_value',
+            {'name': 'mean_reaction_rate', 'column': 0},
+            additional_names=('thetaB', 'thetaA'),
+            take_from_the_end=0.33,
+        )),
+        params_variants=variants,
+        names=('inputA_value', 'inputB_value'),
+        names_groups=(),
+        const_params={
+            'episode_time': episode_time,
+            'calc_dt': lambda x: x / 1000,
+        },
+        sort_iterations_by='mean_reaction_rate',
+        PC=PC_obj,
+        repeat=1,
+        out_fold_path=f'PC_plots/LibudaG/240408_dyn_adv_rates_steady_state',
+        separate_folds=False,
+        cluster_command_ops=False,
+        python_interpreter='/opt/anaconda_py38_1/bin/python',
+        at_same_time=100,
+    )
 
     # return, ratio on rates dependence
     # points_num = 40  # 30, 40

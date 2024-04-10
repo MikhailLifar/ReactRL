@@ -182,6 +182,7 @@ if __name__ == '__main__':
     #                      dest_name='collected_integral_curves')
 
     # MCKMC RES PROCESSING
-    dirpath = './PC_plots/MCKMC/240401_steady_state'
+    # dirpath = './PC_plots/MCKMC/240401_steady_state'
+    dirpath = './PC_plots/MCKMC/240409_SBP_varOTFrac'
     collectMCKMCcalcs(dirpath)
 

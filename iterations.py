@@ -317,10 +317,9 @@ def get_for_MCKMC_mimic_iteration():
             key = params['take_policy_key']
             fname = [f for f in os.listdir(datapath) if (key in f) and (f.endswith('all_data.csv'))][0]
             params['plottoffile'] = f'{datapath}/{fname}'
-            params['logDir'] = f'{foldpath}/{params["prefix"]}_{it_arg}'
+            params['logDir'] = f'{foldpath}/_{it_arg}'
             del params['datapath']
             del params['take_policy_key']
-            del params['prefix']
         else:
             plottof_name = os.path.splitext(os.path.split(params['plottoffile'])[1])[0]
             params['logDir'] = f'{foldpath}/_{plottof_name}_{it_arg}'

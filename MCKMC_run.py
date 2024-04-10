@@ -5,9 +5,12 @@ import lib
 import PC_setup
 
 
-def compatibility_test():
+def KMC_compatibility_test():
     PC_obj = PC_setup.general_PC_setup('MCKMC', ('to_model_constructor',
-                                                 {'logDir': './PC_plots/MCKMC/compatibility_test'}),
+                                                 {
+                                                     'surf_shape': (20, 20, 1),
+                                                     'logDir': './PC_plots/MCKMC/compatibility_test/20x20',
+                                                 }),
                                                 ('to_PC_constructor', {'analyser_dt': 100.}))
     PC_obj.reset()
     PC_obj.set_controlled((1., 1.))
@@ -190,4 +193,4 @@ if __name__ == '__main__':
     #                  t_end=30.,
     #                  )
 
-    compatibility_test()
+    KMC_compatibility_test()

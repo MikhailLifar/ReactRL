@@ -462,7 +462,8 @@ def temperature_dependence_analysis():
         PC_obj.get_and_plot(f'./PC_plots/LibudaGWithT/230925_temperature_effect/T{T}K.png')
 
 
-def SBP_constant_ratio_and_max_rate(PC: ProcessController, inputs_start, inputs_end, period_bounds, resolutions: Union[int, list] = 10,
+def SBP_constant_ratio_and_max_rate(PC: ProcessController, inputs_start, inputs_end, period_bounds,
+                                    resolutions: Union[int, list] = 10,
                                     DEBUG=False, **kwargs):
     original_analyzer_dt = PC.analyser_dt
 
@@ -488,7 +489,8 @@ def SBP_constant_ratio_and_max_rate(PC: ProcessController, inputs_start, inputs_
         PC.process_by_policy_objs(constant_policies, const_episode_time, const_episode_time / 10)
         if DEBUG:
             PC.get_and_plot(f'{debug_folder}/constant_{p:.2f}.png')
-        constant_mean_rets.append(2 * PC.get_cumulative_target([const_episode_time / 2, const_episode_time]) / const_episode_time)
+        constant_mean_rets.append(2 * PC.get_cumulative_target([const_episode_time / 2, const_episode_time]) /\
+                                  const_episode_time)
 
     # SBP
     SBP_policies = [TwoStepPolicy() for _ in PC.controlled_names]
@@ -823,9 +825,10 @@ def steady_state_plot_anltc(PC_obj: ProcessController, start_point, end_point, n
     plt.close(fig)
 
 
-def SBP_LibudaG_run():
-    periods = [2., 5., 10., 20.]
-    reps = [50, 20, 10, 5]
+def SBP_LibudaG_examples():
+    periods = [2., 5., 10., 20., 40.]
+    reps = [100, 40, 20, 10, 5]
+    O_sub_period_fracs = [0.2, 0.25, 0.33, 0.5, 0.66, 0.75, 0.8]
     PC_obj = PC_setup.general_PC_setup('LibudaG')
     PC_obj.process_to_control.set_params({'C_A_inhibit_B': 1., 'C_B_inhibit_A': 0.3,
                                           'thetaA_max': 0.5, 'thetaB_max': 0.25,
@@ -835,19 +838,61 @@ def SBP_LibudaG_run():
     PC_obj.process_to_control.set_params({'thetaA_init': 0., 'thetaB_init': 0., })
 
     for T, r in zip(periods, reps):
+        for frac in O_sub_period_fracs:
+            PC_obj.reset()
+            for _ in range(r):
+                PC_obj.set_controlled((1., 0.))
+                PC_obj.time_forward(frac * T)
+                PC_obj.set_controlled((0., 1.))
+                PC_obj.time_forward((1 - frac) * T)
+            PC_obj.get_and_plot(f'./PC_plots/LibudaG/240409_SBP/T({T:.1f})_OTFrac({frac:.2f}).png')
+
+
+def same_trajectory_diff_parameters():
+    plottoffile = './231002_sudden_discovery/rl_agent_sol.csv'
+    destdirpath = './PC_plots/LibudaG/240410_opt_rl_trajectory'
+
+    PC_obj = PC_setup.general_PC_setup('LibudaG')
+    PC_obj.process_to_control.set_params({'C_A_inhibit_B': 1., 'C_B_inhibit_A': 0.3,
+                                          'thetaA_max': 0.5, 'thetaB_max': 0.25,
+                                          'rate_ads_A': 0.14895, 'rate_ads_B': 0.06594, 'rate_des_B': 0.,
+                                          'rate_des_A': 0.1, 'rate_react': 0.1,
+                                          })
+    PC_obj.process_to_control.set_params({'thetaA_init': 0., 'thetaB_init': 0., })
+
+    times, controlSeqs = lib.read_control_from_plottof(plottoffile,
+                                                       ['inputA', 'inputB'])
+
+    O_control = controlSeqs['inputB']
+    CO_control = controlSeqs['inputA']
+
+    def _iteration(param_name, param_value):
+        PC_obj.process_to_control.params[param_name] = param_value
         PC_obj.reset()
-        for _ in range(r):
-            PC_obj.set_controlled((1., 0.))
-            PC_obj.time_forward(T)
-            PC_obj.set_controlled((0., 1.))
-            PC_obj.time_forward(T)
-        PC_obj.get_and_plot(f'./PC_plots/LibudaG/240408_SBP/T({T:.1f}).png')
+        PC_obj.set_controlled((O_control[0], CO_control[0]))
+        turning_points = np.where(np.abs(O_control[1:] - O_control[:-1]) > 1.e-5)[0]
+        if len(turning_points):
+            turning_points = turning_points + 1
+            step_end_times = times[turning_points - 1]
+
+            PC_obj.time_forward(step_end_times[0])
+            step_end_times = np.array(step_end_times[1:].tolist() + [times[-1]])
+            for O_val, CO_val, t in zip(O_control[turning_points], CO_control[turning_points], step_end_times):
+                PC_obj.set_controlled((O_val, CO_val))
+                PC_obj.time_forward(t - PC_obj.time)
+        else:
+            PC_obj.time_forward(times[-1])
+        PC_obj.get_and_plot(f'{destdirpath}/{param_name}_{param_value:.5f}.png')
+
+    for p in (0.1, 0.2, 0.5, 1., 2., 6.):
+        _iteration('rate_react', p)
 
 
 def main():
     # transition_speed_test()
 
-    SBP_LibudaG_run()
+    # SBP_LibudaG_examples()
+    same_trajectory_diff_parameters()
 
     # count_conversion_given_exp('run_RL_out/important_results/220928_T25_diff_lims/O2_40_CO_10/8_copy.csv',
     #                            LibudaModel(Ts=273+25))
