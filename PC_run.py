@@ -850,6 +850,32 @@ def SBP_LibudaG_examples():
 
 def same_trajectory_diff_parameters():
     plottoffile = './231002_sudden_discovery/rl_agent_sol.csv'
+    destdirpath = './PC_plots/LibudaG/240410_opt_rl_trajectory/diffK5'
+
+    PC_obj = PC_setup.general_PC_setup('LibudaG')
+    PC_obj.process_to_control.set_params({'C_A_inhibit_B': 1., 'C_B_inhibit_A': 0.3,
+                                          'thetaA_max': 0.5, 'thetaB_max': 0.25,
+                                          'rate_ads_A': 0.14895, 'rate_ads_B': 0.06594, 'rate_des_B': 0.,
+                                          'rate_des_A': 0.1, 'rate_react': 0.1,
+                                          })
+    PC_obj.process_to_control.set_params({'thetaA_init': 0., 'thetaB_init': 0., })
+
+    times, controldf = lib.read_control_from_plottof(plottoffile,
+                                                       ['inputA', 'inputB'])
+
+    def _iteration(param_name, param_value):
+        PC_obj.process_to_control.params[param_name] = param_value
+        PC_obj.reset()
+        PC_obj.process(times, controldf)
+        PC_obj.get_and_plot(f'{destdirpath}/{param_name}_{param_value:.5f}.png')
+
+    for p in (0.1, 0.2, 0.5, 1., 2., 6.):
+        _iteration('rate_react', p)
+
+
+def prolong_trajectory():
+    new_t_end = 1000.
+    plottoffile = './231002_sudden_discovery/rl_agent_sol.csv'
     destdirpath = './PC_plots/LibudaG/240410_opt_rl_trajectory'
 
     PC_obj = PC_setup.general_PC_setup('LibudaG')
@@ -860,39 +886,34 @@ def same_trajectory_diff_parameters():
                                           })
     PC_obj.process_to_control.set_params({'thetaA_init': 0., 'thetaB_init': 0., })
 
-    times, controlSeqs = lib.read_control_from_plottof(plottoffile,
-                                                       ['inputA', 'inputB'])
+    timesSteps, controldf = lib.read_control_from_plottof(plottoffile,
+                                                     ['inputA', 'inputB'])
 
-    O_control = controlSeqs['inputB']
-    CO_control = controlSeqs['inputA']
+    reps = int(new_t_end / np.sum(timesSteps) + 1)
+    stepsNew = np.tile(timesSteps, reps)
+    timesNew = np.cumsum(stepsNew)
+    stepsNew = stepsNew[timesNew <= new_t_end]
+    timesNew = np.cumsum(stepsNew)
+    if timesNew[-1] < new_t_end:
+        stepsNew = np.array(stepsNew.tolist() + [new_t_end - timesNew[-1]])
 
-    def _iteration(param_name, param_value):
-        PC_obj.process_to_control.params[param_name] = param_value
-        PC_obj.reset()
-        PC_obj.set_controlled((O_control[0], CO_control[0]))
-        turning_points = np.where(np.abs(O_control[1:] - O_control[:-1]) > 1.e-5)[0]
-        if len(turning_points):
-            turning_points = turning_points + 1
-            step_end_times = times[turning_points - 1]
+    ControlDFNew = pd.DataFrame(columns=controldf.columns)
+    for col in controldf.columns:
+        ControlDFNew[col] = np.tile(controldf[col].to_numpy(), reps)[:len(stepsNew)]
 
-            PC_obj.time_forward(step_end_times[0])
-            step_end_times = np.array(step_end_times[1:].tolist() + [times[-1]])
-            for O_val, CO_val, t in zip(O_control[turning_points], CO_control[turning_points], step_end_times):
-                PC_obj.set_controlled((O_val, CO_val))
-                PC_obj.time_forward(t - PC_obj.time)
-        else:
-            PC_obj.time_forward(times[-1])
-        PC_obj.get_and_plot(f'{destdirpath}/{param_name}_{param_value:.5f}.png')
+    plottofName = os.path.splitext(os.path.split(plottoffile)[1])[0]
 
-    for p in (0.1, 0.2, 0.5, 1., 2., 6.):
-        _iteration('rate_react', p)
+    PC_obj.reset()
+    PC_obj.process(stepsNew, ControlDFNew)
+    PC_obj.get_and_plot(f'{destdirpath}/{plottofName}_time{new_t_end:.1f}.png')
 
 
 def main():
     # transition_speed_test()
 
     # SBP_LibudaG_examples()
-    same_trajectory_diff_parameters()
+    # same_trajectory_diff_parameters()
+    prolong_trajectory()
 
     # count_conversion_given_exp('run_RL_out/important_results/220928_T25_diff_lims/O2_40_CO_10/8_copy.csv',
     #                            LibudaModel(Ts=273+25))

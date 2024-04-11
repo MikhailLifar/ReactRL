@@ -362,3 +362,15 @@ def general_PC_setup(model_id, *change_parameters):
     return PC_obj
 
 
+def get_dyn_adv_LibudaG():
+    PC_obj = general_PC_setup('LibudaG',
+                              ('to_model_constructor', {'params': {'reaction_rate_top': 1.}}))
+    PC_obj.process_to_control.set_params({'C_A_inhibit_B': 1., 'C_B_inhibit_A': 0.3,
+                                          'thetaA_max': 0.5, 'thetaB_max': 0.25,
+                                          'rate_ads_A': 0.14895, 'rate_ads_B': 0.06594, 'rate_des_B': 0.,
+                                          'rate_des_A': 0.1, 'rate_react': 0.1,
+                                          })
+    PC_obj.process_to_control.set_params({'thetaA_init': 0., 'thetaB_init': 0., })
+    return PC_obj
+
+

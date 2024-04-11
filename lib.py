@@ -347,7 +347,29 @@ def read_control_from_plottof(plottoffile, control_names, t_start=None, t_end=No
     for name in control_names:
         contorlSeqs[name] = contorlSeqs[name][idx]
 
-    return times, contorlSeqs
+    control_df = pd.DataFrame(columns=control_names)
+    turning_points = np.vstack([np.abs(contorlSeqs[name][1:] - contorlSeqs[name][:-1]) > 1.e-10
+                                for name in control_names])
+    turning_points = np.sum(turning_points, axis=0) > 0
+    Nturns = np.sum(turning_points)
+
+    if Nturns:
+        turning_points = np.where(turning_points)[0] + 1
+        turning_times = times[turning_points - 1]
+        step_starts = np.array([times[0]] + turning_times.tolist())
+        step_ends = np.array(turning_times.tolist() + [times[-1]])
+        time_step_seq = step_ends - step_starts
+
+        turning_points = np.array([0] + turning_points.tolist())
+
+        for name in control_names:
+            control_df[name] = contorlSeqs[name][turning_points]
+
+    else:
+        time_step_seq = np.array([times[-1]])
+        control_df.loc[0, :] = [contorlSeqs[name][0] for name in control_names]
+
+    return time_step_seq, control_df
 
 
 def plot_from_file(*lbls_fmts, csvFileName: str,

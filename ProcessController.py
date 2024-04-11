@@ -168,11 +168,10 @@ class ProcessController:
         :param in_data_df:
         :return:
         """
-        assert time_step_seq.size == in_data_df.shape[0] - 1, 'Error! Length mismatch'
-        self.set_controlled({name: in_data_df.loc[0, name] for name in in_data_df.columns})
+        assert time_step_seq.size == in_data_df.shape[0], 'Error! Length mismatch'
         for i in range(time_step_seq.size):
+            self.set_controlled({name: in_data_df.loc[i, name] for name in in_data_df.columns})
             self.time_forward(time_step_seq[i])
-            self.set_controlled({name: in_data_df.loc[i + 1, name] for name in in_data_df.columns})
 
     def process_by_policy_objs(self, policies, episode_time, policy_step):
         time_seq = np.arange(0., episode_time, policy_step)

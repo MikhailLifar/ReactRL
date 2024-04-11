@@ -76,24 +76,26 @@ class State:
         self.info = info
 
     def normalize(self, s0):
-        # dynamic normalization update
-        renorm_part = s0[self.dyn_norm_idx]
-        # self.dyn_norm_bounds[0] = np.min(np.vstack(self.dyn_norm_bounds[0], renorm_part * (1. - self.dyn_norm_alpha * np.sign(renorm_part))))
-
-        if np.any(renorm_part < self.dyn_norm_bounds[0]):
-            update_idx = renorm_part < self.dyn_norm_bounds[0]
-            self.dyn_norm_bounds[0, update_idx] = renorm_part[update_idx] *\
-                                                  (1. - self.dyn_norm_alpha * np.sign(renorm_part[update_idx]))
-
-        if np.any(renorm_part > self.dyn_norm_bounds[1]):
-            update_idx = renorm_part > self.dyn_norm_bounds[1]
-            self.dyn_norm_bounds[1, update_idx] = renorm_part[update_idx] *\
-                                                  (1. + self.dyn_norm_alpha * np.sign(renorm_part[update_idx]))
-
         s0 = s0.copy()
-        # dynamic normalization
-        s0[self.dyn_norm_idx] = (renorm_part - self.dyn_norm_bounds[0]) / \
-                                (self.dyn_norm_bounds[1] - self.dyn_norm_bounds[0])
+
+        if self.dynamic_normalization:
+            # dynamic normalization update
+            renorm_part = s0[self.dyn_norm_idx]
+            # self.dyn_norm_bounds[0] = np.min(np.vstack(self.dyn_norm_bounds[0], renorm_part * (1. - self.dyn_norm_alpha * np.sign(renorm_part))))
+
+            if np.any(renorm_part < self.dyn_norm_bounds[0]):
+                update_idx = renorm_part < self.dyn_norm_bounds[0]
+                self.dyn_norm_bounds[0, update_idx] = renorm_part[update_idx] *\
+                                                      (1. - self.dyn_norm_alpha * np.sign(renorm_part[update_idx]))
+
+            if np.any(renorm_part > self.dyn_norm_bounds[1]):
+                update_idx = renorm_part > self.dyn_norm_bounds[1]
+                self.dyn_norm_bounds[1, update_idx] = renorm_part[update_idx] *\
+                                                      (1. + self.dyn_norm_alpha * np.sign(renorm_part[update_idx]))
+
+            # dynamic normalization
+            s0[self.dyn_norm_idx] = (renorm_part - self.dyn_norm_bounds[0]) / \
+                                    (self.dyn_norm_bounds[1] - self.dyn_norm_bounds[0])
         # fixed normalization
         s0 = (s0 - self.bounds[0]) / (self.bounds[1] - self.bounds[0])
 
@@ -111,6 +113,8 @@ class State:
             s0[i] = self.normalize(row)
 
         s1, self.inner = self.transform(s0, self.inner)
+
+        # s1 = s1[::-1, :]  # TODO crutch to get compatibility with older code
 
         return s1
 

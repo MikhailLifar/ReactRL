@@ -983,7 +983,8 @@ def fig_n1_k2k5_grid():
                            color_ax_label='reaction rate',
                            title='NM obtained steady-state regimes',
                            map_kwargs={},
-                           save_data=False)
+                           save_data=False,
+                           figsize=FIG_SIZE_MAIN)
 
     lib.plot_show_save_map(ratesRL, f'{PLOT_FOLDER}/fign1_rl_rates.png',
                            xticks=variants, yticks=variants[::-1],
@@ -991,9 +992,24 @@ def fig_n1_k2k5_grid():
                            color_ax_label='reaction rate',
                            title='RL obtained steady-state regimes',
                            map_kwargs={},
-                           save_data=False)
+                           save_data=False,
+                           figsize=FIG_SIZE_MAIN)
 
     ratio = ratesRL / ratesNM
+
+    lib.plot_show_save_map(ratio, f'{PLOT_FOLDER}/fign1_ratio.png',
+                           xticks=variants, yticks=variants[::-1],
+                           xlabel='K2', ylabel='K5',
+                           color_ax_label='RL/NM',
+                           title='ratio RL obtained to NM obtained',
+                           cbounds=[0., 2.],
+                           map_kwargs={
+                               'cmap': 'seismic',
+                           },
+                           save_data=False,
+                           figsize=FIG_SIZE_MAIN
+                           )
+
     for pcnt in 0.01, 0.02, 0.03, 0.05:
         ternary_ratio = (ratio > 1. - pcnt).astype('float') + (ratio > 1. + pcnt).astype('float') - 1.
         lib.plot_show_save_map(ternary_ratio, f'{PLOT_FOLDER}/fign1_ratio_ternarized_{pcnt:.2f}.png',
@@ -1001,21 +1017,24 @@ def fig_n1_k2k5_grid():
                                xlabel='K2', ylabel='K5',
                                color_ax_label=f'(RL/NM > 1-{pcnt:.2f}) + (RL/NM > 1+{pcnt:.2f})',
                                title='ratio RL obtained to NM obtained, ternarized',
+                               cbounds=[-1, 1],
                                map_kwargs={},
-                               save_data=False)
+                               save_data=False,
+                               figsize=FIG_SIZE_MAIN)
 
         lib.plot_show_save_map(ratio * (ratio > 1. + pcnt), f'{PLOT_FOLDER}/fign1_ratio_{pcnt:.2f}.png',
                                xticks=variants, yticks=variants[::-1],
                                xlabel='K2', ylabel='K5',
-                               color_ax_label=f'RL/NM * [RL > 1+{pcnt:.2f}]',
+                               color_ax_label=f'RL/NM * [RL/NM > 1+{pcnt:.2f}]',
                                title=f'ratio RL obtained to NM obtained, non-zero if RL is adv > 1+{pcnt:.2f}',
                                map_kwargs={},
-                               save_data=False)
+                               save_data=False,
+                               figsize=FIG_SIZE_MAIN)
 
 
 def fig_n2_integral_curves():
-    _, dataRL = lib.read_plottof_csv(f'{DATA_DIR}/dynamic_advantage_rates/dynamic_sol.csv', ret_df=True)
-    _, dataNM = lib.read_plottof_csv(f'{DATA_DIR}/dynamic_advantage_rates/NM_sol.csv', ret_df=True)
+    _, dataRL = lib.read_plottof_csv(f'{DATA_DIR}/dynamic_advantage_rates/dynamic_sol_1000.csv', ret_df=True)
+    _, dataNM = lib.read_plottof_csv(f'{DATA_DIR}/dynamic_advantage_rates/NM_sol_1000.csv', ret_df=True)
 
     time_RL = dataRL['outputC x'].to_numpy()
     rate_RL = dataRL['outputC y'].to_numpy()
@@ -1154,8 +1173,8 @@ def main() -> None:
     # for fname in os.listdir(data_folder):
     #     ananikov_sol_plot(f'{data_folder}/{fname}', f'{PLOT_FOLDER}/ananikov/task2', xtop=100.)
 
-    fig_n1_k2k5_grid()
-    # fig_n2_integral_curves()
+    # fig_n1_k2k5_grid()
+    fig_n2_integral_curves()
 
     # exp1_steady_state_map('exp_libuda_react_div60')
     # exp2_reverse_steady_state_maps('exp_libuda_react_div60')
