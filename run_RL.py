@@ -550,6 +550,29 @@ def main():
     # agent_test_arbitrary_co_problem('./ARTICLE/agents/best_CORTP_no_sampling_agent/230717_CORTPS_it2',
     #                                 './ARTICLE/agents/best_CORTP_no_sampling_agent/agent_test')
 
+    # run_agents_test(PC_setup.get_dyn_adv_LibudaG(),
+    #                 agents_paths=[
+    #                     'ARTICLE/agents/diff_rates_both_control/agent_dyn_adv',
+    #                 ],
+    #                 env_params={
+    #                     'episode_time': 1000.,
+    #                     'time_step': 9.98,
+    #                     'names_to_state': ['B', 'A', 'outputC'],
+    #                     'state_string': 'LG:(CO2&O2&CO)x(points)',
+    #                     'state_args': {'points': 2,
+    #                                    'step': 10.,
+    #                                    'dynamic_normalization': None,  # TODO don't forget that old agent is incompatible with a new code
+    #                                    },
+    #                     'reward_spec': 'each_step_base',
+    #                     'input_dt': 0.1,
+    #                     'target_type': 'one_row',
+    #                 },
+    #                 model_params=[
+    #                     {}
+    #                 ],
+    #                 n_episodes=1, deterministic=True,
+    #                 )
+
     run_agents_test(PC_setup.get_dyn_adv_LibudaG(),
                     agents_paths=[
                         # 'ARTICLE/agents/diff_rates_both_control/agent_it_20',
@@ -557,20 +580,20 @@ def main():
                         # 'ARTICLE/agents/diff_rates_both_control/agent_it_94',
                         # 'ARTICLE/agents/diff_rates_both_control/agent_it_65',
                         # 'ARTICLE/agents/diff_rates_both_control/agent_libuda',
-                        'ARTICLE/agents/diff_rates_both_control/agent_dyn_adv',
+                        'ARTICLE/agents/diff_rates_both_control/agent_max_dyn_adv',
                     ],
                     env_params={
                         'episode_time': 1000.,
-                        'time_step': 9.98,
+                        'time_step': 10.,
                         'names_to_state': ['B', 'A', 'outputC'],
                         'state_string': 'LG:(CO2&O2&CO)x(points)',
                         'state_args': {'points': 2,
                                        'step': 10.,
-                                       # 'dynamic_normalization': {
-                                       #     'names': ['outputC'],
-                                       #     'alpha': 0.2
-                                       #     },
-                                       'dynamic_normalization': None,
+                                       'dynamic_normalization': {
+                                           'names': ['outputC'],
+                                           'alpha': 0.2
+                                           },
+                                       # 'dynamic_normalization': None,
                                        },
                         'reward_spec': 'each_step_base',
                         'input_dt': 0.1,
@@ -582,8 +605,7 @@ def main():
                         # {'rate_ads_A': 10., 'rate_ads_B': 0.1, 'rate_des_A': 0.07162, 'rate_react': 5.98734, },
                         # {'rate_ads_A': 0.14895, 'rate_ads_B': 0.06594, 'rate_des_A': 10.0, 'rate_react': 10.0, },
                         # {'rate_ads_A': 0.14895, 'rate_ads_B': 0.06594, 'rate_des_A': 0.1, 'rate_react': 0.1, 'thetaB_init': 0.},
-                        # {'rate_ads_A': 0.14895, 'rate_ads_B': 0.06594, 'rate_des_A': 0.07162, 'rate_react': 5.98734, 'thetaB_init': 0.},
-                        {}
+                        {'rate_des_A': 0.01, 'rate_react': 0.01},
                     ],
                     n_episodes=5, deterministic=True,
                     )

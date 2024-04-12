@@ -875,14 +875,20 @@ def same_trajectory_diff_parameters():
 
 def prolong_trajectory():
     new_t_end = 1000.
-    plottoffile = './231002_sudden_discovery/rl_agent_sol.csv'
-    destdirpath = './PC_plots/LibudaG/240410_opt_rl_trajectory'
+    # plottoffile = './231002_sudden_discovery/rl_agent_sol.csv'
+    # destdirpath = './PC_plots/LibudaG/240410_opt_rl_trajectory'
+
+    # plottoffile = './240412_max_dyn_advantage/_0/max_dyn_adv_all_data.csv'
+    # destdirpath = './PC_plots/LibudaG/240412_rl_lowest_rates'
+    plottoffile = './240412_max_dyn_advantage/_0/nm_sol_all_data.csv'
+    destdirpath = './PC_plots/LibudaG/240412_nm_lowest_rates'
 
     PC_obj = PC_setup.general_PC_setup('LibudaG')
     PC_obj.process_to_control.set_params({'C_A_inhibit_B': 1., 'C_B_inhibit_A': 0.3,
                                           'thetaA_max': 0.5, 'thetaB_max': 0.25,
                                           'rate_ads_A': 0.14895, 'rate_ads_B': 0.06594, 'rate_des_B': 0.,
-                                          'rate_des_A': 0.1, 'rate_react': 0.1,
+                                          # 'rate_des_A': 0.1, 'rate_react': 0.1,
+                                          'rate_des_A': 0.01, 'rate_react': 0.01,
                                           })
     PC_obj.process_to_control.set_params({'thetaA_init': 0., 'thetaB_init': 0., })
 
