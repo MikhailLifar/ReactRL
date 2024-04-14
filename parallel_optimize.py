@@ -69,8 +69,12 @@ def main():
     # PC_obj.process_to_control.set_params({'thetaA_init': 0., 'thetaB_init': 0.,
     #                                       'rate_des_A': 0.1, 'rate_react': 0.1,
     #                                       })
-    PC_obj.process_to_control.set_params({'rate_ads_A': 0.14895, 'rate_ads_B': 0.06594,  'rate_des_B': 0.,
-                                          'rate_des_A': 0.1, 'rate_react': 0.1, })
+    PC_obj.process_to_control.set_params({'C_A_inhibit_B': 1., 'C_B_inhibit_A': 0.3,
+                                          'thetaA_max': 0.5, 'thetaB_max': 0.25,
+                                          'rate_ads_A': 0.14895, 'rate_ads_B': 0.06594, 'rate_des_B': 0.,
+                                          'rate_des_A': 0.07162, 'rate_react': 5.98734,
+                                          })
+    # PC_obj.process_to_control.set_params({'rate_des_A': 0.1, 'rate_react': 0.1, })
     PC_obj.process_to_control.set_params({'thetaA_init': 0., 'thetaB_init': 0., })
 
     # gauss_target_1 = get_target_func('Gauss(CO_sub_default)xConv_I', default=1e-4, sigma=1e-5 * episode_time, eps=1e-4)
@@ -289,7 +293,8 @@ def main():
     #               )
 
     # REFERENCE, NM FOR DIFFERENT RATES, STEADY-STATE
-    episode_time = 1000.
+    # episode_time, t_start_count_from = 1000., 760.
+    episode_time, t_start_count_from = 30., 0.
     # variants = [pow(10., x) for x in np.linspace(-2., 1., 4)]
     variants = [1.e-2, 2.e-2, 1.e-1, 2.e-1, 1., 2., 10.]
 
@@ -307,12 +312,12 @@ def main():
                           'policy_obj': ConstantPolicy(),
                           'episode_len': episode_time,
                           'time_step': episode_time / 1000,
-                          't_start_count_from': 760.
+                          't_start_count_from': t_start_count_from
                       },
                       'to_iter_optimize': {
                           'method': 'Nelder-Mead', 'try_num': 5,
                           'call_after_opt_params': {'DEBUG': True, 'folder': 'auto', 'ind_picture': True},
-                          'optimize_options': {'maxiter': 10},
+                          'optimize_options': {'maxiter': 30},
                           'cut_left': False, 'cut_right': False,
                       },
                   },
@@ -321,7 +326,7 @@ def main():
                   repeat=1,
                   cluster_command_ops=False,
                   python_interpreter='../RL_10_21/venv/bin/python',
-                  out_fold_path='./optimize_out/LibudaG/240402_stationary_diff_rates',
+                  out_fold_path='./optimize_out/LibudaG/240414_K2K5grid_short_ep',
                   at_same_time=110,
                   )
 

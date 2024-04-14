@@ -580,7 +580,8 @@ def main():
                         # 'ARTICLE/agents/diff_rates_both_control/agent_it_94',
                         # 'ARTICLE/agents/diff_rates_both_control/agent_it_65',
                         # 'ARTICLE/agents/diff_rates_both_control/agent_libuda',
-                        'ARTICLE/agents/diff_rates_both_control/agent_max_dyn_adv',
+                        # 'ARTICLE/agents/diff_rates_both_control/agent_max_dyn_adv',
+                        'ARTICLE/agents/diff_rates_both_control/agent_dyn_adv_new',
                     ],
                     env_params={
                         'episode_time': 1000.,
@@ -605,7 +606,8 @@ def main():
                         # {'rate_ads_A': 10., 'rate_ads_B': 0.1, 'rate_des_A': 0.07162, 'rate_react': 5.98734, },
                         # {'rate_ads_A': 0.14895, 'rate_ads_B': 0.06594, 'rate_des_A': 10.0, 'rate_react': 10.0, },
                         # {'rate_ads_A': 0.14895, 'rate_ads_B': 0.06594, 'rate_des_A': 0.1, 'rate_react': 0.1, 'thetaB_init': 0.},
-                        {'rate_des_A': 0.01, 'rate_react': 0.01},
+                        # {'rate_des_A': 0.01, 'rate_react': 0.01},
+                        {'rate_des_A': 0.1, 'rate_react': 0.1},
                     ],
                     n_episodes=5, deterministic=True,
                     )

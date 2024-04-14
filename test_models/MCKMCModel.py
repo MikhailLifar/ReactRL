@@ -44,18 +44,18 @@ class MCKMCModel(BaseModel, NeighborKMCBase):
     model_name = 'KMC_CO_O2_Pt'
 
     def __init__(self,
-                 surf_shape,
+                 surfShape,
                  logDir=None,
                  snapshotPeriod=None,
                  diffusion_level=0.,
                  OORepLim=0.3,
                  OCORepLim=1.1,
-                 init_covs=None,
+                 initSurface=None,
                  **params):
         """
         The Model is based on the NeighborKMC class from Pt(111) example from MonteCoffee package
 
-        :param surf_shape:
+        :param surfShape:
         :param logDir:
         :param parameters:
         """
@@ -83,16 +83,19 @@ class MCKMCModel(BaseModel, NeighborKMCBase):
         # INITIALIZE SYSTEM OBJECT
         a = 4.00  # Lattice Parameter (not related to DFT!) # TODO is it relevant for Pd?
         neighbour_cutoff = a / np.sqrt(2.) + 0.05  # Nearest neighbor cutoff
-        Pt_surface_ase_obj = fcc111("Pd", a=a, size=surf_shape)
+        Pt_surface_ase_obj = fcc111("Pd", a=a, size=surfShape)
+
         # Create a site for each surface-atom:
         Nsites = len(Pt_surface_ase_obj)
-        if init_covs is None:
-            sites = [Site(stype=0, covered=0, ind=i) for i in range(Nsites)]
-        else:
-            init_site_covs = np.random.choice(np.arange(len(init_covs)), size=Nsites, p=init_covs)
-            sites = [Site(stype=0, covered=cov, ind=i) for i, cov in enumerate(init_site_covs)]
+        if initSurface is None:
+            initSurface = np.zeros(Nsites)
+        if isinstance(initSurface, str):
+            initSurface = np.load(initSurface)
+        initSurface = initSurface.flatten()
+        self.initSurface = initSurface
+        sites = [Site(stype=0, covered=cov, ind=i) for i, cov in enumerate(self.initSurface)]
         # Instantiate a system, events, and simulation.
-        system = System(atoms=Pt_surface_ase_obj, sites=sites, shape=surf_shape)
+        system = System(atoms=Pt_surface_ase_obj, sites=sites, shape=surfShape)
         # Set the global neighborlist based on distances:
         system.set_neighbors(neighbour_cutoff, pbc=True)
 
@@ -108,8 +111,8 @@ class MCKMCModel(BaseModel, NeighborKMCBase):
                                  options_dir=OPTIONS_PATH)
         self.timeOffset = 0.  # needed to account for difference between PC and KMC time
 
-        self.size = np.prod(surf_shape)
-        self.params['surf_shape'] = 'x'.join(map(str, surf_shape))
+        self.size = np.prod(surfShape)
+        self.params['surf_shape'] = 'x'.join(map(str, surfShape))
 
         self.COxO_prev_count = 0
 
@@ -332,8 +335,8 @@ class MCKMCModel(BaseModel, NeighborKMCBase):
         else:
             warnings.warn('Logging is turned off')
 
-        for s in self.system.sites:
-            s.covered = 0  # turn all sites empty
+        for i, s in enumerate(self.system.sites):
+            s.covered = self.initSurface[i]  # initiate surface
 
         self.snapshotTime = 0.
         self.COxO_prev_count = 0

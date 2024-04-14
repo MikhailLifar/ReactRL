@@ -99,27 +99,18 @@ def MCKMC_one_turn_steady_state_tries():
 
 
 def MCKMC_run_policy(logDir,
-                     snapshotPeriod,
                      plottoffile, t_start=None, t_end=None,
-                     surfShape=(5, 5, 1),
-                     diffusion_level=0.,
-                     OORepLim = 0.3,
-                     OCORepLim = 1.1,
                      analyser_dt=1.,
                      int_segment=None,
+                     **model_args
                      ):
 
     os.makedirs(logDir, exist_ok=True)
 
     PC_obj = PC_setup.general_PC_setup('MCKMC',
                                        ('to_model_constructor', {
-                                           'surf_shape': surfShape,
-                                           'diffusion_level': diffusion_level,
-                                           'OORepLim': OORepLim,
-                                           'OCORepLim': OCORepLim,
                                            'logDir': logDir,
-                                           'saveLog': logDir is not None,
-                                           'snapshotPeriod': snapshotPeriod,
+                                           **model_args,
                                        }),
                                        ('to_model_constructor', {
                                            'analyser_dt': analyser_dt
@@ -127,9 +118,13 @@ def MCKMC_run_policy(logDir,
     PC_obj.reset()
 
     options, _ = lib.read_plottof_csv(plottoffile, ret_ops=True)
-    Oidx = options[2::3].index('inputB') * 3 + 2
-    COidx = options[2::3].index('inputA') * 3 + 2
 
+    if 'inputB' in options:
+        Oidx = options[2::3].index('inputB') * 3 + 2
+        COidx = options[2::3].index('inputA') * 3 + 2
+    elif 'O2' in options:
+        Oidx = options[2::3].index('O2') * 3 + 2
+        COidx = options[2::3].index('CO') * 3 + 2
     times = options[Oidx - 2]
     O_control = options[Oidx - 1]
     CO_control = options[COidx - 1]
@@ -193,4 +188,11 @@ if __name__ == '__main__':
     #                  t_end=30.,
     #                  )
 
-    KMC_compatibility_test()
+    MCKMC_run_policy('./DEBUG/MCKMCDebug/runPolicy/try1',
+                     snapshotPeriod=0.2,
+                     plottoffile='./PC_plots/LibudaG/240409_SBP/T(20.0)_OTFrac(0.33)_all_data.csv',
+                     initSurface='./data/MCKMC_start_points/debug_5x5_t(9.87).npy',
+                     t_end=30.,
+                     )
+
+    # KMC_compatibility_test()

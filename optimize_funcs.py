@@ -61,6 +61,7 @@ def iter_optimize(func_for_optimize, optimize_bounds, try_num=10, method=None, o
         perm = rng.permutation(len(points)-2)
         points[2:] = points[2 + perm, :]
         eps = 0.01
+        success_rate = 0
         if cut_left:
             points[points == 0] += eps
         if cut_right:
@@ -85,9 +86,10 @@ def iter_optimize(func_for_optimize, optimize_bounds, try_num=10, method=None, o
                     call_after_opt_params['ind_picture'] = try_ind
                 func_for_optimize(convert_to_dict(res.x), **call_after_opt_params)
 
+            success_rate += res.success * 1. / try_num
             min_fun = min(res.fun, min_fun)
 
-    return min_fun
+    return min_fun, success_rate
 
 
 def optimize_different_methods(func_for_optimize, optimize_bounds,
@@ -190,7 +192,7 @@ def get_for_repeated_opt_iterations(func_for_optimize, optimize_bounds, constrai
                 local_params['folder'] = foldpath
             func_for_optimize(convert_to_dict(res.x), **{**call_after_opt_params, **local_params})
 
-        return {'fvalue': res.fun, 'value_at': convert_to_dict(res.x)}
+        return {'fvalue': res.fun, 'value_at': convert_to_dict(res.x), 'success': res.success}
 
     def repeated_optimize_summarize(foldpath):
         with open(f'{foldpath}/optim_results.txt', 'w') as fout:
@@ -232,13 +234,13 @@ def get_for_param_opt_iterations(func_to_optimize, optimize_bounds):
                     setattr(PC, attr_name, d[attr_name])
                     PC.target_func_name = d['target_func_name']
 
-        min_fun = iter_optimize(func_to_optimize(**(params['to_func_to_optimize'])),
+        min_fun, success_rate = iter_optimize(func_to_optimize(**(params['to_func_to_optimize'])),
                                 optimize_bounds=optimize_bounds,
                                 **(params['to_iter_optimize']),
                                 out_folder=foldpath,
                                 unique_folder=False)
 
-        return {'min_fun': min_fun}
+        return {'min_fun': min_fun, 'success_rate': success_rate}
 
     return {'iteration_function': parametric_optimization_iteration,
             'names_groups': ('model', 'to_func_to_optimize', 'to_iter_optimize'),

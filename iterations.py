@@ -321,8 +321,12 @@ def get_for_MCKMC_mimic_iteration():
             del params['datapath']
             del params['take_policy_key']
         else:
-            plottof_name = os.path.splitext(os.path.split(params['plottoffile'])[1])[0]
-            params['logDir'] = f'{foldpath}/_{plottof_name}_{it_arg}'
+            if params.get('plottoff_to_name', False):
+                plottof_name = os.path.splitext(os.path.split(params['plottoffile'])[1])[0]
+                params['logDir'] = f'{foldpath}/_{plottof_name}_{it_arg}'
+                del params['plottoff_to_name']
+            else:
+                params['logDir'] = f'{foldpath}/_{it_arg}'
         ret = MCKMC_run_policy(**params)
         ret.update({'outDataPath': f'{params["logDir"]}/MCKMC_all_data.csv'})
 

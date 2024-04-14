@@ -1035,10 +1035,11 @@ def fig_n1_k2k5_grid():
 
 def fig_n2_integral_curves():
     # _, dataRL = lib.read_plottof_csv(f'{DATA_DIR}/dynamic_advantage_rates/dynamic_sol_1000.csv', ret_df=True)
-    # _, dataNM = lib.read_plottof_csv(f'{DATA_DIR}/dynamic_advantage_rates/NM_sol_1000.csv', ret_df=True)
+    _, dataRL = lib.read_plottof_csv(f'{DATA_DIR}/dynamic_advantage_rates/dynamic_sol_2304_1000.csv', ret_df=True)
+    _, dataNM = lib.read_plottof_csv(f'{DATA_DIR}/dynamic_advantage_rates/NM_sol_1000.csv', ret_df=True)
 
-    _, dataRL = lib.read_plottof_csv(f'{DATA_DIR}/dynamic_advantage_rates/RL_lowest_rates_1000.csv', ret_df=True)
-    _, dataNM = lib.read_plottof_csv(f'{DATA_DIR}/dynamic_advantage_rates/NM_lowest_rates_1000.csv', ret_df=True)
+    # _, dataRL = lib.read_plottof_csv(f'{DATA_DIR}/dynamic_advantage_rates/RL_lowest_rates_1000.csv', ret_df=True)
+    # _, dataNM = lib.read_plottof_csv(f'{DATA_DIR}/dynamic_advantage_rates/NM_lowest_rates_1000.csv', ret_df=True)
 
     time_RL = dataRL['outputC x'].to_numpy()
     rate_RL = dataRL['outputC y'].to_numpy()
@@ -1061,7 +1062,7 @@ def fig_n2_integral_curves():
     ax.set_xlabel('Time, s')
     ax.set_ylabel('Integral CO2 return')
 
-    savefig(fig, f'{PLOT_FOLDER}/fig_n2_lowest_rates.png')
+    savefig(fig, f'{PLOT_FOLDER}/fig_n2_dynamic_sol_2304.png')
 
 
 # def fig_8():
