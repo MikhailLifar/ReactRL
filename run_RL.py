@@ -82,7 +82,7 @@ def run(environment: RL2207_Environment, agent, out_folder='run_RL_out', n_episo
 
     reset_on_test = reset_callback if reset_on_test else None
     if eval_agent is None:
-        eval_agent = lambda agent, env: env.cumm_episode_target
+        eval_agent = lambda agent, env: run_episode(env, agent, deterministic=True, reset_callback=reset_on_test)
 
     if test:
         if create_unique_folder:
