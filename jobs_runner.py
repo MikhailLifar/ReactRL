@@ -76,6 +76,8 @@ def main():
         names_groups=(),
         PC=PC_obj,
         const_params={
+            'OORepLim': 0.95,
+            'OCORepLim': 1.1,
             # 'datapath': './PC_plots/LibudaG/240408_SBP',
             't_end': 40.,
             # 'int_segment': [0., 100.],

@@ -45,12 +45,12 @@ class MCKMCModel(BaseModel, NeighborKMCBase):
 
     def __init__(self,
                  surfShape,
+                 OORepLim,
+                 OCORepLim,
+                 diffusion_level,
+                 initSurface,
                  logDir=None,
                  snapshotPeriod=None,
-                 diffusion_level=0.,
-                 OORepLim=0.3,
-                 OCORepLim=1.1,
-                 initSurface=None,
                  **params):
         """
         The Model is based on the NeighborKMC class from Pt(111) example from MonteCoffee package

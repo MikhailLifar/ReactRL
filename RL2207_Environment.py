@@ -122,6 +122,14 @@ class State:
         string = self.info + f'shape: {self.shape}\n'
         return string
 
+    def saveDynNorm(self, destPath):
+        if self.dynamic_normalization:
+            np.save(destPath, self.dyn_norm_bounds)
+
+    def loadDynNorm(self, sourcePath):
+        if self.dynamic_normalization:
+            self.dyn_norm_bounds = np.load(sourcePath)
+
 
 def get_state_obj(string, PC: ProcessController, **kwargs):
     model = PC.process_to_control

@@ -105,7 +105,7 @@ def run(environment: RL2207_Environment, agent, out_folder='run_RL_out', n_episo
     environment.describe_to_file(f'{dir_path}/info.txt')
 
     prev_graph_ind = 0
-    prev_max_integral = 1e-9
+    prev_max_integral = -np.inf
 
     if eval_period is None:
         eval_period = max(3, n_episodes // 10)
@@ -120,6 +120,7 @@ def run(environment: RL2207_Environment, agent, out_folder='run_RL_out', n_episo
             agent_metric_data.append([i, eval_agent(agent, environment)])
             if agent_metric_data[-1][1] > max_agent_metric:
                 agent.save(directory=dir_path + '/best_agent', format='numpy')
+                environment.state_obj.saveDynNorm(f'{dir_path}/best_agent_dyn_norm.npy')
                 max_agent_metric = agent_metric_data[-1][1]
 
         if not (i % plot_period) or (i > n_episodes - 5):
@@ -165,6 +166,7 @@ def run(environment: RL2207_Environment, agent, out_folder='run_RL_out', n_episo
 
     ret = dict()
     test_agent = Agent.load(directory=f'{dir_path}/best_agent', format='numpy', environment=environment)
+    environment.state_obj.loadDynNorm(f'{dir_path}/best_agent_dyn_norm.npy')
     os.makedirs(f'{dir_path}/testing', exist_ok=False)
     os.makedirs(f'{dir_path}/testing_deterministic', exist_ok=False)
     ret['stochastic_test'] = test_run(environment, test_agent, out_folder=f'{dir_path}/testing',

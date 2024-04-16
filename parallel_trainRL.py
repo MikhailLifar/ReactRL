@@ -376,7 +376,7 @@ def main():
                   sort_iterations_by='deterministic_test::max_on_test',
                   cluster_command_ops=False,
                   python_interpreter='../RL_10_21/venv/bin/python',
-                  out_fold_path='./run_RL_out/LibudaG/240403_diff_rates',
+                  out_fold_path='./run_RL_out/LibudaG/240416_debug',
                   at_same_time=200,
                   )
 

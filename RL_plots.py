@@ -47,6 +47,8 @@ LABEL_A = 'CO'
 LABEL_B = '$O_2$'
 LABEL_B_VAR2 = 'O'
 
+SHIFTED_CMAP = lib.shiftedColorMap(matplotlib.cm.seismic, midpoint=1./3)
+
 
 def savefig(fig, filepath):
     fig.savefig(filepath, bbox_inches='tight', dpi=MAIN_DPI)
@@ -1013,7 +1015,7 @@ def fig_n1_k2k5_grid(RLRatesPath, NMRatesPath, destDir,
                            cbounds=[0.5, 2.],
                            map_kwargs={
                                # 'cmap': 'seismic',
-                               'cmap': lib.shiftedColorMap(matplotlib.cm.seismic, midpoint=1./3),
+                               'cmap': SHIFTED_CMAP,
                            },
                            save_data=False,
                            figsize=FIG_SIZE_MAIN
@@ -1193,7 +1195,12 @@ def main() -> None:
                      f'{DATA_DIR}/K1K3_grid_short_ep/NM_rates.xlsx',
                      f'{PLOT_FOLDER}/rate_maps_k1k3_reference',
                      'model::rate_ads_A',
-                     'model::rate_ads_B',)
+                     'model::rate_ads_B', )
+    fig_n1_k2k5_grid(f'{DATA_DIR}/K2K5_grid_short_ep/RL_rates.xlsx',
+                     f'{DATA_DIR}/K2K5_grid_short_ep/NM_rates.xlsx',
+                     f'{PLOT_FOLDER}/rate_maps_k2k5_reference',
+                     'model::rate_des_A',
+                     'model::rate_react',)
     # fig_n2_integral_curves(f'{DATA_DIR}/dynamic_advantage_rates/dynamic_sol_2304_1000.csv',
     #                        f'{DATA_DIR}/dynamic_advantage_rates/NM_sol_1000.csv',
     #                        f'{PLOT_FOLDER}/fig_n2_dynamic_sol_2304.png')
