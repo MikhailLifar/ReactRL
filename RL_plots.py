@@ -1044,13 +1044,6 @@ def fig_n1_k2k5_grid(RLRatesPath, NMRatesPath, destDir,
 
 
 def fig_n2_integral_curves(RLTrajPath, NMTrajPath, destPath):
-    # _, dataRL = lib.read_plottof_csv(f'{DATA_DIR}/dynamic_advantage_rates/dynamic_sol_1000.csv', ret_df=True)
-    # _, dataRL = lib.read_plottof_csv(f'{DATA_DIR}/dynamic_advantage_rates/dynamic_sol_2304_1000.csv', ret_df=True)
-    # _, dataNM = lib.read_plottof_csv(f'{DATA_DIR}/dynamic_advantage_rates/NM_sol_1000.csv', ret_df=True)
-
-    # _, dataRL = lib.read_plottof_csv(f'{DATA_DIR}/dynamic_advantage_rates/RL_lowest_rates_1000.csv', ret_df=True)
-    # _, dataNM = lib.read_plottof_csv(f'{DATA_DIR}/dynamic_advantage_rates/NM_lowest_rates_1000.csv', ret_df=True)
-
     _, dataRL = lib.read_plottof_csv(RLTrajPath, ret_df=True)
     _, dataNM = lib.read_plottof_csv(NMTrajPath, ret_df=True)
 
@@ -1201,9 +1194,15 @@ def main() -> None:
                      f'{PLOT_FOLDER}/rate_maps_k2k5_reference',
                      'model::rate_des_A',
                      'model::rate_react',)
-    # fig_n2_integral_curves(f'{DATA_DIR}/dynamic_advantage_rates/dynamic_sol_2304_1000.csv',
-    #                        f'{DATA_DIR}/dynamic_advantage_rates/NM_sol_1000.csv',
-    #                        f'{PLOT_FOLDER}/fig_n2_dynamic_sol_2304.png')
+    fig_n2_integral_curves(f'{DATA_DIR}/dynamic_advantage_rates/dynamic_sol_1000.csv',
+                           f'{DATA_DIR}/dynamic_advantage_rates/NM_sol_1000.csv',
+                           f'{PLOT_FOLDER}/fig_n2_dynamic_sol.png')
+    fig_n2_integral_curves(f'{DATA_DIR}/dynamic_advantage_rates/dynamic_sol_2304_1000.csv',
+                           f'{DATA_DIR}/dynamic_advantage_rates/NM_sol_1000.csv',
+                           f'{PLOT_FOLDER}/fig_n2_dynamic_sol_2304.png')
+    fig_n2_integral_curves(f'{DATA_DIR}/dynamic_advantage_rates/RL_lowest_rates_1000.csv',
+                           f'{DATA_DIR}/dynamic_advantage_rates/NM_lowest_rates_1000.csv',
+                           f'{PLOT_FOLDER}/fig_n2_lowest_rates.png')
 
     # exp1_steady_state_map('exp_libuda_react_div60')
     # exp2_reverse_steady_state_maps('exp_libuda_react_div60')
