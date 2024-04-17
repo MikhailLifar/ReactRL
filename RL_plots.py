@@ -1002,6 +1002,8 @@ def fig_n1_k2k5_grid(RLRatesPath, NMRatesPath, destDir,
         'model::rate_react': '$k_{5}$',
     }
 
+    MAP_SIZE = (12, 9)
+
     lib.plot_show_save_map(ratesNM, f'{destDir}/fign1_nm_rates.png',
                            xticks=variants, yticks=variants[::-1],
                            xlabel=labels[xname], ylabel=labels[yname],
@@ -1009,7 +1011,7 @@ def fig_n1_k2k5_grid(RLRatesPath, NMRatesPath, destDir,
                            title='NM obtained steady-state regimes',
                            map_kwargs={},
                            save_data=False,
-                           figsize=FIG_SIZE_MAIN)
+                           figsize=MAP_SIZE)
 
     lib.plot_show_save_map(ratesRL, f'{destDir}/fign1_rl_rates.png',
                            xticks=variants, yticks=variants[::-1],
@@ -1018,7 +1020,7 @@ def fig_n1_k2k5_grid(RLRatesPath, NMRatesPath, destDir,
                            title='RL obtained steady-state regimes',
                            map_kwargs={},
                            save_data=False,
-                           figsize=FIG_SIZE_MAIN)
+                           figsize=MAP_SIZE)
 
     ratio = ratesRL / ratesNM
 
@@ -1032,8 +1034,8 @@ def fig_n1_k2k5_grid(RLRatesPath, NMRatesPath, destDir,
                                # 'cmap': 'seismic',
                                'cmap': SHIFTED_CMAP,
                            },
-                           save_data=False,
-                           figsize=FIG_SIZE_MAIN
+                           save_data=True,
+                           figsize=MAP_SIZE
                            )
 
     for pcnt in 0.01, 0.02, 0.03, 0.05:
@@ -1046,7 +1048,7 @@ def fig_n1_k2k5_grid(RLRatesPath, NMRatesPath, destDir,
                                cbounds=[-1, 1],
                                map_kwargs={},
                                save_data=False,
-                               figsize=FIG_SIZE_MAIN)
+                               figsize=MAP_SIZE)
 
         lib.plot_show_save_map(ratio * (ratio > 1. + pcnt), f'{destDir}/fign1_ratio_{pcnt:.2f}.png',
                                xticks=variants, yticks=variants[::-1],
@@ -1055,7 +1057,7 @@ def fig_n1_k2k5_grid(RLRatesPath, NMRatesPath, destDir,
                                title=f'ratio RL obtained to NM obtained, non-zero if RL is adv > 1+{pcnt:.2f}',
                                map_kwargs={},
                                save_data=False,
-                               figsize=FIG_SIZE_MAIN)
+                               figsize=MAP_SIZE)
 
 
 def fig_n2_integral_curves(RLTrajPath, NMTrajPath, destPath=None, figax=None):
@@ -1320,7 +1322,7 @@ def main() -> None:
     # fig_2_learning_curve()
     # fig_3_one_rate_sets()
     # fig_n3_control_signals()
-    fig_n4_kmc()
+    # fig_n4_kmc()
     # fig4_covs_axis_plot_v3()
     # fig_5_dyn_demo()
     # fig_6_stchdemolrg()
@@ -1339,11 +1341,11 @@ def main() -> None:
     #                  f'{PLOT_FOLDER}/rate_maps_k1k3_reference',
     #                  'model::rate_ads_A',
     #                  'model::rate_ads_B', )
-    # fig_n1_k2k5_grid(f'{DATA_DIR}/K2K5_grid_short_ep/RL_rates.xlsx',
-    #                  f'{DATA_DIR}/K2K5_grid_short_ep/NM_rates.xlsx',
-    #                  f'{PLOT_FOLDER}/rate_maps_k2k5_reference',
-    #                  'model::rate_des_A',
-    #                  'model::rate_react',)
+    fig_n1_k2k5_grid(f'{DATA_DIR}/K2K5_grid_short_ep/RL_rates.xlsx',
+                     f'{DATA_DIR}/K2K5_grid_short_ep/NM_rates.xlsx',
+                     f'{PLOT_FOLDER}/rate_maps_k2k5_reference',
+                     'model::rate_des_A',
+                     'model::rate_react',)
     # fig_n2_integral_curves(f'{DATA_DIR}/dynamic_advantage_rates/dynamic_sol_1000.csv',
     #                        f'{DATA_DIR}/dynamic_advantage_rates/NM_sol_1000.csv',
     #                        f'{PLOT_FOLDER}/fig_n2_dynamic_sol.png')
