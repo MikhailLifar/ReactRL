@@ -839,8 +839,20 @@ def fig4_covs_axis_plot_v3():
     pA[mask] = -0.1
     # pB, pA = pB[::-1, :], pA[::-1, :]
 
-    idxs = np.apply_along_axis(lambda x: None if not np.where(x < 0)[0].size
-        else np.where(x < 0)[0][0], 0, pB)
+    # check if all the points in the hatched region are indeed possible
+    # for this check that the sign changes not more than once
+    # check pB
+    pB_check = np.sign(pB[:, 1:]) * np.sign(pB[:, :-1]) == -1
+    assert np.max(np.sum(pB_check, axis=1)) == 1
+    pB_check = np.sign(pB[1:, :]) * np.sign(pB[:-1, :]) == -1
+    assert np.max(np.sum(pB_check, axis=0)) == 1
+    # check pA
+    pA_check = np.sign(pA[:, 1:]) * np.sign(pA[:, :-1]) == -1
+    assert np.max(np.sum(pA_check, axis=1)) == 1
+    pA_check = np.sign(pA[1:, :]) * np.sign(pA[:-1, :]) == -1
+    assert np.max(np.sum(pA_check, axis=0)) == 1
+
+    idxs = np.apply_along_axis(lambda x: None if not np.where(x < 0)[0].size else np.where(x < 0)[0][0], 0, pB)
     thetaO = np.linspace(0., 0.25, pB.shape[0])
     thetaCO = np.linspace(0., 0.5, pB.shape[1])[idxs % pB.shape[0]]
 
@@ -865,16 +877,19 @@ def fig4_covs_axis_plot_v3():
                      df['thetaA x'], df['thetaA y'], {'label': '$\\theta_{CO}$', 'c': 'r'},
                      df['thetaB x'], np.full_like(df['thetaB x'], stationary_max[0]), {'c': 'b', 'ls': 'dashed'},
                      df['thetaA x'], np.full_like(df['thetaA x'], stationary_max[1]), {'c': 'r', 'ls': 'dashed'},
-                     ax=axs['bottom'],
+                     ax=axs['top'],
                      xlabel='Time, s', ylabel='Coverage $\\theta$',
                      ylim=[0., 0.4]
                      )
-    lib.plot_in_axis(df['outputC x'], df['outputC y'], {'label': 'reaction rate', 'c': 'purple'},
-                     df['outputC x'], np.full_like(df['thetaB x'], stationary_max[2]), {'c': 'purple', 'ls': 'dashed'},
-                     ax=axs['top'],
-                     xlabel='Time, s', ylabel='Reaction rate',
-                     ylim=[0., 0.005]
-                     )
+    fig_n2_integral_curves(f'{DATA_DIR}/dynamic_advantage_rates/dynamic_sol_1000.csv',
+                           f'{DATA_DIR}/dynamic_advantage_rates/NM_sol_1000.csv',
+                           figax=(fig, axs['bottom']))
+    # lib.plot_in_axis(df['outputC x'], df['outputC y'], {'label': 'reaction rate', 'c': 'purple'},
+    #                  df['outputC x'], np.full_like(df['thetaB x'], stationary_max[2]), {'c': 'purple', 'ls': 'dashed'},
+    #                  ax=axs['top'],
+    #                  xlabel='Time, s', ylabel='Reaction rate',
+    #                  ylim=[0., 0.005]
+    #                  )
 
     savefig(fig, f'{PLOT_FOLDER}/fig4v3_covs_axis_plot.png')
     plt.close(fig)
@@ -981,10 +996,10 @@ def fig_n1_k2k5_grid(RLRatesPath, NMRatesPath, destDir,
     ratesRL = ratesRL[::-1]
 
     labels = {
-        'model::rate_ads_A': 'K1',
-        'model::rate_ads_B': 'K3',
-        'model::rate_des_A': 'K2',
-        'model::rate_react': 'K5',
+        'model::rate_ads_A': '$k_{1}$',
+        'model::rate_ads_B': '$k_{3}$',
+        'model::rate_des_A': '$k_{2}$',
+        'model::rate_react': '$k_{5}$',
     }
 
     lib.plot_show_save_map(ratesNM, f'{destDir}/fign1_nm_rates.png',
@@ -1043,7 +1058,7 @@ def fig_n1_k2k5_grid(RLRatesPath, NMRatesPath, destDir,
                                figsize=FIG_SIZE_MAIN)
 
 
-def fig_n2_integral_curves(RLTrajPath, NMTrajPath, destPath):
+def fig_n2_integral_curves(RLTrajPath, NMTrajPath, destPath=None, figax=None):
     _, dataRL = lib.read_plottof_csv(RLTrajPath, ret_df=True)
     _, dataNM = lib.read_plottof_csv(NMTrajPath, ret_df=True)
 
@@ -1057,18 +1072,151 @@ def fig_n2_integral_curves(RLTrajPath, NMTrajPath, destPath):
     integral_output_NM = np.cumsum( (rate_NM[1:] + rate_NM[:-1]) * (time_NM[1:] - time_NM[:-1]) / 2 )
     time_1_NM = (time_NM[1:] + time_NM[:-1]) / 2
 
-    fig, ax = plt.subplots(figsize=FIG_SIZE_MAIN)
+    if figax is None:
+        fig, ax = plt.subplots(figsize=FIG_SIZE_MAIN)
+    else:
+        fig, ax = figax
 
     plot_several_lines_uni([time_1_RL, integral_output_RL], ax=ax,
-                           to_styles={1: {'c': 'g', 'label': 'integral output, RL', 'linestyle': 'solid'}})
+                           to_styles={1: {'c': 'g', 'label': 'RL', 'linestyle': 'solid'}})
     plot_several_lines_uni([time_1_NM, integral_output_NM], ax=ax,
-                           to_styles={1: {'c': 'b', 'label': 'integral output, NM', 'linestyle': 'solid'}})
+                           to_styles={1: {'c': 'b', 'label': 'Nelder-Mead', 'linestyle': 'solid'}})
 
-    ax.set_title('Nelder-Mead vs RL integral CO2 return')
+    # ax.set_title('Nelder-Mead vs RL integral CO2 return')
     ax.set_xlabel('Time, s')
-    ax.set_ylabel('Integral CO2 return')
+    ax.set_ylabel('Integral $CO_{2}$ output')
 
-    savefig(fig, destPath)
+    if figax is None:
+        savefig(fig, destPath)
+
+
+def fig_n3_control_signals():
+
+    _, df_RL = read_plottof_csv(f'{DATA_DIR}/fig_n3_example_curve.csv', ret_df=True)
+    data_RL_in = [df_RL['inputB x'], df_RL['inputB y'], df_RL['inputA y']]
+
+    for x in 5.1, 10.1, 15.1, 20.1, 25.1:
+        df_RL.loc[np.argmin(np.abs(df_RL['inputB x'] - x)), 'inputB x'] = x - 0.1
+
+    fig, ax = plt.subplots(figsize=(FIG_SIZE_MAIN[0], FIG_SIZE_MAIN[1] / 2))
+
+    y1 = np.max([df_RL.loc[47, 'inputB y'], df_RL.loc[53, 'inputB y'],
+                 df_RL.loc[47, 'inputA y'], df_RL.loc[53, 'inputA y']])
+    y2 = np.max([df_RL.loc[97, 'inputB y'], df_RL.loc[103, 'inputB y'],
+                 df_RL.loc[97, 'inputA y'], df_RL.loc[103, 'inputA y']])
+    ax.plot([5., 5.], [-2., y1], c='gray', ls='dashed')
+    ax.plot([10., 10.], [-2., y2], c='gray', ls='dashed')
+
+    plot_several_lines_uni(data_RL_in,
+                           outpath=None,
+                           ax=ax,
+                           # to_styles={1: {'label': 'inputB', 'linestyle': 'solid'}, 2: {'label': 'inputA', 'linestyle': 'solid'}},  # grey
+                           to_styles={1: {
+                               # 'label': f'{LABEL_B}',  # давление $O_2$, {LABEL_B}
+                               'c': '#5588ff', 'linestyle': 'solid'},
+                               2: {
+                                   # 'label': f'{LABEL_A}',  # давление CO, {LABEL_A}
+                                   'c': '#ffaa77', 'linestyle': 'solid'}},  # color
+                           title='Control signals',
+                           # 'input pressures', 'model inputs', 'управляемые параметры', 'RL policy', 'Agent\'s policy'
+                           xlim=[0., 30.], ylim=[0., 1.05],
+                           twin_params=None,
+                           )
+
+    savefig(fig, f'{PLOT_FOLDER}/fig_n3.png')
+
+
+def fig_n4_snapshot(fig, ax, sourcePath, t):
+    surface = np.load(sourcePath)
+    m, n = surface.shape
+
+    where_co = np.where(surface == 1)
+    where_o = np.where(surface == 2)
+
+    marker_size = 200. * 16 / (m + n)
+    ax.scatter(*where_co, c='r', marker='o', label='CO', s=marker_size)
+    ax.scatter(*where_o, c='b', marker='o', label='O', s=marker_size)
+    # ax.set_title(f'Kinetic Monte Carlo simulation, surface state\n'
+    #              f'time: {self.t:.5f}; covs: free {covs[0]:.2f}, O {covs[2]:.2f}, CO {covs[1]:.2f}')
+    ax.set_title(f'Kinetic Monte Carlo simulation, surface state\n'
+                 f'time: {t:.0f} s')
+    ax.xaxis.set_visible(False)
+    ax.yaxis.set_visible(False)
+    # fig.legend(loc='outside lower center', ncol=2, fancybox=True)
+
+
+def fig_n4_kmc():
+    _, df = read_plottof_csv(f'{DATA_DIR}/MCKMC/MCKMC_debug.csv', ret_df=True)
+    # df.rename(columns={'CO x': 'inputA x', 'O2 x': 'inputB x', 'CO2_rate x': 'outputC x',
+    #                    'CO y': 'inputA y', 'O2 y': 'inputB y', 'CO2_rate y': 'outputC y',
+    #                    'thetaO x': 'thetaB x', 'thetaCO x': 'thetaA x',
+    #                    'thetaO y': 'thetaB y', 'thetaCO y': 'thetaA y',},
+    #           inplace=True)
+    data_in = [df['O2 x'], df['O2 y'], df['CO y']]
+    data_out = [df['thetaO x'], df['thetaO y'], df['thetaCO y'], df['CO2_rate y']]
+
+    # out binning
+    length = data_out[0].shape[0]
+    idxs = np.arange(0, length + 1, 10)
+    new_x = []
+    new_y = []
+    for i0, i1 in zip(idxs[:-1], idxs[1:]):
+        new_x.append(np.mean(data_out[0][i0:i1]))
+        new_y.append([np.mean(data_out[j][i0:i1]) for j in range(1, 4)])
+    new_y = list(zip(*new_y))
+    data_out = [new_x, *new_y]
+
+    # fig, axs = plt.subplot_mosaic([['left', 'center', 'right_top'], ['left', 'center', 'right_bottom']],
+    #                               figsize=(16, 5))
+    fig, axs = plt.subplot_mosaic([['top', 'top'], ['center', 'center'], ['b_left', 'b_right']],
+                                  figsize=(16, 3 * 16 / 2))
+
+    plot_several_lines_uni(data_in,
+                           outpath=None,
+                           ax=axs['top'],
+                           # to_styles={1: {'label': 'inputB', 'linestyle': 'solid'}, 2: {'label': 'inputA', 'linestyle': 'solid'}},  # grey
+                           to_styles={
+                               1: {
+                                   # 'label': f'{LABEL_B}',  # давление $O_2$, {LABEL_B}
+                                   'c': '#5588ff', 'linestyle': 'solid'},
+                               2: {
+                                   # 'label': f'{LABEL_A}',  # давление CO, {LABEL_A}
+                                   'c': '#ffaa77', 'linestyle': 'solid'}},  # color
+                           title='Control signals',
+                           # 'input pressures', 'model inputs', 'управляемые параметры', 'RL policy'
+                           xlim=[40., 80.], ylim=[-0.025, 1.025],
+                           twin_params=None,
+                           )
+
+    _, right_ax = plot_several_lines_uni(data_out,
+                                         outpath=None,
+                                         ax=axs['center'],
+                                         # to_styles={1: {'label': 'thetaB'}, 2: {'label': 'thetaA'}, 3: {'label': 'reaction rate'}},
+                                         to_styles={1: {
+                                             # 'label': '$\\theta_O$', theta{LABEL_B_VAR2}
+                                             'c': '#5588ff', 'linestyle': 'solid'},
+                                             2: {
+                                                 # 'label': '$\\theta_{CO}$', theta{LABEL_A}
+                                                 'c': '#ffaa77', 'linestyle': 'solid'},
+                                             3: {
+                                                 # 'label': 'reaction rate',
+                                                 'c': '#44bb44'}},  # color
+                                         xlim=[40., 80.], ylim=[0., 3.],
+                                         title='KMC model response',
+                                         # 'rate & thetas', 'model outputs', 'Environment response'
+                                         # twin_params={'ylim': [0., 0.1], 'ylabel': '$CO_{2}$ formation rate'},
+                                         twin_params={'ylim': [0., 0.04],
+                                                      'ylabel': 'Reaction rate'},
+                                         # 'Reaction rate'
+                                         )
+    right_ax.spines['right'].set_color('#44bb44')
+    right_ax.tick_params(axis='y', colors='#44bb44')
+    right_ax.yaxis.label.set_color('#44bb44')
+
+    fig_n4_snapshot(fig, axs['b_left'], f'{DATA_DIR}/MCKMC/snapshot_t(55.).npy', t=55.)
+    fig_n4_snapshot(fig, axs['b_right'], f'{DATA_DIR}/MCKMC/snapshot_t(70.).npy', t=70.)
+
+    savefig(fig, f'{PLOT_FOLDER}/fig_n4_kmc.png')
 
 
 # def fig_8():
@@ -1171,6 +1319,8 @@ def ananikov_sol_plot(datapath, foldpath, xtop):
 def main() -> None:
     # fig_2_learning_curve()
     # fig_3_one_rate_sets()
+    # fig_n3_control_signals()
+    fig_n4_kmc()
     # fig4_covs_axis_plot_v3()
     # fig_5_dyn_demo()
     # fig_6_stchdemolrg()
@@ -1184,25 +1334,25 @@ def main() -> None:
     # for fname in os.listdir(data_folder):
     #     ananikov_sol_plot(f'{data_folder}/{fname}', f'{PLOT_FOLDER}/ananikov/task2', xtop=100.)
 
-    fig_n1_k2k5_grid(f'{DATA_DIR}/K1K3_grid_short_ep/RL_rates.xlsx',
-                     f'{DATA_DIR}/K1K3_grid_short_ep/NM_rates.xlsx',
-                     f'{PLOT_FOLDER}/rate_maps_k1k3_reference',
-                     'model::rate_ads_A',
-                     'model::rate_ads_B', )
-    fig_n1_k2k5_grid(f'{DATA_DIR}/K2K5_grid_short_ep/RL_rates.xlsx',
-                     f'{DATA_DIR}/K2K5_grid_short_ep/NM_rates.xlsx',
-                     f'{PLOT_FOLDER}/rate_maps_k2k5_reference',
-                     'model::rate_des_A',
-                     'model::rate_react',)
-    fig_n2_integral_curves(f'{DATA_DIR}/dynamic_advantage_rates/dynamic_sol_1000.csv',
-                           f'{DATA_DIR}/dynamic_advantage_rates/NM_sol_1000.csv',
-                           f'{PLOT_FOLDER}/fig_n2_dynamic_sol.png')
-    fig_n2_integral_curves(f'{DATA_DIR}/dynamic_advantage_rates/dynamic_sol_2304_1000.csv',
-                           f'{DATA_DIR}/dynamic_advantage_rates/NM_sol_1000.csv',
-                           f'{PLOT_FOLDER}/fig_n2_dynamic_sol_2304.png')
-    fig_n2_integral_curves(f'{DATA_DIR}/dynamic_advantage_rates/RL_lowest_rates_1000.csv',
-                           f'{DATA_DIR}/dynamic_advantage_rates/NM_lowest_rates_1000.csv',
-                           f'{PLOT_FOLDER}/fig_n2_lowest_rates.png')
+    # fig_n1_k2k5_grid(f'{DATA_DIR}/K1K3_grid_short_ep/RL_rates.xlsx',
+    #                  f'{DATA_DIR}/K1K3_grid_short_ep/NM_rates.xlsx',
+    #                  f'{PLOT_FOLDER}/rate_maps_k1k3_reference',
+    #                  'model::rate_ads_A',
+    #                  'model::rate_ads_B', )
+    # fig_n1_k2k5_grid(f'{DATA_DIR}/K2K5_grid_short_ep/RL_rates.xlsx',
+    #                  f'{DATA_DIR}/K2K5_grid_short_ep/NM_rates.xlsx',
+    #                  f'{PLOT_FOLDER}/rate_maps_k2k5_reference',
+    #                  'model::rate_des_A',
+    #                  'model::rate_react',)
+    # fig_n2_integral_curves(f'{DATA_DIR}/dynamic_advantage_rates/dynamic_sol_1000.csv',
+    #                        f'{DATA_DIR}/dynamic_advantage_rates/NM_sol_1000.csv',
+    #                        f'{PLOT_FOLDER}/fig_n2_dynamic_sol.png')
+    # fig_n2_integral_curves(f'{DATA_DIR}/dynamic_advantage_rates/dynamic_sol_2304_1000.csv',
+    #                        f'{DATA_DIR}/dynamic_advantage_rates/NM_sol_1000.csv',
+    #                        f'{PLOT_FOLDER}/fig_n2_dynamic_sol_2304.png')
+    # fig_n2_integral_curves(f'{DATA_DIR}/dynamic_advantage_rates/RL_lowest_rates_1000.csv',
+    #                        f'{DATA_DIR}/dynamic_advantage_rates/NM_lowest_rates_1000.csv',
+    #                        f'{PLOT_FOLDER}/fig_n2_lowest_rates.png')
 
     # exp1_steady_state_map('exp_libuda_react_div60')
     # exp2_reverse_steady_state_maps('exp_libuda_react_div60')
