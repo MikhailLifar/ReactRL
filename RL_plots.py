@@ -1106,8 +1106,8 @@ def fig_n3_control_signals():
                  df_RL.loc[47, 'inputA y'], df_RL.loc[53, 'inputA y']])
     y2 = np.max([df_RL.loc[97, 'inputB y'], df_RL.loc[103, 'inputB y'],
                  df_RL.loc[97, 'inputA y'], df_RL.loc[103, 'inputA y']])
-    ax.plot([5., 5.], [-2., y1], c='gray', ls='dashed')
-    ax.plot([10., 10.], [-2., y2], c='gray', ls='dashed')
+    # ax.plot([5., 5.], [-2., y1], c='gray', ls='dashed')
+    # ax.plot([10., 10.], [-2., y2], c='gray', ls='dashed')
 
     plot_several_lines_uni(data_RL_in,
                            outpath=None,
@@ -1151,7 +1151,7 @@ def fig_n4_snapshot(fig, ax, sourcePath, t):
 
 
 def fig_n4_kmc():
-    _, df = read_plottof_csv(f'{DATA_DIR}/MCKMC/MCKMC_debug.csv', ret_df=True)
+    _, df = read_plottof_csv(f'{DATA_DIR}/MCKMC/MCKMC_data.csv', ret_df=True)
     # df.rename(columns={'CO x': 'inputA x', 'O2 x': 'inputB x', 'CO2_rate x': 'outputC x',
     #                    'CO y': 'inputA y', 'O2 y': 'inputB y', 'CO2_rate y': 'outputC y',
     #                    'thetaO x': 'thetaB x', 'thetaCO x': 'thetaA x',
@@ -1206,11 +1206,11 @@ def fig_n4_kmc():
                                              3: {
                                                  # 'label': 'reaction rate',
                                                  'c': '#44bb44'}},  # color
-                                         xlim=[40., 80.], ylim=[0., 3.],
+                                         xlim=[40., 80.], ylim=[0., 2.5],
                                          title='KMC model response',
                                          # 'rate & thetas', 'model outputs', 'Environment response'
                                          # twin_params={'ylim': [0., 0.1], 'ylabel': '$CO_{2}$ formation rate'},
-                                         twin_params={'ylim': [0., 0.04],
+                                         twin_params={'ylim': [0., 0.05],
                                                       'ylabel': 'Reaction rate'},
                                          # 'Reaction rate'
                                          )
@@ -1218,8 +1218,8 @@ def fig_n4_kmc():
     right_ax.tick_params(axis='y', colors='#44bb44')
     right_ax.yaxis.label.set_color('#44bb44')
 
-    fig_n4_snapshot(fig, axs['b_left'], f'{DATA_DIR}/MCKMC/snapshot_t(55.).npy', t=55.)
-    fig_n4_snapshot(fig, axs['b_right'], f'{DATA_DIR}/MCKMC/snapshot_t(70.).npy', t=70.)
+    fig_n4_snapshot(fig, axs['b_left'], f'{DATA_DIR}/MCKMC/snapshot_t(29.).npy', t=29.)
+    fig_n4_snapshot(fig, axs['b_right'], f'{DATA_DIR}/MCKMC/snapshot_t(50.).npy', t=50.)
 
     savefig(fig, f'{PLOT_FOLDER}/fig_n4_kmc.png')
 
@@ -1324,8 +1324,8 @@ def ananikov_sol_plot(datapath, foldpath, xtop):
 def main() -> None:
     # fig_2_learning_curve()
     # fig_3_one_rate_sets()
-    fig_n3_control_signals()
-    # fig_n4_kmc()
+    # fig_n3_control_signals()
+    fig_n4_kmc()
     # fig4_covs_axis_plot_v3()
     # fig_5_dyn_demo()
     # fig_6_stchdemolrg()
